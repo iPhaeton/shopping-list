@@ -1,0 +1,151 @@
+import { countDone, initialState, listsReducer } from './listsReducer';
+import type { State } from './types';
+
+/** Builds a state with one list ("l1") holding the given item titles, none done. */
+function stateWithItems(...titles: string[]): State {
+  return titles.reduce<State>(
+    (state, title, index) =>
+      listsReducer(state, { type: 'item/added', listId: 'l1', id: `i${index + 1}`, title }),
+    listsReducer(initialState, { type: 'list/created', id: 'l1', name: 'Groceries' })
+  );
+}
+
+describe('list/created', () => {
+  it('appends a named, empty list', () => {
+    const state = listsReducer(initialState, {
+      type: 'list/created',
+      id: 'l1',
+      name: 'Groceries',
+    });
+
+    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', items: [] }]);
+  });
+
+  it('trims the name', () => {
+    const state = listsReducer(initialState, {
+      type: 'list/created',
+      id: 'l1',
+      name: '  Groceries  ',
+    });
+
+    expect(state.lists[0].name).toBe('Groceries');
+  });
+
+  it('ignores a blank name', () => {
+    const state = listsReducer(initialState, { type: 'list/created', id: 'l1', name: '   ' });
+
+    expect(state).toBe(initialState);
+  });
+
+  it('keeps lists independent of each other', () => {
+    let state = listsReducer(initialState, { type: 'list/created', id: 'l1', name: 'Groceries' });
+    state = listsReducer(state, { type: 'list/created', id: 'l2', name: 'Hardware' });
+    state = listsReducer(state, { type: 'item/added', listId: 'l1', id: 'i1', title: 'Milk' });
+
+    expect(state.lists[0].items.map((item) => item.title)).toEqual(['Milk']);
+    expect(state.lists[1].items).toEqual([]);
+  });
+});
+
+describe('item/added', () => {
+  it('appends an item that starts out not done', () => {
+    const state = stateWithItems('Milk');
+
+    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', done: false }]);
+  });
+
+  it('preserves insertion order', () => {
+    const state = stateWithItems('Milk', 'Bread', 'Eggs');
+
+    expect(state.lists[0].items.map((item) => item.title)).toEqual(['Milk', 'Bread', 'Eggs']);
+  });
+
+  it('trims the title and ignores a blank one', () => {
+    const trimmed = listsReducer(stateWithItems(), {
+      type: 'item/added',
+      listId: 'l1',
+      id: 'i1',
+      title: '  Milk  ',
+    });
+    expect(trimmed.lists[0].items[0].title).toBe('Milk');
+
+    const before = stateWithItems();
+    const blank = listsReducer(before, {
+      type: 'item/added',
+      listId: 'l1',
+      id: 'i1',
+      title: '  ',
+    });
+    expect(blank).toBe(before);
+  });
+
+  it('is a no-op for an unknown list', () => {
+    const before = stateWithItems('Milk');
+    const after = listsReducer(before, {
+      type: 'item/added',
+      listId: 'nope',
+      id: 'i9',
+      title: 'Bread',
+    });
+
+    expect(after).toBe(before);
+  });
+});
+
+describe('item/toggled', () => {
+  it('marks an item done and back again', () => {
+    const before = stateWithItems('Milk');
+
+    const done = listsReducer(before, { type: 'item/toggled', listId: 'l1', itemId: 'i1' });
+    expect(done.lists[0].items[0].done).toBe(true);
+
+    const undone = listsReducer(done, { type: 'item/toggled', listId: 'l1', itemId: 'i1' });
+    expect(undone.lists[0].items[0].done).toBe(false);
+  });
+
+  it('only touches the targeted item', () => {
+    const state = listsReducer(stateWithItems('Milk', 'Bread', 'Eggs'), {
+      type: 'item/toggled',
+      listId: 'l1',
+      itemId: 'i2',
+    });
+
+    expect(state.lists[0].items.map((item) => item.done)).toEqual([false, true, false]);
+  });
+
+  it('is a no-op for an unknown list or item', () => {
+    const before = stateWithItems('Milk');
+
+    expect(listsReducer(before, { type: 'item/toggled', listId: 'nope', itemId: 'i1' })).toBe(
+      before
+    );
+    expect(listsReducer(before, { type: 'item/toggled', listId: 'l1', itemId: 'nope' })).toBe(
+      before
+    );
+  });
+});
+
+describe('immutability', () => {
+  it('does not mutate the previous state', () => {
+    const before = stateWithItems('Milk');
+    const snapshot = JSON.parse(JSON.stringify(before));
+
+    listsReducer(before, { type: 'item/toggled', listId: 'l1', itemId: 'i1' });
+    listsReducer(before, { type: 'item/added', listId: 'l1', id: 'i2', title: 'Bread' });
+    listsReducer(before, { type: 'list/created', id: 'l2', name: 'Hardware' });
+
+    expect(before).toEqual(snapshot);
+  });
+});
+
+describe('countDone', () => {
+  it('counts only items marked done', () => {
+    const state = listsReducer(stateWithItems('Milk', 'Bread', 'Eggs'), {
+      type: 'item/toggled',
+      listId: 'l1',
+      itemId: 'i2',
+    });
+
+    expect(countDone(state.lists[0])).toBe(1);
+  });
+});
