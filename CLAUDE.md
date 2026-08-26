@@ -19,9 +19,14 @@ npx jest -t 'trims the name'                   # one test by name
 
 ## Working rules
 
-- **Current truth lives in `ai/kb/`.** The index above is loaded every session — open the two or
-  three entries it names that bear on your task. Don't grep the KB, and don't restate its facts
-  here: a fact in two places is a fact that will drift.
+- **`ai/kb/` holds what reading the code carefully would *not* tell you** — rationale, environment
+  constraints, scope boundaries, gotchas that already cost a debugging cycle. It's a small set of
+  exceptions, not a description of the system: most questions have no entry, and the code is the
+  answer. The index above is loaded every session — open the two or three entries bearing on your
+  task; if none cover it, run `/librarian ask <topic>`, which searches every entry rather than the
+  shortlist. A miss there means nothing in the KB constrains you — read the code and proceed.
+  Don't grep the KB yourself, and don't restate its facts here: a fact in two places is a fact
+  that will drift.
 - **`ai/tasks/*/implementation-log-step-*.md` are historical records, not current truth.** Each is
   accurate as of the day it was written and is never edited. Read them for provenance — *why* was
   this done — never to learn the current stack or conventions. The step-1 log's version table is

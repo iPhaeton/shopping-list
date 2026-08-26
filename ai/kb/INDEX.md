@@ -29,3 +29,8 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent; `toBeChecked` replaced `toHaveAccessibilityState` (gotcha)
 - [tsconfig needs an explicit types array](ai/kb/entries/tsconfig-explicit-types-array.md) — without it the jest globals don't resolve (gotcha)
+
+---
+
+**Nothing above covers what you need?** Run `/librarian ask <topic>` before answering from
+assumption. It searches every entry, including ones this shortlist deliberately leaves out.
