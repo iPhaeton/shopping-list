@@ -7,7 +7,7 @@ Run `npm run kb:audit` to check every entry still holds.
 **Stack and environment**
 
 - [Expo SDK 54 is pinned](ai/kb/entries/expo-sdk-54-pinned.md) — read the v54.0.0 docs, not the latest (reference)
-- [No native build toolchain](ai/kb/entries/no-native-build-toolchain.md) — `npm run ios`/`android` fail here; verify on web or Expo Go (environment)
+- [No native toolchain installed yet](ai/kb/entries/no-native-build-toolchain.md) — `npm run ios`/`android` fail today, so verify on web or Expo Go; installing Xcode/Android Studio is an option to raise, not a rule against (environment)
 
 **Scope**
 
