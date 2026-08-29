@@ -10,12 +10,17 @@ A simple shopping list app built with React Native and Expo.
 
 ```bash
 npm install
+npm run ios       # boots an iOS simulator and opens the app in Expo Go
 npm run web       # opens in a browser at http://localhost:8081
 npm start         # dev server + QR code for Expo Go on a physical device
 ```
 
-`npm run ios` / `npm run android` need a full Xcode install or the Android SDK respectively.
-Neither is installed on this machine, so `npm run web` and Expo Go are the ways to see the app here.
+`npm run ios` needs Xcode plus an iOS simulator runtime, both installed on this machine
+(Xcode 26.6, iOS 26.5). `npm run android` still needs the Android SDK, which is not installed.
+
+A native dev build (`npx expo run:ios`) would additionally need CocoaPods and an
+`ios.bundleIdentifier` in `app.json` — neither is set up, and nothing here calls for it: every
+dependency ships inside the Expo Go runtime.
 
 ## Checks
 

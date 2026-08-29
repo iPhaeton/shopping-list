@@ -5,9 +5,9 @@ type: reference
 status: current
 tags: [expo, versions, docs]
 sources: [4d55c18, ai/tasks/1/implementation-log-step-1.md]
-last_verified: 2026-08-26
+last_verified: 2026-08-29
 verify: grep -q '"expo": "\^54' package.json
-related: [no-native-build-toolchain]
+related: [native-build-toolchain]
 ---
 
 The stack, as of commit `4d55c18` ("Downgrade expo go sdk to 54"):
