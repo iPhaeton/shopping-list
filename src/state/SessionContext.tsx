@@ -87,7 +87,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async (): Promise<Result> => {
-    const { error } = await supabase.auth.signOut();
+    // `scope: 'local'` revokes this device's refresh token and nothing else. supabase-js defaults
+    // to 'global', which would revoke every device the account is signed in on — signing out in a
+    // browser would eventually sign out the phone too. That belongs behind a deliberate "sign out
+    // everywhere" action, not behind this button.
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
     return { error: error?.message ?? null };
   }, []);
 

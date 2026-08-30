@@ -98,13 +98,18 @@ it('follows Supabase auth transitions', async () => {
   expect(await screen.findByText('status: signedIn')).toBeOnTheScreen();
 });
 
-it('signs out through the client', async () => {
+/**
+ * The scope is the point of this assertion, not an incidental argument. supabase-js defaults to
+ * `'global'`, which would revoke every device the account is signed in on; a bare
+ * `toHaveBeenCalled()` would pass just as happily against that default.
+ */
+it('signs out this device only', async () => {
   await renderProbe();
   await screen.findByText('status: signedOut');
 
   await fireEvent.press(screen.getByLabelText('Sign out'));
 
-  expect(auth.signOut).toHaveBeenCalled();
+  expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
 });
 
 it('unsubscribes from auth changes on unmount', async () => {
