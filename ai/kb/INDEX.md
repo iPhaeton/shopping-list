@@ -8,16 +8,22 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [Expo SDK 54 is pinned](ai/kb/entries/expo-sdk-54-pinned.md) — read the v54.0.0 docs, not the latest (reference)
 - [iOS simulator works; Android does not](ai/kb/entries/native-build-toolchain.md) — `npm run ios` boots a sim into Expo Go; no Android SDK and no CocoaPods, and no native dev build is needed (environment)
+- [Supabase runs locally in Docker](ai/kb/entries/supabase-local-stack.md) — `npx supabase start`; the sign-in code lands in Mailpit; verify auth in the browser (environment)
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — many named lists by design; no persistence, auth, sharing, or deletion (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — many named lists and OTP sign-in in; list persistence, sharing, and deletion out (constraint)
+
+**Auth**
+
+- [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock that file (convention)
+- [Both OTP email templates must render the token](ai/kb/entries/otp-email-templates-carry-the-code.md) — `confirmation` for new addresses, `magic_link` for returning ones (gotcha)
 
 **State**
 
 - [Ids are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
 - [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
-- [Storage touches only ListsContext](ai/kb/entries/persistence-isolated-to-provider.md) — the plan for if persistence ever lands (decision)
+- [Storage touches only ListsContext](ai/kb/entries/persistence-isolated-to-provider.md) — the plan for when list persistence lands (decision)
 
 **UI**
 
@@ -27,7 +33,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Testing**
 
-- [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent; `toBeChecked` replaced `toHaveAccessibilityState` (gotcha)
+- [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent/unmount; `toBeChecked` replaced `toHaveAccessibilityState`; `act` for external updates (gotcha)
 - [tsconfig needs an explicit types array](ai/kb/entries/tsconfig-explicit-types-array.md) — without it the jest globals don't resolve (gotcha)
 
 ---

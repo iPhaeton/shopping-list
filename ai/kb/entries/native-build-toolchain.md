@@ -4,10 +4,10 @@ title: iOS simulator works on this machine; Android SDK and CocoaPods are still 
 type: environment
 status: current
 tags: [environment, verification, expo, ios, android]
-sources: [README.md, ai/tasks/1/implementation-log-step-1.md]
-last_verified: 2026-08-29
+sources: [README.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md]
+last_verified: 2026-08-30
 verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone
-related: [expo-sdk-54-pinned]
+related: [expo-sdk-54-pinned, supabase-local-stack]
 ---
 
 Machine state as of 2026-08-29, probed directly. **Xcode arrived on 2026-08-28** — before that this
@@ -38,14 +38,22 @@ the tools, is the evidence behind this entry.
 managed workflow, and `/ios` and `/android` are gitignored. `npx expo run:ios` would need CocoaPods
 *and* an `ios.bundleIdentifier` in [app.json](../../../app.json), which is not there. Nothing in the
 app calls for one — `expo-status-bar`, `react-native-screens`, `react-native-safe-area-context` and
-React Navigation all ship inside the Expo Go runtime. So don't reach for `expo prebuild` or
-`pod install`; they cost an install to buy what Expo Go already gives you.
+React Navigation all ship inside the Expo Go runtime — as do `@supabase/supabase-js` and
+`@react-native-async-storage/async-storage`, added in step 2. So don't reach for `expo prebuild` or
+`pod install`; they cost an install to buy what Expo Go already gives you. Step 2 did add a
+`scheme` to `app.json`, which is groundwork for a future dev build (the proposed biometric unlock
+needs one) — it is not a dev build and does not imply one exists.
 
 **Picking a target.** Web is still the fastest loop for ordinary UI and state work, and `npm test`
 covers the reducer, so the simulator arriving is not a reason to stop using either. Reach for the
 simulator when what you are checking is platform-specific — safe-area insets, keyboard and gesture
 behaviour, real navigation animations — where `react-native-web`'s shims genuinely differ from the
 device. A simulator screenshot is now a cheap verification step; it was not before.
+
+**Anything behind sign-in is browser-only, whatever the toolchain says.** The app talks to a
+Supabase stack on this machine's `127.0.0.1`, which a phone in Expo Go cannot reach — so `npm start`
+on a device stops at the sign-in screen no matter how healthy the native tooling is. See
+[supabase-local-stack](supabase-local-stack.md).
 
 **Historical note:** the *original* absence of a toolchain is why this project is Expo rather than
 bare React Native CLI. At scaffolding time a bare RN CLI app could have been created here but never

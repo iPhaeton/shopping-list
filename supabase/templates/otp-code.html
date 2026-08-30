@@ -1,0 +1,12 @@
+<!--
+  Supabase's stock template sends {{ .ConfirmationURL }} — a magic link, which verifyOtp has
+  nothing to accept. This one sends the code instead. Wired to both the magic_link and the
+  confirmation templates in config.toml, since a brand-new user gets the latter.
+-->
+<h2>Your sign-in code</h2>
+
+<p>Enter this code in Shopping List:</p>
+
+<p style="font-size: 32px; font-weight: bold; letter-spacing: 6px">{{ .Token }}</p>
+
+<p>It expires in an hour. If you didn't ask for it, you can ignore this email.</p>

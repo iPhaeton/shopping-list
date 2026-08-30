@@ -7,6 +7,7 @@ export const colors = {
   accent: '#2f6fed',
   accentDisabled: '#b9c9f5',
   onAccent: '#ffffff',
+  error: '#c0392b',
 };
 
 export const spacing = {
