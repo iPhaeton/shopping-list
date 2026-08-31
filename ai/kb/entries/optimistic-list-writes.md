@@ -7,13 +7,14 @@ tags: [state, persistence, supabase, architecture]
 sources: [ai/tasks/3/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/listsApi.ts]
 last_verified: 2026-08-31
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && grep -q "from './supabase'" src/lib/listsApi.ts && ! grep -q "lib/supabase'" src/state/ListsContext.tsx && ! grep -qE "removed'|deleted'" src/state/types.ts
-related: [list-data-scoped-by-rls, first-fetch-replaces-list-state, supabase-client-module-boundary, ids-minted-outside-reducer, persistence-isolated-to-provider]
+related: [list-data-scoped-by-rls, server-stamps-done-at, first-fetch-replaces-list-state, supabase-client-module-boundary, ids-minted-outside-reducer, persistence-isolated-to-provider]
 ---
 
 Persistence landed in step 3. [src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx)
-hydrates on mount and owns every write; the four PostgREST queries sit one module over in
-[src/lib/listsApi.ts](../../../src/lib/listsApi.ts), which is also the only place that knows the
-database's column names (`done_at` becomes `doneAt` there, so no row shape reaches `src/state/`).
+hydrates on mount and owns every write; the four database calls — three PostgREST queries and one
+RPC — sit one module over in [src/lib/listsApi.ts](../../../src/lib/listsApi.ts), which is also the
+only place that knows the database's names (`done_at` becomes `doneAt` there, so no row shape
+reaches `src/state/`).
 
 **Decision: the client moves first, and a failure repairs itself with a re-fetch.** The id is minted
 up front, the reducer dispatches immediately, the request follows. On failure the provider sets
@@ -26,12 +27,18 @@ avoids — it doubles the action surface to reproduce, less accurately, what one
 The alternative shape, awaiting the server before touching state, needs no rollback at all but puts a
 round trip in front of every tick of a checkbox; it was weighed and rejected.
 
-**Writes carry absolute values, never flips.** `item/setDone` takes the target `doneAt` — a timestamp
-or `null` — computed in the provider. A flip applied twice by a retry or a second device lands back
-where it started; the same absolute value applied twice is the same result, and the reducer returns
-the identical state object for the second one (see
+**Writes carry absolute values, never flips.** A flip applied twice by a retry or a second device
+lands back where it started; the same absolute value applied twice is the same result, and the
+reducer returns the identical state object for the second one (see
 [update-list-identity-preserving](update-list-identity-preserving.md)). Keep this property when
 adding a write: send what the row should become, not what to do to it.
+
+**What crosses to the database for a tick is now a boolean, not a timestamp.** `setItemDone(itemId,
+done)` calls the `set_item_done` function and Postgres stamps `done_at` from its own clock; the
+`doneAt` string the provider puts on the `item/setDone` action is a placeholder for the optimistic
+row only. That is the same absolute-value rule stated more exactly, not a departure from it — see
+[server-stamps-done-at](server-stamps-done-at.md), which also records why the device's clock stopped
+being trusted and what it costs.
 
 **The provider is mounted only while signed in.** `App.tsx` wraps it in a six-line
 `ListsForSignedInUser` that renders `<ListsProvider key={userId}>` for a `signedIn` session only.

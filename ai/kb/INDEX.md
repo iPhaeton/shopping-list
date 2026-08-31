@@ -24,7 +24,9 @@ Run `npm run kb:audit` to check every entry still holds.
 - [Ids and timestamps are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
 - [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
 - [List writes are optimistic](ai/kb/entries/optimistic-list-writes.md) — a failure re-fetches rather than undoing; the queries live in `src/lib/listsApi.ts` (decision)
-- [RLS scopes lists to their owner](ai/kb/entries/list-data-scoped-by-rls.md) — the client never filters and never sends `owner_id`; no delete policy (constraint)
+- [The database stamps `done_at`](ai/kb/entries/server-stamps-done-at.md) — the client sends a boolean through `set_item_done` and cannot update `items` at all (decision)
+- [RLS scopes lists to their owner](ai/kb/entries/list-data-scoped-by-rls.md) — the client never filters and never sends `owner_id`; grants are half the story; no delete policy (constraint)
+- [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, and `from public` leaves `anon` (gotcha)
 - [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'` (gotcha)
 
 **UI**

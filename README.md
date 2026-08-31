@@ -52,8 +52,12 @@ remains out of scope, so there is no membership table yet.
 
 Writes are optimistic. The client mints a row's uuid, the screen updates immediately, and the
 insert follows; if it fails, the message appears at the top of the screen and the lists are
-re-fetched, so what you see is what the database holds. Items store `done_at` rather than a
-boolean, and the app sends an absolute value rather than "flip it", so a retry cannot double-apply.
+re-fetched, so what you see is what the database holds.
+
+Ticking an item sends done or not-done — an absolute value rather than "flip it", so a retry cannot
+double-apply — and the **database** stamps `done_at` from its own clock, through the
+`set_item_done` function. Clients are not granted `update` on `items` at all, so a device whose
+clock is wrong cannot record when an item was checked off; it can only say *that* it was.
 
 Auth lives in [`src/state/SessionContext.tsx`](src/state/SessionContext.tsx), which models the
 session as a union (`loading` / `signedOut` / `signedIn`) that

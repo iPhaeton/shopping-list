@@ -114,11 +114,16 @@ export function ListsProvider({ children }: { children: ReactNode }) {
         ?.items.find((candidate) => candidate.id === itemId);
       if (!item) return;
 
-      // The target value, computed here and sent whole. The reducer is never asked to flip.
-      const doneAt = item.doneAt === null ? new Date().toISOString() : null;
+      // The target state, computed here and sent whole. The reducer is never asked to flip.
+      const done = item.doneAt === null;
+
+      // A placeholder for the optimistic row only — this device's clock does not decide when an
+      // item was checked off. The database stamps the real instant, and the next hydration replaces
+      // what is dispatched here.
+      const doneAt = done ? new Date().toISOString() : null;
 
       dispatch({ type: 'item/setDone', listId, itemId, doneAt });
-      void write(() => setItemDone(itemId, doneAt));
+      void write(() => setItemDone(itemId, done));
     },
     [state.lists, write]
   );

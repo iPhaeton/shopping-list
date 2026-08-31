@@ -20,9 +20,11 @@ create table public.items (
   id uuid primary key,
   list_id uuid not null references public.lists on delete cascade,
   title text not null check (length(trim(title)) > 0),
-  -- A timestamp rather than a boolean: the client sends an absolute value ("done at 14:02" or "not
-  -- done") instead of a flip, so a retry cannot double-apply and two clients converge on the later
-  -- write. It also records *when* an item was checked off, for free.
+  -- A timestamp rather than a boolean, so the row records *when* an item was checked off. The
+  -- client cannot write it: it calls set_item_done() below with done or not-done, and this column
+  -- is stamped from the database's clock. Sending a state rather than a flip is also what stops a
+  -- retry double-applying. Note that nothing compares these values to decide anything — an update
+  -- is unconditional, and the last one to commit wins.
   done_at timestamptz,
   created_at timestamptz not null default now()
 );
@@ -56,9 +58,48 @@ create policy "add items to own lists" on public.items
     exists (select 1 from public.lists where lists.id = items.list_id and lists.owner_id = auth.uid())
   );
 
+-- Kept although the revoke below currently makes it unreachable: it states the rule any future
+-- column grant would have to satisfy, so re-granting one cannot accidentally open the table up.
 create policy "update items of own lists" on public.items
   for update using (
     exists (select 1 from public.lists where lists.id = items.list_id and lists.owner_id = auth.uid())
   ) with check (
     exists (select 1 from public.lists where lists.id = items.list_id and lists.owner_id = auth.uid())
   );
+
+-- No client may write items directly. `done_at` has to be stamped by the database's clock: a
+-- device's own clock can be wrong by a year, and a timestamp that records when a phone *thinks* an
+-- item was checked off is a value nothing downstream can trust — least of all a later step that
+-- resolves conflicts by comparing them.
+--
+-- Table-level, because a column-level revoke cannot subtract from a table-level grant, and
+-- anon/authenticated hold this one on every column. Nothing else updates items today.
+revoke update on public.items from anon, authenticated;
+
+-- `security definer` so the update can happen at all now the grant is gone. That bypasses the
+-- policies as well, which is why the ownership test is repeated here: this predicate and the
+-- "update items of own lists" policy above say the same thing and must stay in step.
+create function public.set_item_done(p_item_id uuid, p_done boolean)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.items
+     set done_at = case when p_done then now() else null end
+   where id = p_item_id
+     and exists (
+       select 1 from public.lists
+        where lists.id = items.list_id and lists.owner_id = auth.uid()
+     );
+$$;
+
+-- Who may call it. anon would match no rows anyway (auth.uid() is null), but a `security definer`
+-- function should name its callers rather than inherit them.
+--
+-- `from public` alone is not enough: Postgres grants EXECUTE to PUBLIC on every new function, and
+-- Supabase *additionally* runs `alter default privileges ... grant execute on functions to anon,
+-- authenticated, service_role`, so a fresh function arrives with anon already on its ACL by name.
+-- Revoking the implicit grant leaves the explicit one standing.
+revoke execute on function public.set_item_done(uuid, boolean) from public, anon;
+grant execute on function public.set_item_done(uuid, boolean) to authenticated;

@@ -158,6 +158,68 @@ mock plus two new cases in `ListsScreen.test.tsx` (loading spinner, error banner
      `/auth/v1/token` was a stale refresh token in localStorage from before `db reset` wiped the
      auth schema.)
 
+## Follow-up — `done_at` moved to the server (2026-08-31, same day, after review)
+
+Added rather than rewritten: what is above was true when written, and this is what changed.
+
+**The question that prompted it:** `done_at` was minted on the device
+(`new Date().toISOString()`). If a phone's clock is a year out, do its writes always win?
+
+**No** — and worth being precise about why, because the reasoning above was loose. Nothing compares
+`done_at` values: the update was unconditional and the winner is whichever statement commits last.
+The convergence property this design rests on is the *absolute value* ("be done", not "flip"), which
+holds whatever the timestamp says. But the stored value was still a lie from a skewed device, the
+row mixed a server clock in `created_at` with a device clock in `done_at`, and a later step that
+resolved conflicts by comparing timestamps would have handed every conflict to the fastest clock.
+
+**What changed:** `set_item_done(p_item_id uuid, p_done boolean)` in the migration. The client sends
+a boolean; the database writes `case when p_done then now() else null end`. `setItemDone` calls it
+through `supabase.rpc`, and `toggleItem` still mints a local timestamp — now explicitly a
+placeholder for the optimistic row, replaced at the next hydration.
+
+### Two things I had wrong when proposing it
+
+**A column-level revoke cannot subtract from a table-level grant.** The plan was
+`revoke update (done_at) on public.items from authenticated`. But `anon` and `authenticated` hold
+*table-level* UPDATE (Supabase grants it by default), and Postgres will not carve a column out of
+that. It has to be `revoke update on public.items from anon, authenticated`, which also takes away
+direct title updates — no feature uses them, so nothing broke.
+
+**Which forced `security definer`, not `invoker`.** An invoker function runs under the caller's
+privileges and would have been denied by the very revoke that makes this worth doing. Definer
+bypasses RLS too, so the ownership test is repeated inside the function body. That duplication is
+real and is called out in a comment: the predicate and the `update items of own lists` policy must
+stay in step. The policy is kept although unreachable, so a future column grant lands on a rule that
+is already written.
+
+### Problem hit: revoking from `PUBLIC` did not stop `anon`
+
+`revoke execute on function ... from public` left `anon_may_call = t`. Postgres grants EXECUTE to
+PUBLIC on every new function, but Supabase *also* runs
+`alter default privileges ... grant execute on functions to anon, authenticated, service_role`, so a
+new function arrives with `anon` on its ACL **by name**. Revoking the implicit grant leaves the
+explicit one standing. Fixed with `from public, anon`, and confirmed against `pg_proc.proacl`.
+
+### Verification performed
+
+1. `npm run typecheck`, `npm test` — 52 tests still passing; the toggle assertions changed from
+   `expect.any(String)` to `true`/`false`, which is strictly stronger.
+2. `npx supabase db reset`; `prosecdef = t`, `search_path=""`, and **zero** UPDATE rows for
+   anon/authenticated in `information_schema.column_privileges` for `items`.
+3. REST, with HS256 tokens minted from the local `jwt_secret` for two users created through the
+   admin API:
+   - A marks **A's own** item → 204, `done_at` within 5s of the server's `now()`
+   - A marks **B's** item → 204 but **zero rows changed**; B's `done_at` still null. This is what
+     earns the ownership predicate inside a definer function.
+   - A `PATCH`es `done_at` directly → **403, "permission denied for table items"**
+   - A `PATCH`es `title` directly → 403 as well, the accepted cost of the table-level revoke
+   - anon calls the function → **401, "permission denied for function set_item_done"**
+   - A unmarks its own item → `done_at` null again
+4. In the browser, the direct answer to the question: overrode the page's `Date` so it believed it
+   was **2025-08-31**, signed in, ticked an item. The checkbox ticked instantly and the row in
+   Postgres carried **2026-08-31 12:59:19**, within a second of `now()`. Unticking cleared it.
+   Console: 0 errors, the known `pointerEvents` warning.
+
 ## Follow-ups / notes for later steps
 
 - **`scope-boundaries` is now wrong again**: persistence is in; sharing, realtime and deletion are

@@ -40,9 +40,16 @@ export async function insertItem(id: string, listId: string, title: string): Pro
   return { error: error?.message ?? null };
 }
 
-/** An absolute value, never a flip — see the `done_at` comment in the migration. */
-export async function setItemDone(itemId: string, doneAt: string | null): Promise<Result> {
-  const { error } = await supabase.from('items').update({ done_at: doneAt }).eq('id', itemId);
+/**
+ * Sends what the item should *be*, never a flip, so a retry cannot double-apply.
+ *
+ * Through an RPC rather than an update because the client is not allowed to write `done_at` — the
+ * database stamps the time from its own clock. The argument keys have to match the function's
+ * parameter names exactly: PostgREST resolves the call by name, and a typo reads as "function not
+ * found" rather than as a bad argument.
+ */
+export async function setItemDone(itemId: string, done: boolean): Promise<Result> {
+  const { error } = await supabase.rpc('set_item_done', { p_item_id: itemId, p_done: done });
   return { error: error?.message ?? null };
 }
 

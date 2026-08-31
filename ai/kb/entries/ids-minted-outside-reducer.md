@@ -7,7 +7,7 @@ tags: [state, reducer, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md]
 last_verified: 2026-08-31
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
-related: [optimistic-list-writes, update-list-identity-preserving, expo-crypto-undefined-under-jest]
+related: [optimistic-list-writes, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---
 
 [src/state/listsReducer.ts](../../../src/state/listsReducer.ts) generates nothing non-deterministic.
@@ -19,6 +19,12 @@ Every action that creates something carries the new id on it
 **As of step 3 the same rule governs a second value: the `doneAt` timestamp.** `item/setDone` carries
 the absolute value the item should hold — `new Date().toISOString()` or `null` — computed in the
 provider. The reducer is never asked to read the clock, and never asked to flip.
+
+**That timestamp is only a placeholder for the optimistic row.** The stored `done_at` is minted by
+Postgres, not by the device, and the request that triggers it carries a boolean
+([server-stamps-done-at](server-stamps-done-at.md)). The convention here is untouched — the value
+still arrives on the action and the reducer stays deterministic — but do not read the dispatched
+`doneAt` as the time the database holds.
 
 **The ids are uuids now, not the `makeId(prefix)` counter** that produced `list-1` and `item-3`
 before persistence landed. Counter ids cannot be primary keys in a table shared by every account, and

@@ -4,3 +4,4 @@
 4. Supabase limits: throughput, email rate limit
 5. Librarian prints and reads all KB entries
 6. Offline support
+7. Check that "Done At" time shown in the ui is in the device's timezone.

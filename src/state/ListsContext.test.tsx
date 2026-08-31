@@ -141,7 +141,10 @@ it('adds an item optimistically and inserts it against its list', async () => {
   );
 });
 
-/** A timestamp, then null — never "flip whatever is there now". */
+/**
+ * Done, then not done — never "flip whatever is there now". The timestamp is the database's to
+ * mint, so what crosses this boundary is the target state, not a time.
+ */
 it('sends an absolute value when an item is toggled', async () => {
   api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
 
@@ -149,11 +152,11 @@ it('sends an absolute value when an item is toggled', async () => {
 
   await fireEvent.press(screen.getByLabelText('toggle'));
   expect(screen.getByText('l1 Groceries: Milk done')).toBeOnTheScreen();
-  expect(api.setItemDone).toHaveBeenLastCalledWith('i1', expect.any(String));
+  expect(api.setItemDone).toHaveBeenLastCalledWith('i1', true);
 
   await fireEvent.press(screen.getByLabelText('toggle'));
   expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
-  expect(api.setItemDone).toHaveBeenLastCalledWith('i1', null);
+  expect(api.setItemDone).toHaveBeenLastCalledWith('i1', false);
 });
 
 /**
