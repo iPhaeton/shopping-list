@@ -3,6 +3,7 @@ import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'reac
 
 import { AddBar } from '../components/AddBar';
 import { EmptyState } from '../components/EmptyState';
+import { ErrorBanner } from '../components/ErrorBanner';
 import { ItemRow } from '../components/ItemRow';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
@@ -10,7 +11,7 @@ import { colors, spacing } from '../theme';
 
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const { listId } = route.params;
-  const { lists, addItem, toggleItem } = useLists();
+  const { lists, error, addItem, toggleItem } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
 
   useLayoutEffect(() => {
@@ -29,6 +30,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {error ? <ErrorBanner message={error} /> : null}
       <AddBar
         placeholder="Add an item"
         buttonLabel="Add"

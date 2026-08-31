@@ -1,0 +1,1 @@
+Implement persistence of the lists in the database. Do not take into account list sharing between the users yet.

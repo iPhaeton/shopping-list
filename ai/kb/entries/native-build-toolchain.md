@@ -4,8 +4,8 @@ title: iOS simulator works on this machine; Android SDK and CocoaPods are still 
 type: environment
 status: current
 tags: [environment, verification, expo, ios, android]
-sources: [README.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md]
-last_verified: 2026-08-30
+sources: [README.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md]
+last_verified: 2026-08-31
 verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone
 related: [expo-sdk-54-pinned, supabase-local-stack]
 ---
@@ -39,7 +39,10 @@ managed workflow, and `/ios` and `/android` are gitignored. `npx expo run:ios` w
 *and* an `ios.bundleIdentifier` in [app.json](../../../app.json), which is not there. Nothing in the
 app calls for one — `expo-status-bar`, `react-native-screens`, `react-native-safe-area-context` and
 React Navigation all ship inside the Expo Go runtime — as do `@supabase/supabase-js` and
-`@react-native-async-storage/async-storage`, added in step 2. So don't reach for `expo prebuild` or
+`@react-native-async-storage/async-storage`, added in step 2, and `expo-crypto`, added in step 3.
+`expo-crypto` is the first *native* module the app calls directly; it is an Expo SDK module and so is
+present in Expo Go, but note it is absent under jest, which is a separate problem with a separate fix
+— see [expo-crypto-undefined-under-jest](expo-crypto-undefined-under-jest.md). So don't reach for `expo prebuild` or
 `pod install`; they cost an install to buy what Expo Go already gives you. Step 2 did add a
 `scheme` to `app.json`, which is groundwork for a future dev build (the proposed biometric unlock
 needs one) — it is not a dev build and does not imply one exists.
@@ -52,7 +55,8 @@ device. A simulator screenshot is now a cheap verification step; it was not befo
 
 **Anything behind sign-in is browser-only, whatever the toolchain says.** The app talks to a
 Supabase stack on this machine's `127.0.0.1`, which a phone in Expo Go cannot reach — so `npm start`
-on a device stops at the sign-in screen no matter how healthy the native tooling is. See
+on a device stops at the sign-in screen no matter how healthy the native tooling is. Since step 3
+that covers the list screens too: they fetch from the same stack. See
 [supabase-local-stack](supabase-local-stack.md).
 
 **Historical note:** the *original* absence of a toolchain is why this project is Expo rather than

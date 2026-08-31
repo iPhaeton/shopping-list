@@ -1,6 +1,9 @@
 import { countDone, initialState, listsReducer } from './listsReducer';
 import type { State } from './types';
 
+/** Stands in for a timestamp minted by the provider; the reducer never makes one itself. */
+const DONE_AT = '2026-08-31T09:00:00.000Z';
+
 /** Builds a state with one list ("l1") holding the given item titles, none done. */
 function stateWithItems(...titles: string[]): State {
   return titles.reduce<State>(
@@ -9,6 +12,24 @@ function stateWithItems(...titles: string[]): State {
     listsReducer(initialState, { type: 'list/created', id: 'l1', name: 'Groceries' })
   );
 }
+
+describe('lists/loaded', () => {
+  it('replaces the lists with what the database returned', () => {
+    const lists = [
+      { id: 'l9', name: 'Hardware', items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT }] },
+    ];
+
+    const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists });
+
+    expect(state.lists).toEqual(lists);
+  });
+
+  it('empties the state for an account with no lists', () => {
+    const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists: [] });
+
+    expect(state.lists).toEqual([]);
+  });
+});
 
 describe('list/created', () => {
   it('appends a named, empty list', () => {
@@ -51,7 +72,7 @@ describe('item/added', () => {
   it('appends an item that starts out not done', () => {
     const state = stateWithItems('Milk');
 
-    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', done: false }]);
+    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', doneAt: null }]);
   });
 
   it('preserves insertion order', () => {
@@ -92,36 +113,74 @@ describe('item/added', () => {
   });
 });
 
-describe('item/toggled', () => {
+describe('item/setDone', () => {
   it('marks an item done and back again', () => {
     const before = stateWithItems('Milk');
 
-    const done = listsReducer(before, { type: 'item/toggled', listId: 'l1', itemId: 'i1' });
-    expect(done.lists[0].items[0].done).toBe(true);
+    const done = listsReducer(before, {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i1',
+      doneAt: DONE_AT,
+    });
+    expect(done.lists[0].items[0].doneAt).toBe(DONE_AT);
 
-    const undone = listsReducer(done, { type: 'item/toggled', listId: 'l1', itemId: 'i1' });
-    expect(undone.lists[0].items[0].done).toBe(false);
+    const undone = listsReducer(done, {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i1',
+      doneAt: null,
+    });
+    expect(undone.lists[0].items[0].doneAt).toBeNull();
   });
 
   it('only touches the targeted item', () => {
     const state = listsReducer(stateWithItems('Milk', 'Bread', 'Eggs'), {
-      type: 'item/toggled',
+      type: 'item/setDone',
       listId: 'l1',
       itemId: 'i2',
+      doneAt: DONE_AT,
     });
 
-    expect(state.lists[0].items.map((item) => item.done)).toEqual([false, true, false]);
+    expect(state.lists[0].items.map((item) => item.doneAt)).toEqual([null, DONE_AT, null]);
+  });
+
+  /**
+   * The point of an absolute value rather than a flip: a retried request, or a second device
+   * sending the same thing, changes nothing the second time.
+   */
+  it('is a no-op when the item already holds that value', () => {
+    const before = listsReducer(stateWithItems('Milk'), {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i1',
+      doneAt: DONE_AT,
+    });
+
+    expect(
+      listsReducer(before, { type: 'item/setDone', listId: 'l1', itemId: 'i1', doneAt: DONE_AT })
+    ).toBe(before);
   });
 
   it('is a no-op for an unknown list or item', () => {
     const before = stateWithItems('Milk');
 
-    expect(listsReducer(before, { type: 'item/toggled', listId: 'nope', itemId: 'i1' })).toBe(
-      before
-    );
-    expect(listsReducer(before, { type: 'item/toggled', listId: 'l1', itemId: 'nope' })).toBe(
-      before
-    );
+    expect(
+      listsReducer(before, {
+        type: 'item/setDone',
+        listId: 'nope',
+        itemId: 'i1',
+        doneAt: DONE_AT,
+      })
+    ).toBe(before);
+    expect(
+      listsReducer(before, {
+        type: 'item/setDone',
+        listId: 'l1',
+        itemId: 'nope',
+        doneAt: DONE_AT,
+      })
+    ).toBe(before);
   });
 });
 
@@ -130,7 +189,7 @@ describe('immutability', () => {
     const before = stateWithItems('Milk');
     const snapshot = JSON.parse(JSON.stringify(before));
 
-    listsReducer(before, { type: 'item/toggled', listId: 'l1', itemId: 'i1' });
+    listsReducer(before, { type: 'item/setDone', listId: 'l1', itemId: 'i1', doneAt: DONE_AT });
     listsReducer(before, { type: 'item/added', listId: 'l1', id: 'i2', title: 'Bread' });
     listsReducer(before, { type: 'list/created', id: 'l2', name: 'Hardware' });
 
@@ -141,9 +200,10 @@ describe('immutability', () => {
 describe('countDone', () => {
   it('counts only items marked done', () => {
     const state = listsReducer(stateWithItems('Milk', 'Bread', 'Eggs'), {
-      type: 'item/toggled',
+      type: 'item/setDone',
       listId: 'l1',
       itemId: 'i2',
+      doneAt: DONE_AT,
     });
 
     expect(countDone(state.lists[0])).toBe(1);

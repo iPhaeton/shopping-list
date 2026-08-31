@@ -4,8 +4,8 @@ title: RNTL 14 made render/fireEvent/unmount async and removed toHaveAccessibili
 type: gotcha
 status: current
 tags: [testing, rntl]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md]
-last_verified: 2026-08-30
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md]
+last_verified: 2026-08-31
 verify: grep -q '"@testing-library/react-native": "\^14' package.json
 related: [queries-go-through-a11y-labels, screens-take-navigation-props, supabase-client-module-boundary]
 ---
@@ -33,7 +33,9 @@ subscriber, say — updates the provider without RNTL knowing, and prints
 `An update to SessionProvider inside a test was not wrapped in act(...)`. Awaiting the assertion
 with `findBy*` does not settle it; wrap the trigger instead:
 `await act(async () => emitAuthChange(session))`. Anything RNTL itself drives (`fireEvent`) is
-already wrapped, which is why this only shows up for callbacks the test holds.
+already wrapped, which is why this only shows up for callbacks the test holds. **Resolving a mock
+promise by hand is the same case:** step 3's loading-spinner test holds a deferred `fetchLists` and
+settles it with `await act(async () => settle({ lists: [], error: null }))`, for exactly this reason.
 
 **What to do:** `await` every `render`, `fireEvent` and `unmount` call. Retire this entry if the
 project ever moves off RNTL 14 — the `verify:` command pins the major version — but note that the

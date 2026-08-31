@@ -5,19 +5,36 @@ import type { ListDetailScreenProps } from '../navigation/types';
 import { ListsProvider, useLists } from '../state/ListsContext';
 import { ListDetailScreen } from './ListDetailScreen';
 
+/**
+ * `src/lib/listsApi.ts` is mocked at the module boundary — the provider fetches on mount now, and
+ * this suite is about the screen, not about what the database returns.
+ */
+jest.mock('../lib/listsApi', () => ({
+  fetchLists: jest.fn(async () => ({ lists: [], error: null })),
+  insertList: jest.fn(async () => ({ error: null })),
+  insertItem: jest.fn(async () => ({ error: null })),
+  setItemDone: jest.fn(async () => ({ error: null })),
+}));
+
 const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
 function detailProps(listId: string) {
   return { navigation, route: { params: { listId } } } as unknown as ListDetailScreenProps;
 }
 
-/** Creates a real list through the provider, then renders the detail screen for it. */
+/**
+ * Creates a real list through the provider, then renders the detail screen for it.
+ *
+ * It waits for `status` first because hydration replaces the whole of state: a list created before
+ * the fetch lands would be wiped by it. The app has the same ordering — `ListsScreen` renders a
+ * spinner, not an input, until the fetch is in.
+ */
 function Harness({ listName }: { listName: string }) {
-  const { lists, createList } = useLists();
+  const { lists, status, createList } = useLists();
 
   useEffect(() => {
-    createList(listName);
-  }, [createList, listName]);
+    if (status === 'ready') createList(listName);
+  }, [status, createList, listName]);
 
   const list = lists[0];
   return list ? <ListDetailScreen {...detailProps(list.id)} /> : null;
@@ -33,6 +50,9 @@ async function renderScreen(listName = 'Groceries') {
       <Harness listName={listName} />
     </ListsProvider>
   );
+
+  // Nothing renders until the fetch has settled and the harness has created its list.
+  await screen.findByLabelText('Add an item');
 }
 
 async function addItem(title: string) {

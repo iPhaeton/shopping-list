@@ -1,17 +1,29 @@
-import { FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
 import { AddBar } from '../components/AddBar';
 import { EmptyState } from '../components/EmptyState';
+import { ErrorBanner } from '../components/ErrorBanner';
 import { ListRow } from '../components/ListRow';
 import type { ListsScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { colors, spacing } from '../theme';
 
 export function ListsScreen({ navigation }: ListsScreenProps) {
-  const { lists, createList } = useLists();
+  const { lists, status, error, createList } = useLists();
+
+  // Without this the first paint claims "No lists yet" — before the fetch that would contradict it
+  // has come back.
+  if (status === 'loading') {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator accessibilityLabel="Loading your lists" color={colors.accent} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
+      {error ? <ErrorBanner message={error} /> : null}
       <AddBar
         placeholder="New list name"
         buttonLabel="Create"
@@ -42,6 +54,12 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.background,
   },
   content: {

@@ -4,6 +4,12 @@ export const initialState: State = { lists: [] };
 
 export function listsReducer(state: State, action: Action): State {
   switch (action.type) {
+    // Hydration from the database, and the way a failed write is rolled back: whatever the server
+    // holds replaces whatever the screen was showing.
+    case 'lists/loaded': {
+      return { ...state, lists: action.lists };
+    }
+
     case 'list/created': {
       const name = action.name.trim();
       if (!name) return state;
@@ -18,18 +24,19 @@ export function listsReducer(state: State, action: Action): State {
 
       return updateList(state, action.listId, (list) => ({
         ...list,
-        items: [...list.items, { id: action.id, title, done: false }],
+        items: [...list.items, { id: action.id, title, doneAt: null }],
       }));
     }
 
-    case 'item/toggled': {
+    case 'item/setDone': {
       return updateList(state, action.listId, (list) => {
-        if (!list.items.some((item) => item.id === action.itemId)) return list;
+        const item = list.items.find((candidate) => candidate.id === action.itemId);
+        if (!item || item.doneAt === action.doneAt) return list;
 
         return {
           ...list,
-          items: list.items.map((item) =>
-            item.id === action.itemId ? { ...item, done: !item.done } : item
+          items: list.items.map((candidate) =>
+            candidate.id === action.itemId ? { ...candidate, doneAt: action.doneAt } : candidate
           ),
         };
       });
@@ -54,5 +61,5 @@ function updateList(state: State, listId: string, update: (list: List) => List):
 }
 
 export function countDone(list: List): number {
-  return list.items.filter((item) => item.done).length;
+  return list.items.filter((item) => item.doneAt !== null).length;
 }

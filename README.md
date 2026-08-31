@@ -45,10 +45,15 @@ npm run typecheck # tsc --noEmit
 
 ## Notes
 
-**The session persists; the lists do not.** Signing in survives a reload — Supabase stores the
-session through the `sessionStorage` adapter in [`src/lib/supabase.ts`](src/lib/supabase.ts) — but
-list data is still held in memory and resets on reload. Moving lists into the database is a later
-step; sharing remains out of scope.
+**Lists live in Postgres, one owner each.** They survive a reload, and row-level security — not a
+filter in the app — is what keeps them private: every query runs under the signed-in user's token,
+and the policies allow only rows whose `owner_id` is that user. Sharing a list with someone else
+remains out of scope, so there is no membership table yet.
+
+Writes are optimistic. The client mints a row's uuid, the screen updates immediately, and the
+insert follows; if it fails, the message appears at the top of the screen and the lists are
+re-fetched, so what you see is what the database holds. Items store `done_at` rather than a
+boolean, and the app sends an absolute value rather than "flip it", so a retry cannot double-apply.
 
 Auth lives in [`src/state/SessionContext.tsx`](src/state/SessionContext.tsx), which models the
 session as a union (`loading` / `signedOut` / `signedIn`) that

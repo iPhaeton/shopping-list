@@ -1,3 +1,6 @@
 1. Real database
 2. Real email service
 3. Sign out everyone
+4. Supabase limits: throughput, email rate limit
+5. Librarian prints and reads all KB entries
+6. Offline support

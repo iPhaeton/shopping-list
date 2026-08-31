@@ -4,18 +4,21 @@ import type { Item } from '../state/types';
 import { colors, radius, spacing } from '../theme';
 
 export function ItemRow({ item, onToggle }: { item: Item; onToggle: () => void }) {
+  // `doneAt` records when the item was checked off; nothing here shows the time, only the fact.
+  const done = item.doneAt !== null;
+
   return (
     <Pressable
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: item.done }}
+      accessibilityState={{ checked: done }}
       accessibilityLabel={item.title}
-      accessibilityHint={item.done ? 'Marks this item as not done' : 'Marks this item as done'}
+      accessibilityHint={done ? 'Marks this item as not done' : 'Marks this item as done'}
       onPress={onToggle}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <View style={[styles.checkbox, item.done && styles.checkboxChecked]}>
-        {item.done ? <Text style={styles.check}>✓</Text> : null}
+      <View style={[styles.checkbox, done && styles.checkboxChecked]}>
+        {done ? <Text style={styles.check}>✓</Text> : null}
       </View>
-      <Text style={[styles.title, item.done && styles.titleDone]}>{item.title}</Text>
+      <Text style={[styles.title, done && styles.titleDone]}>{item.title}</Text>
     </Pressable>
   );
 }

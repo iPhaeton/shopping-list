@@ -1,24 +1,37 @@
 ---
 id: ids-minted-outside-reducer
-title: Ids are minted outside the reducer and arrive on the action
+title: Ids and timestamps are minted outside the reducer and arrive on the action
 type: convention
 status: current
 tags: [state, reducer, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md]
-last_verified: 2026-08-26
-verify: ! grep -qE 'randomUUID|Date\.now|Math\.random' src/state/listsReducer.ts
-related: [persistence-isolated-to-provider, update-list-identity-preserving]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md]
+last_verified: 2026-08-31
+verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
+related: [optimistic-list-writes, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---
 
-[src/state/listsReducer.ts](../../../src/state/listsReducer.ts) never generates an id. Every action
-that creates something carries the new id on it (`{ type: 'list/created', id, name }`).
-[src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx) mints ids in its action creators,
-via a module-level `makeId(prefix)` counter.
+[src/state/listsReducer.ts](../../../src/state/listsReducer.ts) generates nothing non-deterministic.
+Every action that creates something carries the new id on it
+(`{ type: 'list/created', id, name }`), and
+[src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx) mints it at dispatch time via
+`newId()` from [src/lib/ids.ts](../../../src/lib/ids.ts).
+
+**As of step 3 the same rule governs a second value: the `doneAt` timestamp.** `item/setDone` carries
+the absolute value the item should hold — `new Date().toISOString()` or `null` — computed in the
+provider. The reducer is never asked to read the clock, and never asked to flip.
+
+**The ids are uuids now, not the `makeId(prefix)` counter** that produced `list-1` and `item-3`
+before persistence landed. Counter ids cannot be primary keys in a table shared by every account, and
+two devices would collide on `item-3` immediately. `newId()` wraps `expo-crypto`'s `randomUUID`,
+which is a native call — hence the mock in `jest.setup.ts`, and why that call has its own module:
+see [expo-crypto-undefined-under-jest](expo-crypto-undefined-under-jest.md).
 
 **Why it matters:** it keeps the reducer pure and deterministic, so
 [src/state/listsReducer.test.ts](../../../src/state/listsReducer.test.ts) passes literal ids
-(`'l1'`, `'i1'`) and needs no mocking of `Date.now` or `crypto.randomUUID`.
+(`'l1'`, `'i1'`) and fixed timestamp strings, and needs no fake timers and no uuid mocking. Minting
+the id up front is also what makes the optimistic write possible — the row is on screen under the
+same id the insert was given, so a retry cannot duplicate it.
 
-**What to do:** when adding a case that creates an entity, put the id on the action and mint it in
-the provider. Reaching for `crypto.randomUUID()` inside the reducer is the mistake this prevents,
-and it breaks every existing test's determinism.
+**What to do:** a new case that creates an entity, or records a moment, puts the value on the action
+and mints it in the provider. `crypto.randomUUID()` or `new Date()` inside the reducer is the mistake
+this prevents; the `verify:` command greps for both.

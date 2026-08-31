@@ -8,22 +8,24 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [Expo SDK 54 is pinned](ai/kb/entries/expo-sdk-54-pinned.md) — read the v54.0.0 docs, not the latest (reference)
 - [iOS simulator works; Android does not](ai/kb/entries/native-build-toolchain.md) — `npm run ios` boots a sim into Expo Go; no Android SDK and no CocoaPods, and no native dev build is needed (environment)
-- [Supabase runs locally in Docker](ai/kb/entries/supabase-local-stack.md) — `npx supabase start`; the sign-in code lands in Mailpit; verify auth in the browser (environment)
+- [Supabase runs locally in Docker](ai/kb/entries/supabase-local-stack.md) — `npx supabase start`; the sign-in code lands in Mailpit; verify anything that touches it in the browser (environment)
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — many named lists and OTP sign-in in; list persistence, sharing, and deletion out (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in and owner-only persistence in; sharing, realtime, deletion and offline out (constraint)
 
 **Auth**
 
-- [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock that file (convention)
+- [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock it, or the query module above it (convention)
 - [Both OTP email templates must render the token](ai/kb/entries/otp-email-templates-carry-the-code.md) — `confirmation` for new addresses, `magic_link` for returning ones (gotcha)
 
-**State**
+**State and persistence**
 
-- [Ids are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
+- [Ids and timestamps are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
 - [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
-- [Storage touches only ListsContext](ai/kb/entries/persistence-isolated-to-provider.md) — the plan for when list persistence lands (decision)
+- [List writes are optimistic](ai/kb/entries/optimistic-list-writes.md) — a failure re-fetches rather than undoing; the queries live in `src/lib/listsApi.ts` (decision)
+- [RLS scopes lists to their owner](ai/kb/entries/list-data-scoped-by-rls.md) — the client never filters and never sends `owner_id`; no delete policy (constraint)
+- [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'` (gotcha)
 
 **UI**
 
@@ -35,6 +37,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent/unmount; `toBeChecked` replaced `toHaveAccessibilityState`; `act` for external updates (gotcha)
 - [tsconfig needs an explicit types array](ai/kb/entries/tsconfig-explicit-types-array.md) — without it the jest globals don't resolve (gotcha)
+- [expo-crypto is undefined under jest](ai/kb/entries/expo-crypto-undefined-under-jest.md) — `randomUUID()` returns `undefined` silently; `jest.setup.ts` maps it to Node's (gotcha)
 
 ---
 
