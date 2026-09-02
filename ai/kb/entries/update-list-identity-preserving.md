@@ -5,9 +5,9 @@ type: convention
 status: current
 tags: [state, reducer, immutability]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && npx jest -t 'is a no-op' --silent
-related: [ids-minted-outside-reducer, optimistic-list-writes]
+related: [ids-minted-outside-reducer, writes-retry-from-an-outbox]
 ---
 
 The private `updateList` helper in
@@ -19,8 +19,9 @@ being set.
 
 **That second condition is load-bearing beyond rendering.** Writes carry absolute values rather than
 flips precisely so a repeat is harmless (see
-[optimistic-list-writes](optimistic-list-writes.md)); the identity check is what makes the repeat
-free as well as harmless.
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)); the identity check is what makes the
+repeat free as well as harmless. Since step 4 a repeat is routine rather than hypothetical — a
+pending write is replayed over fetched rows on every hydration.
 
 **Why it matters:** referential equality is what lets React skip re-rendering on a no-op dispatch.
 A reducer that always spreads into a new object defeats that silently — nothing fails, the app just

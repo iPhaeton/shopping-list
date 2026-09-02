@@ -5,9 +5,9 @@ type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
 sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx]
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')"
-related: [optimistic-list-writes, supabase-local-stack, rntl-14-api-changes]
+related: [writes-retry-from-an-outbox, supabase-local-stack, rntl-14-api-changes]
 ---
 
 [src/lib/supabase.ts](../../../src/lib/supabase.ts) creates the client and is the only file under
@@ -26,7 +26,12 @@ plain query functions; every list suite mocks `../lib/listsApi` rather than this
 faking PostgREST's chained builder (`.from().select().order()`) is far more work than faking
 `fetchLists`. So the rule is not "one seam" but "one importer": query modules import
 `../lib/supabase`, and screens and providers import the query module. See
-[optimistic-list-writes](optimistic-list-writes.md).
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md).
+
+**Not every module beside it is a seam to mock, though.** Step 4's `src/lib/outbox.ts` and
+`src/lib/listCache.ts` are also plain modules under `lib/`, but the list suites deliberately let
+them run for real against AsyncStorage's own jest mock — faking them would fake away the thing under
+test. Mock the module that owns a *network* call; let the ones that own disk run.
 
 **`sessionStorage` is exported by name** rather than passed inline as `storage: AsyncStorage`,
 because it is the seam a biometric unlock replaces: it would swap in a blob encrypted under a

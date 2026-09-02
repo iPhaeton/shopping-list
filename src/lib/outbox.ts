@@ -1,0 +1,88 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import type { WriteAction } from '../state/types';
+import { inOrder } from './storageQueue';
+
+/**
+ * Writes the database has not acknowledged yet, on disk, in the order they were made.
+ *
+ * The entries are the reducer's own actions rather than a second vocabulary for "a write", which is
+ * what lets `src/state/replay.ts` fold them back over fetched rows with the reducer itself.
+ *
+ * Order is load-bearing: `items.list_id` is a foreign key, so an item insert must never overtake
+ * the list insert it depends on. The flush loop in `ListsContext` sends the head and stops on the
+ * first failure it cannot resolve.
+ */
+const VERSION = 1;
+
+const keyFor = (userId: string) => `outbox:${userId}`;
+
+export async function loadOutbox(userId: string): Promise<WriteAction[]> {
+  const raw = await AsyncStorage.getItem(keyFor(userId));
+  if (!raw) return [];
+
+  const ops = parse(raw);
+  if (ops) return ops;
+
+  // Unsent writes are the promise this feature makes, so a blob that cannot be replayed is moved
+  // aside where it can still be recovered by hand — never silently overwritten.
+  await inOrder(async () => {
+    await AsyncStorage.setItem(`${keyFor(userId)}:broken`, raw);
+    await AsyncStorage.removeItem(keyFor(userId));
+  });
+  return [];
+}
+
+export function saveOutbox(userId: string, ops: WriteAction[]): Promise<void> {
+  return inOrder(() => AsyncStorage.setItem(keyFor(userId), JSON.stringify({ v: VERSION, ops })));
+}
+
+/**
+ * Appends — except for a toggle of an item already waiting, which replaces it where it stands.
+ * Writes carry absolute values, so only the newest one is worth sending: ticking a checkbox five
+ * times on a train is one request. Inserts are never coalesced; their ids are unique by
+ * construction, and each one is a different row.
+ */
+export function enqueue(ops: WriteAction[], op: WriteAction): WriteAction[] {
+  if (op.type === 'item/setDone') {
+    const index = ops.findIndex(
+      (candidate) => candidate.type === 'item/setDone' && candidate.itemId === op.itemId
+    );
+
+    if (index !== -1) {
+      const next = [...ops];
+      next[index] = op;
+      return next;
+    }
+  }
+
+  return [...ops, op];
+}
+
+/**
+ * Drops what a permanently refused write leaves stranded: an item cannot be inserted into a list
+ * the database rejected, and a toggle cannot reach an item that was never inserted. Without this,
+ * one refusal becomes a burst of error banners — each a foreign key complaining about the first.
+ */
+export function dropDependents(ops: WriteAction[], failed: WriteAction): WriteAction[] {
+  switch (failed.type) {
+    case 'list/created':
+      return ops.filter((op) => op.type === 'list/created' || op.listId !== failed.id);
+
+    case 'item/added':
+      return ops.filter((op) => op.type !== 'item/setDone' || op.itemId !== failed.id);
+
+    case 'item/setDone':
+      return ops;
+  }
+}
+
+function parse(raw: string): WriteAction[] | null {
+  try {
+    const stored = JSON.parse(raw) as { v?: unknown; ops?: unknown };
+    if (stored.v !== VERSION || !Array.isArray(stored.ops)) return null;
+    return stored.ops as WriteAction[];
+  } catch {
+    return null;
+  }
+}

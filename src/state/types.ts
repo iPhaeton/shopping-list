@@ -28,3 +28,10 @@ export type Action =
   | { type: 'list/created'; id: string; name: string }
   | { type: 'item/added'; listId: string; id: string; title: string }
   | { type: 'item/setDone'; listId: string; itemId: string; doneAt: string | null };
+
+/**
+ * The three actions that owe the database a write. They are the outbox's entries as well as the
+ * reducer's actions — `src/lib/outbox.ts` stores exactly these — which is what lets a pending write
+ * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`).
+ */
+export type WriteAction = Exclude<Action, { type: 'lists/loaded' }>;

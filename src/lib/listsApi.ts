@@ -8,7 +8,19 @@ import { supabase } from './supabase';
  * Errors are returned rather than thrown, matching `SessionContext`: the provider turns them into
  * something the screen can render.
  */
-export type Result = { error: string | null };
+export type Result = { error: string | null; verdict: Verdict };
+
+/**
+ * How the outbox is meant to read a failure.
+ *
+ * - `applied` — the write is already in the database. A retry caught up with itself.
+ * - `retryable` — nothing is wrong with the write; the network or the server is. Send it again.
+ * - `permanent` — the database refused it and always will. Drop it and tell the user.
+ */
+export type Verdict = 'ok' | 'applied' | 'retryable' | 'permanent';
+
+/** Structural, so this module stays the only one importing anything from supabase-js. */
+type Failure = { message: string; code?: string | null } | null;
 
 type ItemRow = { id: string; title: string; done_at: string | null };
 type ListRow = { id: string; name: string; items: ItemRow[] };
@@ -31,13 +43,13 @@ export async function fetchLists(): Promise<{ lists: List[] | null; error: strin
 
 /** `owner_id` is deliberately not sent: it defaults to `auth.uid()` in the database. */
 export async function insertList(id: string, name: string): Promise<Result> {
-  const { error } = await supabase.from('lists').insert({ id, name });
-  return { error: error?.message ?? null };
+  const { error, status } = await supabase.from('lists').insert({ id, name });
+  return resultFor(error, status);
 }
 
 export async function insertItem(id: string, listId: string, title: string): Promise<Result> {
-  const { error } = await supabase.from('items').insert({ id, list_id: listId, title });
-  return { error: error?.message ?? null };
+  const { error, status } = await supabase.from('items').insert({ id, list_id: listId, title });
+  return resultFor(error, status);
 }
 
 /**
@@ -49,8 +61,45 @@ export async function insertItem(id: string, listId: string, title: string): Pro
  * found" rather than as a bad argument.
  */
 export async function setItemDone(itemId: string, done: boolean): Promise<Result> {
-  const { error } = await supabase.rpc('set_item_done', { p_item_id: itemId, p_done: done });
-  return { error: error?.message ?? null };
+  const { error, status } = await supabase.rpc('set_item_done', {
+    p_item_id: itemId,
+    p_done: done,
+  });
+  return resultFor(error, status);
+}
+
+function resultFor(error: Failure, status: number): Result {
+  if (!error) return { error: null, verdict: 'ok' };
+  return { error: error.message, verdict: verdictFor(error.code ?? '', status) };
+}
+
+/**
+ * Classified from the status and the SQLSTATE, never from the message text — those two are the
+ * stable signals, and postgrest-js retries nothing but GET/HEAD/OPTIONS, so every write here gets
+ * exactly one attempt unless the outbox gives it another.
+ *
+ * The default direction is deliberate: a retry of a doomed write costs a spin, while dropping one
+ * that would have succeeded costs the user their data. So `permanent` is a short list of things the
+ * database has actually refused, and everything else — including anything unrecognised — is sent
+ * again.
+ */
+function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
+  // A duplicate key is this client's own insert catching up with itself: the row is already there,
+  // under the id it minted. This is what makes a retried insert safe rather than a second row.
+  if (code === '23505') return 'applied';
+
+  // Status 0 is how postgrest-js reports a failed fetch — no signal, DNS, TLS, a dropped socket.
+  // In other words: offline, the case this whole feature exists for.
+  if (status === 0 || status >= 500) return 'retryable';
+
+  // An expired JWT. supabase-js refreshes the token, and the next attempt goes through.
+  if (status === 401) return 'retryable';
+
+  // 403 is row-level security refusing, and the rest of the 4xx family is constraint violations.
+  // Neither improves with another attempt.
+  if (status >= 400) return 'permanent';
+
+  return 'retryable';
 }
 
 function toList(row: ListRow): List {

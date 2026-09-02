@@ -1,0 +1,1 @@
+The changes made to the lists (adding items, marking items as done) should be guaranteed to be eventually persisted in database.

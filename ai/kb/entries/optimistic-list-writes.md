@@ -2,13 +2,22 @@
 id: optimistic-list-writes
 title: List writes are optimistic and roll back by re-fetching; the queries live in src/lib/listsApi.ts
 type: decision
-status: current
+status: superseded
+superseded_by: [writes-retry-from-an-outbox]
 tags: [state, persistence, supabase, architecture]
-sources: [ai/tasks/3/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/listsApi.ts]
-last_verified: 2026-08-31
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/listsApi.ts]
+last_verified: 2026-09-01
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && grep -q "from './supabase'" src/lib/listsApi.ts && ! grep -q "lib/supabase'" src/state/ListsContext.tsx && ! grep -qE "removed'|deleted'" src/state/types.ts
-related: [list-data-scoped-by-rls, server-stamps-done-at, first-fetch-replaces-list-state, supabase-client-module-boundary, ids-minted-outside-reducer, persistence-isolated-to-provider]
+related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, server-stamps-done-at, first-fetch-replaces-list-state, supabase-client-module-boundary, ids-minted-outside-reducer, persistence-isolated-to-provider]
 ---
+
+> **Superseded by [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) (step 4).** A failed
+> write is no longer abandoned and no longer repaired by a re-fetch: it is queued on disk and
+> retried until the database takes it, and only a *refusal* re-fetches. The last paragraph below —
+> "Still not solved: offline. A write lost to bad signal is lost" — is the sentence step 4 was
+> written to delete. Everything else here (optimistic dispatch, absolute values, no compensating
+> actions, the `listsApi` seam, the provider mounted only while signed in) was carried forward
+> rather than reversed; read the superseding entry for the current form.
 
 Persistence landed in step 3. [src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx)
 hydrates on mount and owns every write; the four database calls — three PostgREST queries and one

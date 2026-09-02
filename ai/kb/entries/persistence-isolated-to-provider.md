@@ -3,7 +3,7 @@ id: persistence-isolated-to-provider
 title: Storage, if it ever lands, touches only ListsContext
 type: decision
 status: superseded
-superseded_by: [optimistic-list-writes]
+superseded_by: [writes-retry-from-an-outbox]
 tags: [state, architecture, persistence]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, README.md, 6ef87a2]
 last_verified: 2026-08-31
@@ -11,9 +11,11 @@ verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" 
 related: [scope-boundaries, ids-minted-outside-reducer, supabase-client-module-boundary, optimistic-list-writes]
 ---
 
-> **Superseded by [optimistic-list-writes](optimistic-list-writes.md) (step 3).** Storage landed,
-> so this is no longer a plan — and it landed slightly differently: the PostgREST queries sit in
-> `src/lib/listsApi.ts` beside the provider rather than inside it. The prediction below held
+> **Superseded in step 3 by [optimistic-list-writes](optimistic-list-writes.md), which step 4 in
+> turn replaced with [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) — read that one
+> for current truth.** Storage landed, so this is no longer a plan — and it landed slightly
+> differently: the PostgREST queries sit in `src/lib/listsApi.ts` beside the provider rather than
+> inside it, and step 4 added an outbox and a cache in the same directory. The prediction below held
 > otherwise (the reducer, the screens and the components were barely touched) and is kept as the
 > record of what was intended and why.
 

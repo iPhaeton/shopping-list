@@ -5,9 +5,9 @@ type: convention
 status: current
 tags: [state, reducer, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md]
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
-related: [optimistic-list-writes, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
+related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---
 
 [src/state/listsReducer.ts](../../../src/state/listsReducer.ts) generates nothing non-deterministic.
@@ -36,7 +36,10 @@ see [expo-crypto-undefined-under-jest](expo-crypto-undefined-under-jest.md).
 [src/state/listsReducer.test.ts](../../../src/state/listsReducer.test.ts) passes literal ids
 (`'l1'`, `'i1'`) and fixed timestamp strings, and needs no fake timers and no uuid mocking. Minting
 the id up front is also what makes the optimistic write possible — the row is on screen under the
-same id the insert was given, so a retry cannot duplicate it.
+same id the insert was given, so a retry cannot duplicate it. Since step 4 that property is load
+bearing rather than merely tidy: a queued insert may be sent many times, and the duplicate-key error
+the second one earns is read as "already applied"
+([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)).
 
 **What to do:** a new case that creates an entity, or records a moment, puts the value on the action
 and mints it in the provider. `crypto.randomUUID()` or `new Date()` inside the reducer is the mistake

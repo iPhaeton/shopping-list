@@ -3,9 +3,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing } from '../theme';
 
 /**
- * Writes go to the database in the background, so they can fail after the screen has already moved.
- * This is where that gets said out loud — the state behind it has been re-fetched, so what the user
- * sees underneath is what the database holds.
+ * A write the database *refused*, or a read that came back with nothing to show. Not a write that
+ * merely has not landed yet — those are queued and retried, and `SyncBanner` says so quietly.
+ *
+ * By the time this renders, the state behind it has been re-fetched, so what the user sees
+ * underneath is what the database holds.
  */
 export function ErrorBanner({ message }: { message: string }) {
   return (

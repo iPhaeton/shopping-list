@@ -24,11 +24,19 @@ export default function App() {
  * without consulting the session, and what discards one account's lists on sign-out: the provider
  * unmounts and its state goes with it. `key` covers the case of a different account signing in
  * without the first provider ever unmounting.
+ *
+ * The same id also goes in as a prop, because the outbox and the cached rows are stored per user
+ * and two accounts share one device's disk.
  */
 function ListsForSignedInUser({ children }: { children: ReactNode }) {
   const { state } = useSession();
 
   if (state.status !== 'signedIn') return <>{children}</>;
 
-  return <ListsProvider key={state.session.user.id}>{children}</ListsProvider>;
+  const userId = state.session.user.id;
+  return (
+    <ListsProvider key={userId} userId={userId}>
+      {children}
+    </ListsProvider>
+  );
 }

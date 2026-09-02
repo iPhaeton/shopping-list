@@ -51,6 +51,13 @@ a session from before the reset will fail its next token refresh with a 400 on `
 Nothing is broken — clear the site's local storage, or just sign in again. It looks alarming in the
 console during a Playwright run and has already been mistaken for a real auth failure once.
 
+**To simulate being offline, abort requests to port 54321 — not `setOffline`.**
+`page.context().setOffline(true)` also blocks the Metro bundle, so the app never boots and a restart
+cannot be tested at all. Routing only `**/127.0.0.1:54321/**` to `route.abort()` is the faithful
+version: the app starts normally and the database is unreachable, which is the scenario
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) exists for. Stopping the containers
+works too, but it is slower and takes Mailpit with it.
+
 **Verify anything that touches this stack in the browser** — auth since step 2, list data since
 step 3. A phone running Expo Go cannot reach this machine's `127.0.0.1:54321`, so sign-in cannot
 complete there at all; `npm run web` is the path that has been driven end to end, with `psql` against

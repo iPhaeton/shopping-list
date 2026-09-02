@@ -5,13 +5,14 @@ import { AddBar } from '../components/AddBar';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ItemRow } from '../components/ItemRow';
+import { SyncBanner } from '../components/SyncBanner';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { colors, spacing } from '../theme';
 
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const { listId } = route.params;
-  const { lists, error, addItem, toggleItem } = useLists();
+  const { lists, error, pending, addItem, toggleItem } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
 
   useLayoutEffect(() => {
@@ -31,6 +32,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {error ? <ErrorBanner message={error} /> : null}
+      {pending > 0 ? <SyncBanner pending={pending} /> : null}
       <AddBar
         placeholder="Add an item"
         buttonLabel="Add"

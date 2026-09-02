@@ -5,9 +5,9 @@ type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
 sources: [ai/tasks/3/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && grep -q 'done_at = case when p_done then now() else null end' supabase/migrations/20260831000000_lists.sql && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
-related: [optimistic-list-writes, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, ids-minted-outside-reducer, first-fetch-replaces-list-state]
+related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, ids-minted-outside-reducer, first-fetch-replaces-list-state]
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
@@ -27,9 +27,14 @@ The value is now Postgres's `now()`, on every write, from every device.
 loose.** Nothing compares `done_at`: the update is unconditional and the winner is whichever
 statement commits last. What makes a repeated or reordered write safe is that it carries an
 *absolute value* — "be done", not "flip" — and that property holds whatever the timestamp says (see
-[optimistic-list-writes](optimistic-list-writes.md)). Sending a boolean rather than a string is the
-same decision expressed more exactly. What the move buys is a *trustworthy* stored value, for the
-day something does compare them.
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). Sending a boolean rather than a
+string is the same decision expressed more exactly. What the move buys is a *trustworthy* stored
+value, for the day something does compare them.
+
+**Step 4 leans on this harder.** A toggle now sits in an outbox and may be sent minutes or days
+after it was tapped, possibly several times; the boolean is derived at send time from the queued
+action's `doneAt !== null`, and a queued toggle for the same item is *replaced* by a newer one rather
+than appended. Both are only safe because the value is absolute and the timestamp is the database's.
 
 **The provider still dispatches a `doneAt` string, and it is now a placeholder.** `toggleItem`
 computes `new Date().toISOString()` for the optimistic row alone; the real instant is whatever

@@ -1,6 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { useEffect } from 'react';
 
+import { insertItem } from '../lib/listsApi';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { ListsProvider, useLists } from '../state/ListsContext';
 import { ListDetailScreen } from './ListDetailScreen';
@@ -11,9 +13,9 @@ import { ListDetailScreen } from './ListDetailScreen';
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], error: null })),
-  insertList: jest.fn(async () => ({ error: null })),
-  insertItem: jest.fn(async () => ({ error: null })),
-  setItemDone: jest.fn(async () => ({ error: null })),
+  insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  insertItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
 const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
@@ -46,7 +48,7 @@ function Harness({ listName }: { listName: string }) {
  */
 async function renderScreen(listName = 'Groceries') {
   await render(
-    <ListsProvider>
+    <ListsProvider userId="u1">
       <Harness listName={listName} />
     </ListsProvider>
   );
@@ -60,8 +62,10 @@ async function addItem(title: string) {
   await fireEvent.press(screen.getByLabelText('Add'));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   navigation.setOptions.mockClear();
+  // The provider queues writes on disk now; without this each test inherits the last one's outbox.
+  await AsyncStorage.clear();
 });
 
 it('shows an empty state for a list with no items', async () => {
@@ -128,9 +132,22 @@ it('toggles only the item that was pressed', async () => {
   expect(screen.getByLabelText('Bread')).toBeChecked();
 });
 
+/** With no signal the item is still added — it is queued, and the screen says so quietly. */
+it('keeps an item added offline and says it is waiting to sync', async () => {
+  jest
+    .mocked(insertItem)
+    .mockResolvedValueOnce({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
+
+  await renderScreen();
+  await addItem('Milk');
+
+  expect(await screen.findByText("1 change will sync when you're back online")).toBeOnTheScreen();
+  expect(screen.getByLabelText('Milk')).not.toBeChecked();
+});
+
 it('falls back to a not-found state for an unknown list', async () => {
   await render(
-    <ListsProvider>
+    <ListsProvider userId="u1">
       <ListDetailScreen {...detailProps('does-not-exist')} />
     </ListsProvider>
   );

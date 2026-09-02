@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { fetchLists, insertList } from '../lib/listsApi';
@@ -18,16 +19,21 @@ import { ListsScreen } from './ListsScreen';
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], error: null })),
-  insertList: jest.fn(async () => ({ error: null })),
-  insertItem: jest.fn(async () => ({ error: null })),
-  setItemDone: jest.fn(async () => ({ error: null })),
+  insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  insertItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
+
+// The provider queues writes on disk now; without this each test inherits the last one's outbox.
+beforeEach(async () => {
+  await AsyncStorage.clear();
+});
 
 async function renderScreen() {
   const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
   await render(
-    <ListsProvider>
+    <ListsProvider userId="u1">
       <ListsScreen {...({ navigation } as unknown as ListsScreenProps)} />
     </ListsProvider>
   );
@@ -95,7 +101,7 @@ it('shows a spinner instead of the empty state while loading', async () => {
   );
 
   await render(
-    <ListsProvider>
+    <ListsProvider userId="u1">
       <ListsScreen {...({ navigation: { navigate: jest.fn() } } as unknown as ListsScreenProps)} />
     </ListsProvider>
   );
@@ -108,13 +114,29 @@ it('shows a spinner instead of the empty state while loading', async () => {
   expect(screen.getByText('No lists yet')).toBeOnTheScreen();
 });
 
-it('shows the message when a write fails', async () => {
-  jest.mocked(insertList).mockResolvedValueOnce({ error: 'permission denied' });
+it('shows the message when the database refuses a write', async () => {
+  jest.mocked(insertList).mockResolvedValueOnce({ error: 'permission denied', verdict: 'permanent' });
 
   await renderScreen();
   await createList('Groceries');
 
   expect(await screen.findByText('permission denied')).toBeOnTheScreen();
+});
+
+/** A write that has not landed *yet* is not an error, and must not be dressed as one. */
+it('says a write is waiting to sync instead of raising an error', async () => {
+  jest
+    .mocked(insertList)
+    .mockResolvedValueOnce({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
+
+  await renderScreen();
+  await createList('Groceries');
+
+  expect(
+    await screen.findByText("1 change will sync when you're back online")
+  ).toBeOnTheScreen();
+  expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
+  expect(screen.getByText('Groceries')).toBeOnTheScreen();
 });
 
 it('navigates to the list when a row is pressed', async () => {

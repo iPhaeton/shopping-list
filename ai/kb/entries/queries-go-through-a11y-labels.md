@@ -4,10 +4,10 @@ title: Interactive components are queried by a11y label; static copy is queried 
 type: convention
 status: current
 tags: [testing, accessibility, components]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-08-31
-verify: grep -q accessibilityLabel src/components/ListRow.tsx && grep -q accessibilityLabel src/components/ItemRow.tsx && grep -q accessibilityLabel src/components/AddBar.tsx && grep -q accessibilityState src/components/ItemRow.tsx && grep -q accessibilityLabel src/components/SignOutButton.tsx && grep -q accessibilityLabel src/screens/SignInScreen.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx
-related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, 6ef87a2]
+last_verified: 2026-09-01
+verify: grep -q accessibilityLabel src/components/ListRow.tsx && grep -q accessibilityLabel src/components/ItemRow.tsx && grep -q accessibilityLabel src/components/AddBar.tsx && grep -q accessibilityState src/components/ItemRow.tsx && grep -q accessibilityLabel src/components/SignOutButton.tsx && grep -q accessibilityLabel src/screens/SignInScreen.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx
+related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, writes-retry-from-an-outbox]
 ---
 
 Every **interactive** element is reached through its accessibility props, so those props are
@@ -36,6 +36,11 @@ composed labels for cases like `ListRow` where the composition is the informatio
 else: the message comes from the database, so tests assert the string they arranged to fail with
 (`findByText('permission denied')`). Labelling it would hide the only content worth asserting.
 
+**[SyncBanner](../../../src/components/SyncBanner.tsx) is the same case with a count in it.** It
+carries `accessibilityLiveRegion="polite"` and no label, and three suites assert its sentence
+verbatim — `"1 change will sync when you're back online"`, `"2 changes …"`. The singular/plural
+split and that wording are load-bearing; the `verify:` command pins the phrase.
+
 **Static copy is queried by its visible text instead.**
 [EmptyState](../../../src/components/EmptyState.tsx) carries no accessibility props at all, and the
 tests assert its strings verbatim — `getByText('No lists yet')`, `getByText('Nothing on this list')`,
@@ -43,6 +48,12 @@ tests assert its strings verbatim — `getByText('No lists yet')`, `getByText('N
 (`getByText('No items yet')`). So the user-facing copy in `EmptyState` call sites is load-bearing
 too: rewording an empty state is a test change, not a cosmetic one. Do not "fix" `EmptyState` by
 adding a label to it; nothing queries it that way.
+
+**In the browser, screen-level chrome appears twice.** React Navigation keeps the `Lists` screen
+mounted underneath `ListDetail`, so a Playwright run on the detail screen finds *two* sync banners in
+the DOM — only one of them visible. That is the navigator working, not a rendering bug: filter by
+visibility or take `.last()` rather than "fixing" the duplicate. RNTL suites never see it, because
+they render one screen at a time.
 
 **What to do:** give new interactive components a role, a label, and — if they have on/off state —
 an `accessibilityState`. It is what makes them testable and what makes the app usable with a screen

@@ -4,12 +4,13 @@ import { AddBar } from '../components/AddBar';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ListRow } from '../components/ListRow';
+import { SyncBanner } from '../components/SyncBanner';
 import type { ListsScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { colors, spacing } from '../theme';
 
 export function ListsScreen({ navigation }: ListsScreenProps) {
-  const { lists, status, error, createList } = useLists();
+  const { lists, status, error, pending, createList } = useLists();
 
   // Without this the first paint claims "No lists yet" — before the fetch that would contradict it
   // has come back.
@@ -24,6 +25,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   return (
     <View style={styles.container}>
       {error ? <ErrorBanner message={error} /> : null}
+      {pending > 0 ? <SyncBanner pending={pending} /> : null}
       <AddBar
         placeholder="New list name"
         buttonLabel="Create"

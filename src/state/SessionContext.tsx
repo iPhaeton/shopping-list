@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { clearCachedLists } from '../lib/listCache';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -87,13 +88,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async (): Promise<Result> => {
+    // Signing out has always discarded this account's lists along with the provider; leaving a
+    // readable copy of them on the device would quietly change that. The outbox is deliberately
+    // *not* cleared — those writes are still owed to the database, and they flush at the next
+    // sign-in. The residue is real and intended: unsent item titles stay on disk until they land.
+    if (state.status === 'signedIn') await clearCachedLists(state.session.user.id);
+
     // `scope: 'local'` revokes this device's refresh token and nothing else. supabase-js defaults
     // to 'global', which would revoke every device the account is signed in on — signing out in a
     // browser would eventually sign out the phone too. That belongs behind a deliberate "sign out
     // everywhere" action, not behind this button.
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     return { error: error?.message ?? null };
-  }, []);
+  }, [state]);
 
   const value = useMemo(
     () => ({ state, requestCode, verifyCode, signOut }),

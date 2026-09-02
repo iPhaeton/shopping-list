@@ -5,9 +5,9 @@ type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence]
 sources: [ai/tasks/3/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql]
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && ! grep -rqi 'for delete' supabase/migrations && ! grep -rq "eq('owner_id'" src && grep -q 'create policy "update items of own lists"' supabase/migrations/20260831000000_lists.sql && grep -q 'security definer' supabase/migrations/20260831000000_lists.sql
-related: [optimistic-list-writes, server-stamps-done-at, supabase-default-grants-defeat-revokes, scope-boundaries, supabase-local-stack]
+related: [writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, scope-boundaries, supabase-local-stack]
 ---
 
 [supabase/migrations/20260831000000_lists.sql](../../../supabase/migrations/20260831000000_lists.sql)
@@ -44,6 +44,12 @@ definer` for their own unrelated reasons — neither is a precedent for a policy
 
 **No delete policy on either table.** Deletion has never been in scope, and a policy for an action
 nothing performs is a policy nobody has thought through. Its absence is deliberate, not an oversight.
+
+**A policy refusal is now the only thing that throws a write away.** Since step 4 every failed write
+is queued and retried forever; the outbox drops one only on a `permanent` verdict, which is the 403
+these policies return ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). Tightening a
+policy therefore does not merely block a write — it deletes it from the user's device, with one
+error banner to show for it.
 
 **What to do:** when sharing arrives it will **replace** these owner-only policies rather than extend
 them, and that is the moment `is_list_member` earns its place — see

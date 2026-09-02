@@ -12,7 +12,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in and owner-only persistence in; sharing, realtime, deletion and offline out (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, owner-only persistence and offline writes in; sharing, realtime and deletion out (constraint)
 
 **Auth**
 
@@ -23,7 +23,8 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [Ids and timestamps are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
 - [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
-- [List writes are optimistic](ai/kb/entries/optimistic-list-writes.md) — a failure re-fetches rather than undoing; the queries live in `src/lib/listsApi.ts` (decision)
+- [Writes are queued on disk and retried](ai/kb/entries/writes-retry-from-an-outbox.md) — optimistic, never dropped, and only a refusal re-fetches; the queries live in `src/lib/listsApi.ts` (decision)
+- [The list cache holds acknowledged rows](ai/kb/entries/list-cache-holds-acknowledged-rows.md) — never the replayed view, and not only what a fetch returned (gotcha)
 - [The database stamps `done_at`](ai/kb/entries/server-stamps-done-at.md) — the client sends a boolean through `set_item_done` and cannot update `items` at all (decision)
 - [RLS scopes lists to their owner](ai/kb/entries/list-data-scoped-by-rls.md) — the client never filters and never sends `owner_id`; grants are half the story; no delete policy (constraint)
 - [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, and `from public` leaves `anon` (gotcha)
@@ -39,7 +40,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent/unmount; `toBeChecked` replaced `toHaveAccessibilityState`; `act` for external updates (gotcha)
 - [tsconfig needs an explicit types array](ai/kb/entries/tsconfig-explicit-types-array.md) — without it the jest globals don't resolve (gotcha)
-- [expo-crypto is undefined under jest](ai/kb/entries/expo-crypto-undefined-under-jest.md) — `randomUUID()` returns `undefined` silently; `jest.setup.ts` maps it to Node's (gotcha)
+- [expo-crypto is undefined under jest](ai/kb/entries/expo-crypto-undefined-under-jest.md) — `randomUUID()` returns `undefined` silently; `jest.setup.ts` maps it to Node's and holds AsyncStorage's in-memory mock (gotcha)
 
 ---
 

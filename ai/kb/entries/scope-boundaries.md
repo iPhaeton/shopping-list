@@ -1,23 +1,25 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, and owner-only persistence in; sharing, realtime, and deletion out
+title: Scope — named lists, OTP sign-in, owner-only persistence and offline writes in; sharing, realtime, and deletion out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md]
-last_verified: 2026-08-31
-related: [optimistic-list-writes, list-data-scoped-by-rls, supabase-local-stack]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md]
+last_verified: 2026-09-01
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, supabase-local-stack]
 ---
 
-Scope is set one task step at a time. What is in, as of step 3:
+Scope is set one task step at a time. What is in, as of step 4:
 
 | | |
 |---|---|
 | step 1 | create named lists, add items, mark/unmark items done |
 | step 2 | email OTP sign-in and sign-out, a session that survives a reload, a `users` table |
 | step 3 | lists and items in Postgres, one owner each, surviving a reload |
+| step 4 | writes queued on disk and retried until they land; the lists readable with no signal |
 
-**Still deliberately out: sharing, realtime, deletion, offline support, and passwords.**
+**Still deliberately out: sharing, realtime, deletion, passwords, and conflict resolution beyond
+last-write-wins.**
 
 **List persistence moved in at step 3 and this entry used to say otherwise.**
 [ai/tasks/3/description-step-1.md](../../tasks/3/description-step-1.md) asked for persistence and
@@ -42,9 +44,19 @@ list, and do not re-litigate the ambiguity from the description alone.
 so it was left out on purpose; it is not an oversight waiting to be fixed. It goes as far as the
 database: there is no delete policy on either table.
 
-**Offline is not solved either.** A write lost to bad signal is lost, and an error banner is all
-that says so — see [optimistic-list-writes](optimistic-list-writes.md). Do not build a queue,
-a retry loop or a local cache speculatively.
+**Offline moved in at step 4, and this entry used to forbid it** — "do not build a queue, a retry
+loop or a local cache speculatively" was right until
+[ai/tasks/4-offline-support/description-step-1.md](../../tasks/4-offline-support/description-step-1.md)
+asked for changes to be *guaranteed* to reach the database. All three now exist: an outbox, a
+backoff loop and a cached copy of the lists
+([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md),
+[list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)). Reading offline came
+in with it, decided with the user before the work started: without a cached copy a cold start with
+no signal shows an empty app, and the shop-with-no-bars scenario the queue exists for never happens.
+
+What step 4 still left out, on purpose: no sync engine (PowerSync is the answer if this ever needs
+real convergence), no connectivity library, no conflict resolution beyond last-write-wins, and no
+"wait for sync" confirmation when signing out with writes pending.
 
 **`ai/suggestions/*.md` are proposals, not scope.** They read like plans because they are — full
 schema and design for Supabase-backed list persistence, a biometric unlock layer, and a cloud
