@@ -1,8 +1,9 @@
-1. Real database
-2. Real email service
+(1. Real database)
+(2. Real email service)
 3. Sign out everyone
 4. Supabase limits: throughput, email rate limit
 (5. Offline support)
 6. Check that "Done At" time shown in the ui is in the device's timezone.
 7. Human readable errors: 
     - when a deleted list is updated
+8. Unsaved changes message flickering

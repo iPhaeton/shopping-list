@@ -4,10 +4,10 @@ title: OTP needs both the confirmation and magic_link templates overridden to re
 type: gotcha
 status: current
 tags: [supabase, auth, email, otp]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, supabase/config.toml]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, supabase/config.toml]
 last_verified: 2026-09-03
 verify: test "$(grep -c '^content_path = "./supabase/templates/otp-code.html"' supabase/config.toml)" = 2 && grep -q '{{ .Token }}' supabase/templates/otp-code.html
-related: [supabase-local-stack, supabase-config-push-sends-the-whole-root]
+related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, scope-boundaries]
 ---
 
 Supabase's stock auth emails send `{{ .ConfirmationURL }}` — a magic link. `verifyOtp` has nothing
@@ -36,13 +36,19 @@ project, and a second copy would be a second thing to keep in sync — as well a
 `content_path` line, which this entry's own check (it counts exactly two) would fail on. See
 [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md).
 
-**As of 2026-09-03 no `config push` has been run, so the cloud project still has stock templates.**
-A physical device reaches cloud and can request a code, but the mail it gets is a
-`{{ .ConfirmationURL }}` link that `verifyOtp` cannot accept — this exact bug, in production. Device
-sign-in starts working only after the push, and the confirmation is in the dashboard under
-Auth → Emails: check that **both** "Confirm signup" and "Magic Link" render `{{ .Token }}`. Both,
-because testing with an address that has already signed in exercises only `magic_link` and passes
-while every first-time signup is broken. Delete this paragraph once it is done.
+**As of 2026-09-03 the push has happened and the dashboard confirms it landed.** Task 6 pushed
+`[remotes.production.auth.email.smtp]` (custom SMTP via Resend —
+[supabase-local-stack](supabase-local-stack.md) has the detail) in the same `config push` that
+carries these two templates to production by inheritance. Auth → Emails in the live dashboard was
+read directly from the source editor for both slots — labeled "Confirm sign up" and "Magic link or
+OTP" in the current dashboard UI, not "Confirm signup" / "Magic Link" as in older docs — and both
+render `{{ .Token }}` from `otp-code.html`.
+
+**That is config-level and dashboard-level proof, not delivery proof.** No physical device has
+completed a sign-in against production yet. That still needs two runs — a brand-new address
+(exercises `confirmation`), then the same address again (exercises `magic_link`) — and until both
+happen, treat "the templates are correctly wired" and "device sign-in works end to end" as separate
+claims, not the same one.
 
 **What to do:** any further auth email (email change, recovery) needs the same treatment before it
 is used with `verifyOtp`. After editing a template or `config.toml`, restart the stack — see

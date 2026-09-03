@@ -4,7 +4,7 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, README.md, .env.example]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, README.md, .env.example]
 last_verified: 2026-09-03
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml
 related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls]
@@ -36,13 +36,23 @@ supabase` — a globally installed one may be a different version.
 **Why local is still the verification path:** the six-digit sign-in code is machine-readable in
 Mailpit, so the whole OTP flow can be driven end to end by Playwright. On cloud the code lands in a
 real inbox and a human has to relay it. Adding cloud did not change that — it added a target for the
-phone, which cannot reach this machine's loopback at all.
+phone, which cannot reach this machine's loopback at all. **Confirming anything else about cloud
+config isn't scriptable against an API either:** the access token `npx supabase login` stores in the
+macOS keychain is not scoped for the Management API — `GET /v1/projects/{ref}/config/auth` and even a
+plain project list both come back `403`. The dashboard — read by eye, or driven with Playwright after
+a human signs in — is the only read-back path that works without minting a separate personal access
+token.
 
 **Reading the code during development:** open Mailpit at http://127.0.0.1:54324. Nothing local is
-ever sent to a real address. **Cloud mail is real mail**, with one restriction that will look like a
-bug: the built-in hosted mailer delivers only to addresses belonging to the project's own Supabase
-team, so the first device sign-in has to use the account owner's address. Anything else is accepted
-by the API and silently never arrives.
+ever sent to a real address. **Cloud mail is real mail, and since step 6 it goes out through Resend,
+not Supabase's built-in mailer** — `[remotes.production.auth.email.smtp]` at the end of
+`supabase/config.toml` carries the block, confirmed against the live dashboard on 2026-09-03 (host,
+port, sender, rate limit all matched). The restriction that will look like a bug survives step 6, but
+its *owner* changed: Resend's sandbox sender (`onboarding@resend.dev`) delivers only to the address
+that owns the Resend account, not to "the project's own Supabase team" as it used to. Anything else
+is accepted by the API and silently never arrives — same symptom, different cause — and it lifts only
+once a verified sending domain lands (phase 2 of task 6, not yet done). Until then, README's "your
+real inbox" line means specifically the Resend account owner's inbox.
 
 **The cloud schema is kept current with `npx supabase db push`.** Both migrations were already
 applied there as of 2026-09-03, and the remote runs Postgres 17.6.1 against `major_version = 17` in
@@ -97,7 +107,10 @@ works too, but it is slower and takes Mailpit with it.
 **Verify anything that touches Supabase in the browser** — auth since step 2, list data since step 3
 — with `psql` against port 54322 as the check on what actually landed in the tables. `npm run web`
 is the only path that has been driven end to end. The simulator picks the same local stack and boots
-against it, but no sign-in has been completed there; a physical device reaches cloud and **cannot
-finish signing in until the email templates are pushed** —
-[otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md) has the state of that.
-See [native-build-toolchain](native-build-toolchain.md) for what each target is good for otherwise.
+against it, but no sign-in has been completed there. A physical device reaches cloud, and as of step
+6 the SMTP credentials and both templates are confirmed live by direct dashboard read-back — but no
+physical device has actually completed a sign-in against production yet, which is the only thing left
+that would prove it end to end. See
+[otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md) for exactly what is and
+isn't proven, and [native-build-toolchain](native-build-toolchain.md) for what each target is good
+for otherwise.

@@ -4,12 +4,12 @@ title: Scope — named lists, OTP sign-in, owner-only persistence and offline wr
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md]
 last_verified: 2026-09-03
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, supabase-local-stack, supabase-target-picked-at-runtime]
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
-Scope is set one task step at a time. What is in, as of step 5:
+Scope is set one task step at a time. What is in, as of step 6:
 
 | | |
 |---|---|
@@ -18,6 +18,7 @@ Scope is set one task step at a time. What is in, as of step 5:
 | step 3 | lists and items in Postgres, one owner each, surviving a reload |
 | step 4 | writes queued on disk and retried until they land; the lists readable with no signal |
 | step 5 | a cloud Supabase project as a second environment, which a physical device talks to |
+| step 6 (phase 1) | custom SMTP pushed to production; sign-in mail is real mail now, but the app stays structurally single-user until phase 2 |
 
 **Still deliberately out: sharing, realtime, deletion, passwords, and conflict resolution beyond
 last-write-wins.**
@@ -62,10 +63,26 @@ real convergence), no connectivity library, no conflict resolution beyond last-w
 **A cloud environment moved in at step 5**, from
 [ai/tasks/5-supabase-cloud/description-step-1.md](../../tasks/5-supabase-cloud/description-step-1.md):
 a linked project, `supabase/config.toml` split into local truth plus production overrides, and a
-physical device pointed at cloud. What did *not* move in: any user-facing feature, any schema change,
-custom SMTP, and the `config push` itself — the file is written, the production project has not been
-updated from it. Nothing about the local-first workflow changed; web is still where work is verified
-([supabase-local-stack](supabase-local-stack.md)).
+physical device pointed at cloud. What did *not* move in at step 5: any user-facing feature, any
+schema change, custom SMTP, and the `config push` itself — the file was written, the production
+project had not been updated from it. Nothing about the local-first workflow changed; web is still
+where work is verified ([supabase-local-stack](supabase-local-stack.md)).
+
+**Custom SMTP moved in at step 6, phase 1 only — and the step-5 paragraph above used to say the
+`config push` itself hadn't happened. It has now.**
+[ai/tasks/6-custom-smtp/description-step-1.md](../../tasks/6-custom-smtp/description-step-1.md)
+pushed `[remotes.production.auth.email.smtp]` (Resend) and raised
+`[remotes.production.auth.rate_limit] email_sent` to 30; a live dashboard read-back confirmed both
+landed, along with the two OTP templates the push carries by inheritance
+([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md),
+[supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)). What did
+*not* move in: multi-user sign-in. Resend's sandbox sender (`onboarding@resend.dev`) delivers only to
+the address that owns the Resend account, so a stranger's `signInWithOtp` request is accepted by the
+API and the mail silently never arrives — the app stays structurally single-user until phase 2
+verifies a sending domain. Also not done: an actual physical-device sign-in against the new config,
+which needs two runs (a brand-new address, then the same one again) that nothing has run yet. Treat
+the push and the dashboard read-back as config-level proof, not delivery proof — do not read this
+entry as saying device sign-in now works end to end.
 
 **`ai/suggestions/*.md` are proposals, not scope.** They read like plans because they are — full
 schema and design for Supabase-backed list persistence, a biometric unlock layer, and a cloud
@@ -73,10 +90,12 @@ Supabase project alongside the local stack — but nothing in them is approved u
 `ai/tasks/<n>/description-step-<n>.md`, and a document being *partly* implemented does not promote
 the rest of it. Step 2
 implemented the auth half of `otp-biometric-auth.md` *only* because a task description asked for it,
-step 3 the first staging step of `supabase-persistence.md`, and step 5 the project/schema/config
-sections of `production-supabase.md` — each because a task description asked for it. The biometric
-half is still just a proposal, and it needs a native dev build besides; so are that document's
-`list_members` table, its realtime subscriptions, and `production-supabase.md`'s custom-SMTP section.
+step 3 the first staging step of `supabase-persistence.md`, step 5 the project/schema/config sections
+of `production-supabase.md`, and step 6 phase 1 of that document's custom-SMTP section (§4) — each
+because a task description asked for it. The biometric half is still just a proposal, and it needs a
+native dev build besides; so are that document's `list_members` table and its realtime subscriptions.
+§4's phase 2 (a verified sending domain) is also still just a proposal — phase 1 is the only part of
+it that has landed.
 
 **A suggestion can also be *overruled* by the step that implements the rest of it.** That document's
 "Environment selection" section argued against runtime target-switching; step 5 did it anyway,

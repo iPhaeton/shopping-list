@@ -232,15 +232,9 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
+# Use a production-ready SMTP server. Production does — see [remotes.production.auth.email.smtp] at
+# the end of this file (Resend). The local stack deliberately has none: mail goes to Mailpit.
 # [auth.email.smtp]
-# enabled = true
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -452,7 +446,22 @@ additional_redirect_urls = ["shopping-list://*"]
 # claim true rather than aspirational.
 max_frequency = "60s"
 
-# Not overridden, deliberately: [auth.rate_limit] email_sent stays at the root's 2/hour, which is
-# exactly what Supabase's built-in hosted mailer allows anyway. Raising it to 30 has no effect
-# until [remotes.production.auth.email.smtp] enables a real provider — see
-# ai/suggestions/production-supabase.md §4, which also covers the SPF/DKIM/DMARC work that needs.
+[remotes.production.auth.email.smtp]
+# The built-in hosted mailer is 2/hour and delivers only to addresses on the project's own Supabase
+# team; everyone else gets "Email address not authorized", which reads as mail that never arrived.
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"                      # literal — the API key is the password, not the username
+pass = "env(RESEND_API_KEY)"         # resolved at push time from the gitignored .env, or the shell
+# PHASE 1 PLACEHOLDER. Resend's sandbox sender delivers only to the address that owns the Resend
+# account; every other recipient gets a 403. Replace with no-reply@<the verified domain> and push
+# again — that swap is the whole of phase 2, and until it happens this app is single-user.
+admin_email = "onboarding@resend.dev"
+sender_name = "Shopping List"
+
+[remotes.production.auth.rate_limit]
+# Only means anything now that smtp above is enabled — the root's 2/hour is exactly what the
+# built-in mailer allowed. 30 is Supabase's own floor for custom SMTP. Resend's free plan is
+# 100/day, so this is a burst cap, not an allowance.
+email_sent = 30
