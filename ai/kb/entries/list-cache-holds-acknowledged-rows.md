@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
 sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx
 related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, supabase-local-stack]
 ---

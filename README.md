@@ -26,8 +26,29 @@ npm run ios       # boots an iOS simulator and opens the app in Expo Go
 npm start         # dev server + QR code for Expo Go on a physical device
 ```
 
-A phone cannot reach this machine's `127.0.0.1:54321`, so Expo Go will not get past sign-in
-against the local stack. The browser is the path that works end to end.
+### Two databases, chosen by where the app is running
+
+| Running on | Database | Where the code arrives |
+|---|---|---|
+| browser (`npm run web`) | local, in Docker | Mailpit at http://127.0.0.1:54324 |
+| iOS simulator (`npm run ios`) | local, in Docker | same |
+| physical device (`npm start`) | cloud | your real inbox |
+
+A phone cannot reach this machine's `127.0.0.1:54321`, which is why it gets the cloud project
+instead. The simulator shares the host's loopback, so it stays local with the browser.
+
+**The browser is still the path that works end to end**, and the one to verify against: Mailpit
+makes the six-digit code machine-readable, so the whole sign-in flow can be driven by a script. On
+a device the code lands in a real inbox and a human has to read it.
+
+The choice is made at runtime in [`src/lib/supabaseTarget.ts`](src/lib/supabaseTarget.ts), not at
+build time — a single `expo start` serves the browser and Expo Go from the same bundle, so nothing
+compiled in could tell them apart. Set `EXPO_PUBLIC_SUPABASE_TARGET=local|cloud` in `.env` to
+override it, which is how you put two clients on one database.
+
+Only `.env` differs between them; the cloud key is blank in `.env.example` and
+[`.env.example`](.env.example) says how to fill it. Everything on web and in the simulator works
+without it.
 
 `npm run ios` needs Xcode plus an iOS simulator runtime, both installed on this machine
 (Xcode 26.6, iOS 26.5). `npm run android` still needs the Android SDK, which is not installed.

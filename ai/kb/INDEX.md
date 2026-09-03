@@ -8,7 +8,9 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [Expo SDK 54 is pinned](ai/kb/entries/expo-sdk-54-pinned.md) — read the v54.0.0 docs, not the latest (reference)
 - [iOS simulator works; Android does not](ai/kb/entries/native-build-toolchain.md) — `npm run ios` boots a sim into Expo Go; no Android SDK and no CocoaPods, and no native dev build is needed (environment)
-- [Supabase runs locally in Docker](ai/kb/entries/supabase-local-stack.md) — `npx supabase start`; the sign-in code lands in Mailpit; verify anything that touches it in the browser (environment)
+- [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; verify in the browser (environment)
+- [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
+- [`config push` sends the whole root config](ai/kb/entries/supabase-config-push-sends-the-whole-root.md) — `[remotes.production]` holds only what differs, unset keys inherit, and there is no dry run (gotcha)
 
 **Scope**
 

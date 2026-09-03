@@ -422,3 +422,37 @@ enabled = true
 # declarative_schema_path = "./schemas"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ─── Production overrides ─────────────────────────────────────────────────────────────────────
+#
+# Everything above this line is the local stack, and `supabase config push` sends the *whole* root
+# config to the linked project — so every key that is only true locally has to be restated here or
+# it lands in production. Without this block a push would set production's site_url to
+# 127.0.0.1:3000 and let a user request a new code every second.
+#
+# Remotes are matched to the target by `project_id`, and any key left unset inherits from the root.
+# That inheritance is load-bearing: it is what carries both otp-code.html template overrides to
+# real inboxes. Do not restate them here — they are correct at the root, and a second copy is a
+# second thing to keep in sync.
+#
+# `config push` has no --dry-run. Run it without --yes so the CLI prints the diff and waits.
+[remotes.production]
+project_id = "gvosanjceygakbubjfkv"
+
+[remotes.production.auth]
+# There is no web deployment; Expo Go on a device is the only real client, so the app's own scheme
+# (`scheme` in app.json) is the honest value. The code-based OTP flow renders neither of these into
+# an email — they are here so that a push cannot leak a loopback address into production.
+site_url = "shopping-list://"
+additional_redirect_urls = ["shopping-list://*"]
+
+[remotes.production.auth.email]
+# The root's "1s" exists so a Playwright run never waits. SignInScreen's RESEND_COOLDOWN_SECONDS is
+# 60 and its comment claims Supabase allows one code per minute; this is the line that makes that
+# claim true rather than aspirational.
+max_frequency = "60s"
+
+# Not overridden, deliberately: [auth.rate_limit] email_sent stays at the root's 2/hour, which is
+# exactly what Supabase's built-in hosted mailer allows anyway. Raising it to 30 has no effect
+# until [remotes.production.auth.email.smtp] enables a real provider — see
+# ai/suggestions/production-supabase.md §4, which also covers the SPF/DKIM/DMARC work that needs.

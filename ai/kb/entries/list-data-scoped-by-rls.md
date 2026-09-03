@@ -5,7 +5,7 @@ type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence]
 sources: [ai/tasks/3/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && ! grep -rqi 'for delete' supabase/migrations && ! grep -rq "eq('owner_id'" src && grep -q 'create policy "update items of own lists"' supabase/migrations/20260831000000_lists.sql && grep -q 'security definer' supabase/migrations/20260831000000_lists.sql
 related: [writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, scope-boundaries, supabase-local-stack]
 ---

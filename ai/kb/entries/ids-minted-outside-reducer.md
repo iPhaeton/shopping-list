@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [state, reducer, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---

@@ -4,12 +4,12 @@ title: Scope — named lists, OTP sign-in, owner-only persistence and offline wr
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md]
-last_verified: 2026-09-01
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, supabase-local-stack]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md]
+last_verified: 2026-09-03
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, supabase-local-stack, supabase-target-picked-at-runtime]
 ---
 
-Scope is set one task step at a time. What is in, as of step 4:
+Scope is set one task step at a time. What is in, as of step 5:
 
 | | |
 |---|---|
@@ -17,6 +17,7 @@ Scope is set one task step at a time. What is in, as of step 4:
 | step 2 | email OTP sign-in and sign-out, a session that survives a reload, a `users` table |
 | step 3 | lists and items in Postgres, one owner each, surviving a reload |
 | step 4 | writes queued on disk and retried until they land; the lists readable with no signal |
+| step 5 | a cloud Supabase project as a second environment, which a physical device talks to |
 
 **Still deliberately out: sharing, realtime, deletion, passwords, and conflict resolution beyond
 last-write-wins.**
@@ -58,15 +59,31 @@ What step 4 still left out, on purpose: no sync engine (PowerSync is the answer 
 real convergence), no connectivity library, no conflict resolution beyond last-write-wins, and no
 "wait for sync" confirmation when signing out with writes pending.
 
+**A cloud environment moved in at step 5**, from
+[ai/tasks/5-supabase-cloud/description-step-1.md](../../tasks/5-supabase-cloud/description-step-1.md):
+a linked project, `supabase/config.toml` split into local truth plus production overrides, and a
+physical device pointed at cloud. What did *not* move in: any user-facing feature, any schema change,
+custom SMTP, and the `config push` itself — the file is written, the production project has not been
+updated from it. Nothing about the local-first workflow changed; web is still where work is verified
+([supabase-local-stack](supabase-local-stack.md)).
+
 **`ai/suggestions/*.md` are proposals, not scope.** They read like plans because they are — full
 schema and design for Supabase-backed list persistence, a biometric unlock layer, and a cloud
 Supabase project alongside the local stack — but nothing in them is approved until it arrives as an
 `ai/tasks/<n>/description-step-<n>.md`, and a document being *partly* implemented does not promote
 the rest of it. Step 2
 implemented the auth half of `otp-biometric-auth.md` *only* because a task description asked for it,
-and step 3 the first staging step of `supabase-persistence.md` for the same reason. The biometric
+step 3 the first staging step of `supabase-persistence.md`, and step 5 the project/schema/config
+sections of `production-supabase.md` — each because a task description asked for it. The biometric
 half is still just a proposal, and it needs a native dev build besides; so are that document's
-`list_members` table, its realtime subscriptions, and everything in `production-supabase.md`.
+`list_members` table, its realtime subscriptions, and `production-supabase.md`'s custom-SMTP section.
+
+**A suggestion can also be *overruled* by the step that implements the rest of it.** That document's
+"Environment selection" section argued against runtime target-switching; step 5 did it anyway,
+because the task made the phone a target and removed the section's premise
+([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)). So a suggestion is not
+merely un-promoted until a task lands — parts of it can be wrong afterwards, and the document is
+never edited to say so. Check the KB before treating a suggestion's reasoning as current.
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
 absence as a gap worth flagging in a review. When a new task description lands, re-read this entry

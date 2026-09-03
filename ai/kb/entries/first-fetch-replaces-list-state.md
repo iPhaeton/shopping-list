@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [state, persistence, testing]
 sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts
 related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels]
 ---

@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [testing, accessibility, components]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: grep -q accessibilityLabel src/components/ListRow.tsx && grep -q accessibilityLabel src/components/ItemRow.tsx && grep -q accessibilityLabel src/components/AddBar.tsx && grep -q accessibilityState src/components/ItemRow.tsx && grep -q accessibilityLabel src/components/SignOutButton.tsx && grep -q accessibilityLabel src/screens/SignInScreen.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx
 related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, writes-retry-from-an-outbox]
 ---

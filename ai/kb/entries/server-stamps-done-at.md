@@ -5,7 +5,7 @@ type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
 sources: [ai/tasks/3/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && grep -q 'done_at = case when p_done then now() else null end' supabase/migrations/20260831000000_lists.sql && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
 related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, ids-minted-outside-reducer, first-fetch-replaces-list-state]
 ---

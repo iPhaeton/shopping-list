@@ -5,7 +5,7 @@ type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
 sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qE "removed'|deleted'" src/state/types.ts
 related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, scope-boundaries]
 ---

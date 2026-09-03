@@ -4,10 +4,10 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx]
-last_verified: 2026-09-01
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx]
+last_verified: 2026-09-03
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')"
-related: [writes-retry-from-an-outbox, supabase-local-stack, rntl-14-api-changes]
+related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, rntl-14-api-changes]
 ---
 
 [src/lib/supabase.ts](../../../src/lib/supabase.ts) creates the client and is the only file under
@@ -38,6 +38,15 @@ because it is the seam a biometric unlock replaces: it would swap in a blob encr
 keystore-gated key with nothing else in the app changing. Ten lines that keep a planned feature to
 one file — the same reasoning that shaped the state layer before persistence landed
 (see [persistence-isolated-to-provider](persistence-isolated-to-provider.md), now superseded).
+
+**Configuration that needs *testing* moves out, one module down.** Step 5 wrote `pickTarget()` —
+which Supabase URL and key to use — inside `supabase.ts` first, and could not test it there: a suite
+importing that file imports supabase-js, which is the thing this convention exists to prevent. It
+lives in [src/lib/supabaseTarget.ts](../../../src/lib/supabaseTarget.ts) instead, with `supabase.ts`
+importing it, so the branch has its own suite while the client seam stays thin
+([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)). The rule generalises:
+config that is only *set* belongs in `supabase.ts`; config that is *decided* belongs below it, where
+a test can reach it.
 
 **What to do:** need Supabase anywhere new? Import from `../lib/supabase`, and put anything that
 needs configuring — storage, realtime, a service client — in that file rather than at the call site.

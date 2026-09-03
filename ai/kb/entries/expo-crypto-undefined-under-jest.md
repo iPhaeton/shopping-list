@@ -4,10 +4,10 @@ title: expo-crypto's randomUUID() returns undefined under jest instead of throwi
 type: gotcha
 status: current
 tags: [testing, jest, expo, ids]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, jest.setup.ts, src/lib/ids.ts]
-last_verified: 2026-09-01
-verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json
-related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, jest.setup.ts, src/lib/ids.ts]
+last_verified: 2026-09-03
+verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json && ! grep -q 'expo-device' jest.setup.ts && grep -q "jest.mock('expo-device'" src/lib/supabaseTarget.test.ts
+related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, supabase-target-picked-at-runtime]
 ---
 
 `randomUUID()` from `expo-crypto` is a native call. jest-expo mocks native modules away, and this
@@ -45,8 +45,20 @@ writing a suite that touches storage:
   `await AsyncStorage.clear()` in `beforeEach`; skip that and one test's outbox flushes inside the
   next one, which reads as a mysterious extra call.
 
+**`expo-device` is the third native module, and it deliberately is *not* in that file.** Step 5's
+[src/lib/supabaseTarget.test.ts](../../../src/lib/supabaseTarget.test.ts) mocks it inside the suite,
+because the whole point of the suite is to vary `Device.isDevice` per test — a global mock would
+freeze it at one value and the branch table would go untested. So the split is: **a native module
+whose behaviour every suite wants the same goes in `jest.setup.ts`; one whose value a suite needs to
+steer is mocked in that suite.** The `verify:` command pins both halves, because moving the
+`expo-device` mock into `jest.setup.ts` looks like tidying and silently guts the tests.
+
+That module is also this entry's lesson repeating: `Device.isDevice` is exactly the kind of native
+constant that can come back `undefined` rather than throwing, so `pickTarget()` carries an explicit
+fallback and a test for it instead of trusting the flag.
+
 **What to do:** keep [src/lib/ids.ts](../../../src/lib/ids.ts) as the single call site of
-`randomUUID`, so this stays a one-line problem. Any further native module used in code under test
-needs its own entry in `jest.setup.ts`; that file is the place for them, not a `jest.mock` repeated
-in each suite — and check first whether the library ships its own mock, as AsyncStorage does. Retire
-this entry if the app stops minting ids on the client.
+`randomUUID`, so this stays a one-line problem. A further native module used in code under test needs
+a decision about *where* its mock lives — `jest.setup.ts` when one behaviour serves everyone, the
+suite when the test steers it — and check first whether the library ships its own mock, as
+AsyncStorage does. Retire this entry if the app stops minting ids on the client.

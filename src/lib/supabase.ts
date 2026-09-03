@@ -2,18 +2,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
-/**
- * Metro substitutes `process.env.EXPO_PUBLIC_*` by **literal text match**, so each variable has to
- * be spelled out in full here — a computed key is never replaced. Env edits need a dev-server
- * restart to take effect.
- */
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+import { pickTarget, targets } from './supabaseTarget';
+
+const target = pickTarget();
+const { url, anonKey } = targets[target];
 
 if (!url || !anonKey) {
+  // Naming the selected target is the point: a phone booting with only the local pair filled in
+  // says which two variables it wanted, rather than "missing config".
+  const suffix = target.toUpperCase();
   throw new Error(
-    'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Copy .env.example to ' +
-      '.env, fill in the values from `npx supabase status`, then restart the dev server.'
+    `Missing EXPO_PUBLIC_SUPABASE_URL_${suffix} or EXPO_PUBLIC_SUPABASE_ANON_KEY_${suffix}. ` +
+      'Copy .env.example to .env, fill in the values, then restart the dev server. The local pair ' +
+      'comes from `npx supabase status`.'
   );
 }
 
