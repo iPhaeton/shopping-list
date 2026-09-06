@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sign-In Round Trip</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+
+    --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --serif: 'IBM Plex Serif', Georgia, serif;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --ground: #f4f6fa;
+    --surface: #ffffff;
+    --sunk: #eceff6;
+    --ink: #14161c;
+    --ink-soft: #4d5462;
+    --muted-ink: #858d9e;
+    --rule: #dde2ec;
+    --accent: #2f6fed;
+    --accent-soft: #e5edfd;
+    --danger: #b83a28;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --ground: #0f1218;
+      --surface: #161a22;
+      --sunk: #1b202a;
+      --ink: #e7eaf1;
+      --ink-soft: #a8b0bf;
+      --muted-ink: #79839a;
+      --rule: #2a3140;
+      --accent: #7aa5ff;
+      --accent-soft: #1b2540;
+      --danger: #e0796a;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --ground: #0f1218;
+    --surface: #161a22;
+    --sunk: #1b202a;
+    --ink: #e7eaf1;
+    --ink-soft: #a8b0bf;
+    --muted-ink: #79839a;
+    --rule: #2a3140;
+    --accent: #7aa5ff;
+    --accent-soft: #1b2540;
+    --danger: #e0796a;
+  }
+
+  * { box-sizing: border-box; }
+
+  img { max-width: 100%; }
+
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 28px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-ink);
+    margin: 0 0 18px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(38px, 6vw, 58px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 18px;
+  }
+
+  .standfirst {
+    max-width: 62ch;
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
+  .sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 26px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+
+  .sources span {
+    padding: 4px 9px;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--ink-soft);
+  }
+
+  /* ---- section grid ---- */
+
+  section {
+    display: grid;
+    grid-template-columns: minmax(0, 640px) minmax(0, 300px);
+    column-gap: 40px;
+    align-items: start;
+    padding-top: 52px;
+  }
+
+  section > * { grid-column: 1; }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 25px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin: 0 0 4px;
+  }
+
+  h2 .step {
+    font-family: var(--mono);
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  p { margin: 14px 0 0; max-width: 66ch; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.855em;
+    background: var(--sunk);
+    border-radius: 3px;
+    padding: 0.1em 0.32em;
+    color: var(--ink);
+  }
+
+  /* ---- margin rail ---- */
+
+  .note {
+    grid-column: 2;
+    align-self: start;
+    margin-top: 22px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--ink);
+    padding-top: 10px;
+  }
+
+  .note b {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-ink);
+    margin-bottom: 5px;
+  }
+
+  .note code { font-size: 0.82em; background: none; padding: 0; color: var(--ink); }
+
+  /* ---- figures ---- */
+
+  figure {
+    grid-column: 1 / -1;
+    margin: 30px 0 0;
+    padding: 22px 22px 16px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow-x: auto;
+  }
+
+  figcaption {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 78ch;
+  }
+
+  figcaption code { background: none; padding: 0; font-size: 0.86em; }
+
+  .dg { display: block; width: 100%; min-width: 620px; height: auto; color: var(--ink); }
+  .dg text { font-family: var(--mono); fill: currentColor; }
+  .dg .box { fill: var(--surface); stroke: currentColor; stroke-opacity: 0.3; stroke-width: 1; }
+  .dg .box-em { stroke-opacity: 0.9; stroke-width: 1.4; }
+  .dg .fill-soft { fill: var(--accent-soft); }
+  .dg .fill-sunk { fill: var(--sunk); }
+  .dg .lane { stroke: currentColor; stroke-opacity: 0.22; stroke-dasharray: 3 5; }
+  .dg .flow { stroke: currentColor; stroke-width: 1.4; fill: none; }
+  .dg .oob { stroke-dasharray: 6 4; stroke-opacity: 0.75; }
+  .dg .head { fill: currentColor; stroke: none; }
+  .dg .t-title { font-family: var(--sans); font-weight: 600; font-size: 12.5px; }
+  .dg .t-lab { font-size: 10.5px; }
+  .dg .t-sm { font-size: 9.5px; }
+  .dg .t-dim { opacity: 0.6; }
+  .dg .t-num { font-size: 10px; opacity: 0.42; }
+  .dg .accent { color: var(--accent); }
+  .dg .muted { color: var(--muted-ink); }
+  .dg .danger { color: var(--danger); }
+
+  /* ---- closing ---- */
+
+  .coda {
+    grid-column: 1 / -1;
+    margin-top: 56px;
+    padding-top: 22px;
+    border-top: 2px solid var(--ink);
+    font-size: 14px;
+    color: var(--ink-soft);
+    max-width: 70ch;
+  }
+
+  @media (max-width: 900px) {
+    section { grid-template-columns: minmax(0, 1fr); }
+    section > *, .note, figure { grid-column: 1; }
+    .note {
+      border-top: none;
+      border-left: 2px solid var(--rule);
+      padding: 2px 0 2px 14px;
+      margin-top: 20px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Shopping List · client auth</p>
+    <h1>The Sign-In Round Trip</h1>
+    <p class="standfirst">
+      Email OTP, from the moment the client picks which Supabase it is talking to, through a
+      six-digit code that leaves the system entirely and comes back through a person, to the header
+      that decides which Postgres role every later query runs as.
+    </p>
+    <div class="sources">
+      <span>src/lib/supabaseTarget.ts</span>
+      <span>src/lib/supabase.ts</span>
+      <span>src/state/SessionContext.tsx</span>
+      <span>src/screens/SignInScreen.tsx</span>
+      <span>App.tsx</span>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="step">01</span>Which Supabase, decided at boot</h2>
+    <p>
+      Before any auth call, <code>pickTarget()</code> chooses a project. The choice is made at
+      runtime rather than at build time because one <code>expo start</code> serves the browser and
+      Expo Go from the same bundle and the same env file — a build-time split would silently send
+      the browser wherever the last build pointed.
+    </p>
+    <p>
+      This decides more than a URL. It decides <em>where the six-digit code shows up</em>, which is
+      what makes the whole flow drivable end to end in a browser.
+    </p>
+
+    <aside class="note">
+      <b>Escape hatch</b>
+      <code>EXPO_PUBLIC_SUPABASE_TARGET=cloud npm run web</code> overrides the branch — the way to
+      get two clients on one database.
+    </aside>
+
+    <figure>
+      <svg class="dg" viewBox="0 0 1020 220" role="img"
+           aria-label="pickTarget branches three ways: web and simulator to the local Docker stack where codes land in Mailpit, a physical device to the cloud project where codes are delivered by Resend SMTP.">
+        <rect class="box box-em" x="15" y="85" width="180" height="52" rx="6"/>
+        <text class="t-title" x="105" y="107" text-anchor="middle">pickTarget()</text>
+        <text class="t-sm t-dim" x="105" y="123" text-anchor="middle">runtime, not build time</text>
+
+        <g class="muted">
+          <path class="flow" d="M195 111 H 220 V 45 H 510"/>
+          <polygon class="head" points="518,45 506,40 506,50"/>
+          <text class="t-lab" x="365" y="36" text-anchor="middle">Platform.OS === 'web'</text>
+
+          <path class="flow" d="M195 111 H 510"/>
+          <polygon class="head" points="518,111 506,106 506,116"/>
+          <text class="t-lab" x="365" y="102" text-anchor="middle">simulator — !Device.isDevice</text>
+        </g>
+
+        <g class="accent">
+          <path class="flow" d="M195 111 H 220 V 177 H 510"/>
+          <polygon class="head" points="518,177 506,172 506,182"/>
+          <text class="t-lab" x="365" y="168" text-anchor="middle">physical device — Device.isDevice</text>
+        </g>
+
+        <g class="muted">
+          <rect class="box fill-sunk" x="520" y="19" width="480" height="52" rx="6"/>
+          <text class="t-lab" x="540" y="41">local stack · 127.0.0.1:54321</text>
+          <text class="t-sm t-dim" x="540" y="58">code lands in Mailpit, machine-readable</text>
+
+          <rect class="box fill-sunk" x="520" y="85" width="480" height="52" rx="6"/>
+          <text class="t-lab" x="540" y="107">local stack · shares the host loopback</text>
+          <text class="t-sm t-dim" x="540" y="124">code lands in Mailpit</text>
+        </g>
+
+        <g class="accent">
+          <rect class="box box-em fill-soft" x="520" y="151" width="480" height="52" rx="6"/>
+          <text class="t-lab" x="540" y="173">cloud project</text>
+          <text class="t-sm t-dim" x="540" y="190">code delivered by Resend SMTP to a real inbox</text>
+        </g>
+      </svg>
+      <figcaption>
+        A phone cannot reach this machine's <code>127.0.0.1:54321</code> at all, so it is the one
+        target that must be the cloud project — and the one whose sign-in email goes to a real
+        inbox rather than Mailpit.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="step">02</span>The round trip</h2>
+    <p>
+      <code>SignInScreen</code> has two phases in one screen — email, then code — and there is no
+      separate sign-up screen, because <code>shouldCreateUser: true</code> makes the first sign-in
+      of a new address create the account on the same path.
+    </p>
+    <p>
+      Steps 3 and 4 are the ones worth staring at. The credential leaves the system through an
+      email and re-enters through a person typing it, which is why GoTrue's template choice
+      matters: it sends <code>confirmation</code> to an address it has never seen and
+      <code>magic_link</code> to one it knows, and both must render the token rather than a link.
+    </p>
+
+    <aside class="note">
+      <b>The asymmetry that hides</b>
+      Override only <code>magic_link</code> and every returning-user test passes while the first
+      sign-in of a fresh address ships an unusable link. See
+      <code>ai/kb/entries/otp-email-templates-carry-the-code.md</code>.
+    </aside>
+
+    <figure>
+      <svg class="dg" viewBox="0 0 1020 590" role="img"
+           aria-label="Sequence diagram: the screen asks SessionContext for a code, supabase-js calls GoTrue, GoTrue mails a six-digit token, the user types it back in, verifyOtp returns an access token that supabase-js persists to AsyncStorage, and onAuthStateChange flips the app to signed in.">
+        <g>
+          <rect class="box" x="35" y="8" width="190" height="44" rx="6"/>
+          <text class="t-title" x="130" y="27" text-anchor="middle">SignInScreen</text>
+          <text class="t-sm t-dim" x="130" y="42" text-anchor="middle">phase: email → code</text>
+
+          <rect class="box" x="295" y="8" width="190" height="44" rx="6"/>
+          <text class="t-title" x="390" y="27" text-anchor="middle">SessionProvider</text>
+          <text class="t-sm t-dim" x="390" y="42" text-anchor="middle">supabase-js · AsyncStorage</text>
+
+          <rect class="box" x="560" y="8" width="190" height="44" rx="6"/>
+          <text class="t-title" x="655" y="27" text-anchor="middle">GoTrue</text>
+          <text class="t-sm t-dim" x="655" y="42" text-anchor="middle">/auth/v1</text>
+
+          <rect class="box" x="805" y="8" width="190" height="44" rx="6"/>
+          <text class="t-title" x="900" y="27" text-anchor="middle">Inbox</text>
+          <text class="t-sm t-dim" x="900" y="42" text-anchor="middle">Mailpit or Resend</text>
+        </g>
+
+        <g class="lane">
+          <line class="lane" x1="130" y1="52" x2="130" y2="570"/>
+          <line class="lane" x1="390" y1="52" x2="390" y2="570"/>
+          <line class="lane" x1="655" y1="52" x2="655" y2="570"/>
+          <line class="lane" x1="900" y1="52" x2="900" y2="570"/>
+        </g>
+
+        <text class="t-num" x="6" y="104">1</text>
+        <line class="flow" x1="130" y1="100" x2="382" y2="100"/>
+        <polygon class="head" points="390,100 378,95 378,105"/>
+        <text class="t-lab" x="260" y="91" text-anchor="middle">requestCode(email)</text>
+
+        <text class="t-num" x="6" y="154">2</text>
+        <line class="flow" x1="390" y1="150" x2="647" y2="150"/>
+        <polygon class="head" points="655,150 643,145 643,155"/>
+        <text class="t-lab" x="522" y="141" text-anchor="middle">signInWithOtp</text>
+        <text class="t-sm t-dim" x="522" y="128" text-anchor="middle">shouldCreateUser: true — sign-up is the same path</text>
+
+        <text class="t-num" x="6" y="204">3</text>
+        <line class="flow oob" x1="655" y1="200" x2="892" y2="200"/>
+        <polygon class="head" points="900,200 888,195 888,205"/>
+        <text class="t-sm" x="777" y="191" text-anchor="middle">confirmation | magic_link</text>
+        <text class="t-sm t-dim" x="777" y="179" text-anchor="middle">both render {{ .Token }}</text>
+
+        <text class="t-num" x="6" y="259">4</text>
+        <line class="flow oob" x1="900" y1="255" x2="138" y2="255"/>
+        <polygon class="head" points="130,255 142,250 142,260"/>
+        <text class="t-sm" x="515" y="246" text-anchor="middle">six digits — out of band, carried by a person</text>
+
+        <text class="t-num" x="6" y="314">5</text>
+        <line class="flow" x1="130" y1="310" x2="382" y2="310"/>
+        <polygon class="head" points="390,310 378,305 378,315"/>
+        <text class="t-lab" x="260" y="301" text-anchor="middle">verifyCode(email, code)</text>
+
+        <text class="t-num" x="6" y="364">6</text>
+        <line class="flow" x1="390" y1="360" x2="647" y2="360"/>
+        <polygon class="head" points="655,360 643,355 643,365"/>
+        <text class="t-lab" x="522" y="351" text-anchor="middle">verifyOtp({ type: 'email' })</text>
+        <text class="t-sm t-dim" x="522" y="338" text-anchor="middle">accepts a code from either template</text>
+
+        <g class="accent">
+          <text class="t-num" x="6" y="414">7</text>
+          <line class="flow" x1="655" y1="410" x2="398" y2="410"/>
+          <polygon class="head" points="390,410 402,405 402,415"/>
+          <text class="t-lab" x="522" y="401" text-anchor="middle">access_token + refresh_token</text>
+          <text class="t-sm t-dim" x="522" y="388" text-anchor="middle">role: authenticated · sub: user id</text>
+
+          <text class="t-num" x="6" y="464">8</text>
+          <path class="flow" d="M390 450 H 470 V 478 H 398"/>
+          <polygon class="head" points="390,478 402,473 402,483"/>
+          <text class="t-lab" x="484" y="456">persist to AsyncStorage</text>
+          <text class="t-sm t-dim" x="484" y="472">then onAuthStateChange fires — it owns every transition</text>
+        </g>
+
+        <text class="t-num" x="6" y="534">9</text>
+        <line class="flow" x1="390" y1="530" x2="138" y2="530"/>
+        <polygon class="head" points="130,530 142,525 142,535"/>
+        <text class="t-lab" x="260" y="521" text-anchor="middle">status: 'signedIn'</text>
+        <text class="t-sm t-dim" x="260" y="546" text-anchor="middle">the stack swaps; this screen unmounts</text>
+      </svg>
+      <figcaption>
+        Dashed legs leave the app. Step 9 is why <code>verify()</code> only clears its
+        <code>pending</code> flag on failure — on success the navigator replaces the whole stack and
+        the screen is gone before any success state could render.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="step">03</span>What the app switches on</h2>
+    <p>
+      <code>AuthState</code> is a discriminated union, not <code>session | null</code>. The third
+      state exists because at launch the answer is genuinely unknown until AsyncStorage has been
+      read, and rendering either stack during that gap flashes the wrong one.
+    </p>
+    <p>
+      <code>getSession()</code> resolves the launch case once; after that
+      <code>onAuthStateChange</code> is the only writer. Sign-in and sign-out both arrive through
+      that one subscription rather than as return values from the calls that caused them.
+    </p>
+
+    <aside class="note">
+      <b>Why a union</b>
+      A biometric unlock would land as one new case — <code>{ status: 'locked' }</code> — that
+      <code>RootNavigator</code> switches on, instead of an edit at every point that asks "is there
+      a session?"
+    </aside>
+
+    <figure>
+      <svg class="dg" viewBox="0 0 1020 250" role="img"
+           aria-label="Three states: loading resolves to signedOut or, from a stored session, to signedIn; onAuthStateChange moves signedOut to signedIn; a local-scope signOut moves back.">
+        <rect class="box" x="60" y="90" width="210" height="56" rx="8"/>
+        <text class="t-title" x="165" y="113" text-anchor="middle">loading</text>
+        <text class="t-sm t-dim" x="165" y="131" text-anchor="middle">spinner · nothing mounted</text>
+
+        <rect class="box" x="405" y="90" width="210" height="56" rx="8"/>
+        <text class="t-title" x="510" y="113" text-anchor="middle">signedOut</text>
+        <text class="t-sm t-dim" x="510" y="131" text-anchor="middle">SignInScreen</text>
+
+        <g class="accent">
+          <rect class="box box-em fill-soft" x="750" y="90" width="210" height="56" rx="8"/>
+          <text class="t-title" x="855" y="113" text-anchor="middle">signedIn</text>
+          <text class="t-sm t-dim" x="855" y="131" text-anchor="middle">Lists stack · ListsProvider</text>
+        </g>
+
+        <line class="flow" x1="270" y1="118" x2="397" y2="118"/>
+        <polygon class="head" points="405,118 393,113 393,123"/>
+        <text class="t-sm" x="337" y="110" text-anchor="middle">getSession() → null</text>
+
+        <path class="flow" d="M165 90 V 44 H 855 V 82"/>
+        <polygon class="head" points="855,90 850,78 860,78"/>
+        <text class="t-sm" x="510" y="36" text-anchor="middle">getSession() → a session restored from AsyncStorage</text>
+
+        <line class="flow" x1="615" y1="118" x2="742" y2="118"/>
+        <polygon class="head" points="750,118 738,113 738,123"/>
+        <text class="t-sm" x="682" y="110" text-anchor="middle">onAuthStateChange</text>
+        <text class="t-sm t-dim" x="682" y="136" text-anchor="middle">SIGNED_IN</text>
+
+        <g class="danger">
+          <path class="flow" d="M855 146 V 200 H 510 V 154"/>
+          <polygon class="head" points="510,146 505,158 515,158"/>
+          <text class="t-sm" x="682" y="216" text-anchor="middle">signOut({ scope: 'local' }) — this device only</text>
+        </g>
+      </svg>
+      <figcaption>
+        <code>ListsProvider</code> is mounted by the <code>signedIn</code> case alone, keyed by user
+        id. That is what lets it fetch on mount without ever consulting the session, and what
+        discards one account's lists when another signs in.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="step">04</span>What every later request carries</h2>
+    <p>
+      There is one client, created once at module load with the anon key. Signing in does not build
+      a second one — it changes a single header, and that header is the entire difference between
+      the two Postgres roles.
+    </p>
+    <p>
+      The <code>apikey</code> header is identical in both cases; it is the gateway's concern. It is
+      the bearer token that PostgREST reads, whose <code>role</code> claim it applies with
+      <code>set local role</code> for the transaction, and whose <code>sub</code> claim becomes
+      <code>auth.uid()</code>.
+    </p>
+
+    <aside class="note">
+      <b>Not a security boundary by itself</b>
+      <code>anon</code> matching no rows is a consequence of the policy predicate, not of the role.
+      A <code>using (true)</code> policy plus Supabase's default grants is world-readable to anyone
+      holding the anon key, which ships in the bundle.
+    </aside>
+
+    <figure>
+      <svg class="dg" viewBox="0 0 1020 300" role="img"
+           aria-label="Before sign-in the bearer token is the anon key, so PostgREST sets role anon and auth.uid() is null, matching no rows. After sign-in the bearer is the user access token, so the role is authenticated and auth.uid() is the sub claim, matching the user's rows.">
+        <g class="muted">
+          <text class="t-sm" x="15" y="52">BEFORE SIGN-IN</text>
+
+          <rect class="box fill-sunk" x="15" y="64" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="32" y="86">apikey: &lt;anon key&gt;</text>
+          <text class="t-sm" x="32" y="102">Authorization:</text>
+          <text class="t-sm" x="32" y="118">Bearer &lt;anon key&gt;</text>
+
+          <line class="flow" x1="225" y1="96" x2="267" y2="96"/>
+          <polygon class="head" points="275,96 263,91 263,101"/>
+
+          <rect class="box fill-sunk" x="275" y="64" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="292" y="94">PostgREST reads the JWT</text>
+          <text class="t-sm" x="292" y="110">set local role anon</text>
+
+          <line class="flow" x1="485" y1="96" x2="527" y2="96"/>
+          <polygon class="head" points="535,96 523,91 523,101"/>
+
+          <rect class="box fill-sunk" x="535" y="64" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="552" y="94">auth.uid()</text>
+          <text class="t-sm" x="552" y="110">→ null</text>
+
+          <line class="flow" x1="745" y1="96" x2="787" y2="96"/>
+          <polygon class="head" points="795,96 783,91 783,101"/>
+
+          <rect class="box fill-sunk" x="795" y="64" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="812" y="94">owner policies</text>
+          <text class="t-sm" x="812" y="110">match no rows</text>
+        </g>
+
+        <g class="accent">
+          <text class="t-sm" x="15" y="178">AFTER SIGN-IN</text>
+
+          <rect class="box box-em fill-soft" x="15" y="190" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="32" y="212">apikey: &lt;anon key&gt;</text>
+          <text class="t-sm" x="32" y="228">Authorization:</text>
+          <text class="t-sm" x="32" y="244">Bearer &lt;access_token&gt;</text>
+
+          <line class="flow" x1="225" y1="222" x2="267" y2="222"/>
+          <polygon class="head" points="275,222 263,217 263,227"/>
+
+          <rect class="box box-em fill-soft" x="275" y="190" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="292" y="220">PostgREST reads the JWT</text>
+          <text class="t-sm" x="292" y="236">set local role authenticated</text>
+
+          <line class="flow" x1="485" y1="222" x2="527" y2="222"/>
+          <polygon class="head" points="535,222 523,217 523,227"/>
+
+          <rect class="box box-em fill-soft" x="535" y="190" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="552" y="220">auth.uid()</text>
+          <text class="t-sm" x="552" y="236">→ the sub claim</text>
+
+          <line class="flow" x1="745" y1="222" x2="787" y2="222"/>
+          <polygon class="head" points="795,222 783,217 783,227"/>
+
+          <rect class="box box-em fill-soft" x="795" y="190" width="210" height="64" rx="6"/>
+          <text class="t-sm" x="812" y="220">owner policies</text>
+          <text class="t-sm" x="812" y="236">match the user's rows</text>
+        </g>
+
+        <line class="flow" x1="120" y1="132" x2="120" y2="182" stroke-dasharray="4 4" stroke-opacity="0.5"/>
+        <text class="t-sm t-dim" x="240" y="162">one line of one header is the whole difference</text>
+      </svg>
+      <figcaption>
+        The client never adds <code>.eq('owner_id', user.id)</code> to a query — the token it sends
+        already decides what comes back. A filter that agreed with the policy would be redundant;
+        one that disagreed would be a bug wearing the costume of a safeguard.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="step">05</span>Staying signed in, and signing out</h2>
+    <p>
+      <code>autoRefreshToken</code> keeps the access token alive, but only while a timer is running.
+      On native the token would otherwise expire silently while the app sits in the background, so
+      an <code>AppState</code> listener starts and stops the refresh on foreground and background;
+      the browser tab keeps running and needs no equivalent.
+    </p>
+    <p>
+      A token that does slip through expired is not a lost write. The outbox classifies a
+      <code>401</code> as <code>retryable</code> precisely because supabase-js will have refreshed
+      the token by the next attempt — while a <code>403</code>, which is row-level security actually
+      refusing, is <code>permanent</code> and drops the write.
+    </p>
+    <p>
+      Sign-out clears this account's cached lists first, then calls
+      <code>signOut({ scope: 'local' })</code>. The scope is deliberate: the supabase-js default is
+      <code>'global'</code>, which revokes every device, so signing out in a browser would
+      eventually sign out the phone. The outbox is deliberately <em>not</em> cleared — those writes
+      are still owed to the database and flush at the next sign-in.
+    </p>
+
+    <aside class="note">
+      <b>The one auth error that deletes data</b>
+      A tightened policy does not merely block a write; the <code>403</code> it returns takes the
+      queued write off the device, with one error banner to show for it.
+    </aside>
+
+    <p class="coda">
+      Two claims worth keeping apart: the templates are wired correctly in config and confirmed in
+      the dashboard, and device sign-in works end to end against production. As of the last check
+      only the first has been proven — verifying the second needs a brand-new address, then the same
+      address again, to exercise both template paths.
+    </p>
+  </section>
+
+</div>
+
+</body>
+</html>
