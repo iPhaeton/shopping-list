@@ -37,3 +37,6 @@ npx jest -t 'trims the name'                   # one test by name
 - **Only the librarian writes to `ai/kb/entries/` and `ai/kb/INDEX.md`.** Hand it candidate facts;
   don't append to the KB yourself. The rules it curates by are in
   [ai/kb/CHARTER.md](ai/kb/CHARTER.md).
+- **Write for whoever is reading.** In chat, explain things in simple words — assume a technical
+  person who doesn't know this code and hasn't read the documentation. Files under `ai/` have a
+  different reader: other agents. Write those for precision and density, not for a human's comfort.
