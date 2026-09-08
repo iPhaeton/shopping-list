@@ -4,8 +4,8 @@ title: Ids and timestamps are minted outside the reducer and arrive on the actio
 type: convention
 status: current
 tags: [state, reducer, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md]
-last_verified: 2026-09-07
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md]
+last_verified: 2026-09-08
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---
@@ -24,6 +24,11 @@ provider. The reducer is never asked to read the clock, and never asked to flip.
 `role: 'owner'` inside the reducer without it arriving on the action, and that is fine: it is a
 constant the database's `on_list_created` trigger is guaranteed to agree with, so the case stays a
 pure function of its input. Do not "fix" it by putting `role` on the action.
+
+**And it is about values that are *created*, not every write.** `list/renamed`, the fourth action,
+mints nothing at all: the list already has its id, and the name comes from the user. There is no
+`renamedAt` on it, because nothing stores one — do not add a timestamp to an action just to match
+the shape of `item/setDone`.
 
 **That timestamp is only a placeholder for the optimistic row.** The stored `done_at` is minted by
 Postgres, not by the device, and the request that triggers it carries a boolean

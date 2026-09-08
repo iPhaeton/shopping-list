@@ -13,10 +13,18 @@ import { AppState, Platform } from 'react-native';
 
 import { newId } from '../lib/ids';
 import { readCachedLists, writeCachedLists } from '../lib/listCache';
-import { fetchLists, insertItem, insertList, setItemDone, type Result } from '../lib/listsApi';
+import {
+  fetchLists,
+  insertItem,
+  insertList,
+  setItemDone,
+  updateListName,
+  type Result,
+} from '../lib/listsApi';
 import { dropDependents, enqueue, loadOutbox, saveOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
 import { replay } from './replay';
+import { canEditItems, canManageList } from './roles';
 import type { List, WriteAction } from './types';
 
 /** Backoff floor and ceiling. Doubling from one second gets to the cap in six attempts. */
@@ -25,6 +33,8 @@ const MAX_RETRY_MS = 30_000;
 
 type ListsContextValue = {
   lists: List[];
+  /** Whose lists these are. The sharing screen needs it to tell your own roster row from the rest. */
+  userId: string;
   /** `loading` until there is something to show — a cached copy, or the first fetch settling. */
   status: 'loading' | 'ready';
   /** The last write the database *refused*, for the screen to render. Cleared by the next success. */
@@ -33,8 +43,11 @@ type ListsContextValue = {
   pending: number;
   /** Returns the id of the new list, or null when `name` was blank. */
   createList: (name: string) => string | null;
+  renameList: (listId: string, name: string) => void;
   addItem: (listId: string, title: string) => void;
   toggleItem: (listId: string, itemId: string) => void;
+  /** Server truth again, on demand. A read, so it is safe to call at any time after mount. */
+  refresh: () => Promise<void>;
 };
 
 const ListsContext = createContext<ListsContextValue | null>(null);
@@ -91,8 +104,13 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     }
   }, [userId]);
 
-  /** Server truth, with everything still unsent folded back on top. */
-  const refresh = useCallback(async () => {
+  /**
+   * Server truth, with everything still unsent folded back on top.
+   *
+   * Unguarded on purpose — the flush loop calls it to roll a refused write back, and that happens
+   * with `flushing` set. `refresh` below is the guarded door everyone else comes through.
+   */
+  const hydrate = useCallback(async () => {
     fetching.current = true;
 
     try {
@@ -149,7 +167,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
             setError(message);
             // The one case that still rolls back by re-fetching: the write is never happening, so
             // the screen has to stop showing it.
-            await refresh();
+            await hydrate();
           } else {
             attempt.current = 0;
             setError(null);
@@ -159,8 +177,21 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
         flushing.current = false;
       }
     },
-    [persist, refresh]
+    [persist, hydrate]
   );
+
+  /**
+   * A re-read on demand, for the sharing screen and for coming back to the app.
+   *
+   * `flush` guards itself against a fetch; nothing guards a fetch against a flush. A read issued
+   * while a write is in the air can come back without that write just as the loop removes it from
+   * the queue — and the row disappears from the screen until the next fetch. A set `retry` means
+   * backoff took over, so we are offline and a fetch would fail anyway.
+   */
+  const refresh = useCallback(async () => {
+    if (flushing.current || retry.current) return;
+    await hydrate();
+  }, [hydrate]);
 
   // Hydrate: the outbox and the cached rows first, so the app is usable with no network at all,
   // then the database.
@@ -179,7 +210,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
         setStatus('ready');
       }
 
-      const failure = await refresh();
+      const failure = await hydrate();
       if (cancelled) return;
 
       // A failed read is only worth a banner when there is nothing to show instead of an answer.
@@ -192,7 +223,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     return () => {
       cancelled = true;
     };
-  }, [userId, refresh, flush]);
+  }, [userId, hydrate, flush]);
 
   // Keep the cached copy current. A fetch only happens on mount, so caching *only* what a fetch
   // returned leaves the next cold start showing the app as it was when it last started — which is
@@ -202,26 +233,47 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     if (status === 'ready' && pending === 0) void writeCachedLists(userId, state.lists);
   }, [userId, status, pending, state.lists]);
 
-  // Backoff is a floor, not a schedule. When the OS says the app is back in front, or the browser
-  // says the network is back, there is no reason to keep waiting.
+  /**
+   * Coming back to the app: send whatever is queued, then re-read.
+   *
+   * Backoff is a floor, not a schedule — when the OS says the app is in front, or the browser says
+   * the network is back, there is no reason to keep waiting. The re-read is new with sharing: the
+   * fetch used to happen only on mount, which was fine while you were the only writer, but a list
+   * somebody else changed an hour ago would stay stale until a cold start and read as sharing being
+   * broken. `refresh` is the guarded one, so it stands down if the flush it just ran is still going.
+   */
   useEffect(() => {
     const resume = () => {
       if (retry.current) clearTimeout(retry.current);
       retry.current = null;
       attempt.current = 0;
-      void flush();
+
+      void (async () => {
+        await flush();
+        await refresh();
+      })();
     };
 
     if (Platform.OS === 'web') {
+      // `online` fires when connectivity changes; on the web the foreground event that matters is
+      // coming back to the tab, and neither implies the other.
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') resume();
+      };
+
       window.addEventListener('online', resume);
-      return () => window.removeEventListener('online', resume);
+      document.addEventListener('visibilitychange', onVisible);
+      return () => {
+        window.removeEventListener('online', resume);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
     }
 
     const subscription = AppState.addEventListener('change', (next) => {
       if (next === 'active') resume();
     });
     return () => subscription.remove();
-  }, [flush]);
+  }, [flush, refresh]);
 
   const enqueueOp = useCallback(
     async (op: WriteAction) => {
@@ -250,24 +302,60 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     [enqueueOp]
   );
 
+  /**
+   * No id to mint — the list already has one. Renaming is an absolute value like a toggle, so a
+   * retry cannot double-apply it and a queued rename can be replaced by a newer one.
+   */
+  const renameList = useCallback(
+    (listId: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+
+      const list = state.lists.find((candidate) => candidate.id === listId);
+      if (!list) return;
+      if (!canManageList(list.role)) {
+        setError('Only an owner can rename this list.');
+        return;
+      }
+
+      const op: WriteAction = { type: 'list/renamed', id: listId, name: trimmed };
+      dispatch(op);
+      void enqueueOp(op);
+    },
+    [state.lists, enqueueOp]
+  );
+
   const addItem = useCallback(
     (listId: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
 
+      const list = state.lists.find((candidate) => candidate.id === listId);
+      if (!list) return;
+      if (!canEditItems(list.role)) {
+        setError('You have read-only access to this list.');
+        return;
+      }
+
       const op: WriteAction = { type: 'item/added', listId, id: newId(), title: trimmed };
       dispatch(op);
       void enqueueOp(op);
     },
-    [enqueueOp]
+    [state.lists, enqueueOp]
   );
 
   const toggleItem = useCallback(
     (listId: string, itemId: string) => {
-      const item = state.lists
-        .find((list) => list.id === listId)
-        ?.items.find((candidate) => candidate.id === itemId);
-      if (!item) return;
+      const list = state.lists.find((candidate) => candidate.id === listId);
+      const item = list?.items.find((candidate) => candidate.id === itemId);
+      if (!list || !item) return;
+
+      // Unreachable from the UI, which hides the controls a reader may not use. Written anyway,
+      // because the next screen to call these will not remember the rule.
+      if (!canEditItems(list.role)) {
+        setError('You have read-only access to this list.');
+        return;
+      }
 
       // The target state, computed here and sent whole. The reducer is never asked to flip, which
       // is also what makes a queued toggle safe to replace with a newer one.
@@ -286,8 +374,30 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   );
 
   const value = useMemo(
-    () => ({ lists: state.lists, status, error, pending, createList, addItem, toggleItem }),
-    [state.lists, status, error, pending, createList, addItem, toggleItem]
+    () => ({
+      lists: state.lists,
+      userId,
+      status,
+      error,
+      pending,
+      createList,
+      renameList,
+      addItem,
+      toggleItem,
+      refresh,
+    }),
+    [
+      state.lists,
+      userId,
+      status,
+      error,
+      pending,
+      createList,
+      renameList,
+      addItem,
+      toggleItem,
+      refresh,
+    ]
   );
 
   return <ListsContext.Provider value={value}>{children}</ListsContext.Provider>;
@@ -302,6 +412,9 @@ function send(op: WriteAction): Promise<Result> {
   switch (op.type) {
     case 'list/created':
       return insertList(op.id, op.name);
+
+    case 'list/renamed':
+      return updateListName(op.id, op.name);
 
     case 'item/added':
       return insertItem(op.id, op.listId, op.title);

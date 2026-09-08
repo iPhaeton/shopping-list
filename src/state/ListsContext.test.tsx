@@ -3,7 +3,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Pressable, Text } from 'react-native';
 
 import { writeCachedLists } from '../lib/listCache';
-import { fetchLists, insertItem, insertList, setItemDone, type Result } from '../lib/listsApi';
+import {
+  fetchLists,
+  insertItem,
+  insertList,
+  setItemDone,
+  updateListName,
+  type Result,
+} from '../lib/listsApi';
 import { saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
 
@@ -25,6 +32,7 @@ jest.mock('../lib/listsApi', () => ({
   insertList: jest.fn(),
   insertItem: jest.fn(),
   setItemDone: jest.fn(),
+  updateListName: jest.fn(),
 }));
 
 const api = {
@@ -32,12 +40,15 @@ const api = {
   insertList: jest.mocked(insertList),
   insertItem: jest.mocked(insertItem),
   setItemDone: jest.mocked(setItemDone),
+  updateListName: jest.mocked(updateListName),
 };
 
 const USER = 'u1';
 
 const MILK = { id: 'i1', title: 'Milk', doneAt: null };
 const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, items: [MILK] };
+/** The same list as seen by somebody it was shared with, read-only. */
+const READ_ONLY = { ...GROCERIES, role: 'reader' as const };
 
 const OK: Result = { error: null, verdict: 'ok' };
 /** What a write looks like with no signal: postgrest-js reports a failed fetch as status 0. */
@@ -53,6 +64,7 @@ beforeEach(async () => {
   api.insertList.mockResolvedValue(OK);
   api.insertItem.mockResolvedValue(OK);
   api.setItemDone.mockResolvedValue(OK);
+  api.updateListName.mockResolvedValue(OK);
 });
 
 afterEach(() => {
@@ -61,7 +73,7 @@ afterEach(() => {
 
 /** Renders the provider's whole surface as text, so assertions read what a screen would see. */
 function Probe() {
-  const { lists, status, error, pending, createList, addItem, toggleItem } = useLists();
+  const { lists, status, error, pending, createList, renameList, addItem, toggleItem } = useLists();
 
   return (
     <>
@@ -81,6 +93,8 @@ function Probe() {
       {/* Whichever list is first, so this works for a fetched list and for one just created. */}
       <Button label="add" onPress={() => addItem(lists[0]?.id ?? 'l1', 'Bread')} />
       <Button label="toggle" onPress={() => toggleItem('l1', 'i1')} />
+      <Button label="rename" onPress={() => renameList('l1', 'Weekly shop')} />
+      <Button label="rename blank" onPress={() => renameList('l1', '   ')} />
     </>
   );
 }
@@ -179,6 +193,78 @@ it('sends an absolute value when an item is toggled', async () => {
   await fireEvent.press(screen.getByLabelText('toggle'));
   expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
   expect(api.setItemDone).toHaveBeenLastCalledWith('i1', false);
+});
+
+// --- Renaming, and who may write ---------------------------------------------------------------
+
+it('renames a list optimistically and sends the new name', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+
+  await renderProbe();
+  await fireEvent.press(screen.getByLabelText('rename'));
+
+  expect(screen.getByText('l1 Weekly shop: Milk')).toBeOnTheScreen();
+  await waitFor(() => expect(api.updateListName).toHaveBeenCalledWith('l1', 'Weekly shop'));
+});
+
+it('does not rename a list to nothing', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+
+  await renderProbe();
+  await fireEvent.press(screen.getByLabelText('rename blank'));
+
+  expect(api.updateListName).not.toHaveBeenCalled();
+});
+
+/**
+ * The screens hide the controls a reader may not use, so none of these three are reachable by
+ * tapping. They are written anyway: the database is the only real boundary, and the next screen to
+ * call these functions will not remember the rule.
+ */
+describe('a list you only have read access to', () => {
+  beforeEach(() => {
+    api.fetchLists.mockResolvedValue({ lists: [READ_ONLY], error: null });
+  });
+
+  it('refuses to add an item, and says why', async () => {
+    await renderProbe();
+    await fireEvent.press(screen.getByLabelText('add'));
+
+    expect(screen.getByText('error: You have read-only access to this list.')).toBeOnTheScreen();
+    expect(api.insertItem).not.toHaveBeenCalled();
+    expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
+  });
+
+  it('refuses to toggle an item', async () => {
+    await renderProbe();
+    await fireEvent.press(screen.getByLabelText('toggle'));
+
+    expect(screen.getByText('error: You have read-only access to this list.')).toBeOnTheScreen();
+    expect(api.setItemDone).not.toHaveBeenCalled();
+    expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
+  });
+
+  it('refuses to rename the list', async () => {
+    await renderProbe();
+    await fireEvent.press(screen.getByLabelText('rename'));
+
+    expect(screen.getByText('error: Only an owner can rename this list.')).toBeOnTheScreen();
+    expect(api.updateListName).not.toHaveBeenCalled();
+    expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
+  });
+});
+
+/** A writer adds and ticks but does not manage the list itself. */
+it('lets a writer change items but not the name', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [{ ...GROCERIES, role: 'writer' }], error: null });
+
+  await renderProbe();
+
+  await fireEvent.press(screen.getByLabelText('add'));
+  expect(screen.getByText('l1 Groceries: Milk, Bread')).toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByLabelText('rename'));
+  expect(api.updateListName).not.toHaveBeenCalled();
 });
 
 /**

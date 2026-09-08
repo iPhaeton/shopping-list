@@ -3,18 +3,30 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Item } from '../state/types';
 import { colors, radius, spacing } from '../theme';
 
-export function ItemRow({ item, onToggle }: { item: Item; onToggle: () => void }) {
+type Props = {
+  item: Item;
+  /** A `reader` still sees whether an item is done; they just cannot change it. */
+  editable?: boolean;
+  onToggle: () => void;
+};
+
+export function ItemRow({ item, editable = true, onToggle }: Props) {
   // `doneAt` records when the item was checked off; nothing here shows the time, only the fact.
   const done = item.doneAt !== null;
 
   return (
     <Pressable
+      // Still a checkbox when read-only, and still labelled: the checked state is information a
+      // reader wants. Only `disabled` changes, following `AddBar`'s precedent.
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: done }}
+      accessibilityState={{ checked: done, disabled: !editable }}
       accessibilityLabel={item.title}
-      accessibilityHint={done ? 'Marks this item as not done' : 'Marks this item as done'}
+      accessibilityHint={
+        editable ? (done ? 'Marks this item as not done' : 'Marks this item as done') : undefined
+      }
+      disabled={!editable}
       onPress={onToggle}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+      style={({ pressed }) => [styles.row, pressed && editable && styles.rowPressed]}>
       <View style={[styles.checkbox, done && styles.checkboxChecked]}>
         {done ? <Text style={styles.check}>✓</Text> : null}
       </View>

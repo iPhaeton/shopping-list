@@ -9,15 +9,21 @@ export function ListRow({ list, onPress }: { list: List; onPress: () => void }) 
   const summary =
     list.items.length === 0 ? 'No items yet' : `${done} of ${list.items.length} done`;
 
+  // Somebody else's list that you have been given access to. It deliberately does not say *how
+  // widely* a list you own is shared: the `list_members` select policy shows you your own row only,
+  // so any count the client could compute would read `1` for everybody — convincing, and wrong.
+  const shared = list.role !== 'owner';
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${list.name}, ${summary}`}
+      accessibilityLabel={shared ? `${list.name}, ${summary}, shared with you` : `${list.name}, ${summary}`}
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <View style={styles.text}>
         <Text style={styles.name}>{list.name}</Text>
         <Text style={styles.summary}>{summary}</Text>
+        {shared ? <Text style={styles.summary}>Shared with you</Text> : null}
       </View>
       <Text style={styles.chevron}>›</Text>
     </Pressable>

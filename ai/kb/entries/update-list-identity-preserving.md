@@ -4,9 +4,9 @@ title: updateList returns the original state object when nothing changed
 type: convention
 status: current
 tags: [state, reducer, immutability]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-07
-verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && npx jest -t 'is a no-op' --silent
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, 6ef87a2]
+last_verified: 2026-09-08
+verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && grep -q 'returns the same state object when the name is unchanged' src/state/listsReducer.test.ts && npx jest -t 'is a no-op|returns the same state object' --silent
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox]
 ---
 
@@ -15,7 +15,8 @@ The private `updateList` helper in
 object**, not a fresh one, in two cases: the list id is unknown, and the `update` callback returned
 the same list it was given. `item/setDone` leans on the second case twice over — it returns `list`
 untouched when the item id is not in that list, *and* when the item already holds the `doneAt` value
-being set.
+being set. Step 7's `list/renamed` is the third case and follows the same shape: a rename to the name
+the list already has returns that same list object.
 
 **That second condition is load-bearing beyond rendering.** Writes carry absolute values rather than
 flips precisely so a repeat is harmless (see
@@ -33,4 +34,7 @@ with `toBe`, so a regression here is caught — that is what this entry's `verif
 
 The `verify:` command greps for the test names *before* running jest, because `jest -t` exits 0 when
 its filter matches nothing: delete or rename those tests and the jest half alone would go on passing
-while nothing was being checked.
+while nothing was being checked. It names two patterns, since the rename case was written as
+"returns the same state object when the name is unchanged" rather than as another `is a no-op …` —
+the `-t` filter is a regex, so both are matched in one run. Name a new no-op test to match one of
+them, or add it here.

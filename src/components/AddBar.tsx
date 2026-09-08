@@ -7,15 +7,20 @@ type Props = {
   placeholder: string;
   /** Label for the submit button, also used as its accessibility label. */
   buttonLabel: string;
+  /** What the field starts with. For editing something that already has a value, like a list name. */
+  initialValue?: string;
   onSubmit: (value: string) => void;
 };
 
 /**
  * Text field + submit button, shared by both screens. Owns its own draft text and
  * clears it once a non-blank value has been handed to `onSubmit`.
+ *
+ * `initialValue` seeds that draft on mount only — it is a starting point, not a controlled value, so
+ * a bar that is open while the underlying name changes keeps what the user is typing.
  */
-export function AddBar({ placeholder, buttonLabel, onSubmit }: Props) {
-  const [value, setValue] = useState('');
+export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }: Props) {
+  const [value, setValue] = useState(initialValue);
   const canSubmit = value.trim().length > 0;
 
   function submit() {

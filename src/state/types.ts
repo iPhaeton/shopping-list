@@ -32,16 +32,17 @@ export type State = {
  *
  * `item/setDone` carries an absolute value rather than asking for a flip: a flip applied twice —
  * by a retried request, or by a second device — lands back where it started, while the same
- * absolute value applied twice is the same result.
+ * absolute value applied twice is the same result. `list/renamed` carries one for the same reason.
  */
 export type Action =
   | { type: 'lists/loaded'; lists: List[] }
   | { type: 'list/created'; id: string; name: string }
+  | { type: 'list/renamed'; id: string; name: string }
   | { type: 'item/added'; listId: string; id: string; title: string }
   | { type: 'item/setDone'; listId: string; itemId: string; doneAt: string | null };
 
 /**
- * The three actions that owe the database a write. They are the outbox's entries as well as the
+ * The four actions that owe the database a write. They are the outbox's entries as well as the
  * reducer's actions — `src/lib/outbox.ts` stores exactly these — which is what lets a pending write
  * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`).
  */

@@ -68,6 +68,51 @@ describe('list/created', () => {
   });
 });
 
+describe('list/renamed', () => {
+  it('renames the list and leaves its items alone', () => {
+    const state = listsReducer(stateWithItems('Milk'), {
+      type: 'list/renamed',
+      id: 'l1',
+      name: 'Weekly shop',
+    });
+
+    expect(state.lists[0].name).toBe('Weekly shop');
+    expect(state.lists[0].items.map((item) => item.title)).toEqual(['Milk']);
+  });
+
+  it('trims the name', () => {
+    const state = listsReducer(stateWithItems(), {
+      type: 'list/renamed',
+      id: 'l1',
+      name: '  Weekly shop  ',
+    });
+
+    expect(state.lists[0].name).toBe('Weekly shop');
+  });
+
+  it('ignores a blank name', () => {
+    const before = stateWithItems();
+    const after = listsReducer(before, { type: 'list/renamed', id: 'l1', name: '   ' });
+
+    expect(after).toBe(before);
+  });
+
+  it('ignores a list it does not have', () => {
+    const before = stateWithItems();
+    const after = listsReducer(before, { type: 'list/renamed', id: 'l9', name: 'Hardware' });
+
+    expect(after).toBe(before);
+  });
+
+  /** A rename to the name it already has must not make React think anything moved. */
+  it('returns the same state object when the name is unchanged', () => {
+    const before = stateWithItems();
+    const after = listsReducer(before, { type: 'list/renamed', id: 'l1', name: 'Groceries' });
+
+    expect(after).toBe(before);
+  });
+});
+
 describe('item/added', () => {
   it('appends an item that starts out not done', () => {
     const state = stateWithItems('Milk');

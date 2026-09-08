@@ -4,10 +4,10 @@ title: The database stamps done_at — the client sends a boolean and holds no u
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-07
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-08
 verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && grep -q 'done_at = case when p_done then now() else null end' supabase/migrations/20260907000000_list_sharing.sql && grep -A30 'function public.set_item_done' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'if updated = 0 then' && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
-related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, ids-minted-outside-reducer, first-fetch-replaces-list-state]
+related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state]
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
@@ -58,6 +58,13 @@ write is dropped loudly with a banner and a re-fetch
 that returns void must raise on refusal, or the outbox reports a lie as delivered.** Zero rows is
 unambiguously a refusal only because nothing deletes items; if item deletion ever lands, this branch
 has to tell "gone" from "refused".
+
+**Step 7's UI found the same bug one table over, arriving through PostgREST rather than through a
+function.** A `reader`'s plain `PATCH` of `lists.name` is filtered to zero rows and answers `204`
+with no error — again read as `ok`, again dropped from the outbox as delivered. The fix there is
+`.select()` rather than `raise`, because the write is a table update and not an RPC. Read the pair
+together: **an RPC has to fail loudly; a direct write has to be asked what it did**
+([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)).
 
 **What it cost, both parts deliberate.** The function has to be `security definer` — an invoker
 function would be denied by the very revoke that makes this worth doing — so it bypasses RLS and

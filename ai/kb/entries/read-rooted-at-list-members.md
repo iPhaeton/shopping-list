@@ -4,8 +4,8 @@ title: The read starts at list_members, and every policy predicate is an uncorre
 type: decision
 status: current
 tags: [supabase, postgres, rls, performance, persistence]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
-last_verified: 2026-09-07
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
+last_verified: 2026-09-08
 verify: grep -q "from('list_members')" src/lib/listsApi.ts && grep -q 'lists!inner' src/lib/listsApi.ts && grep -q 'create index on public.list_members (user_id, created_at);' supabase/migrations/20260907000000_list_sharing.sql && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security invoker' && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q "set search_path = ''"
 related: [list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, supabase-local-stack]
 ---
@@ -67,6 +67,11 @@ seed.
 **One caveat on the headline claim.** Size-independence is read off the plan — no node's row count
 tracks the table — rather than measured; a 10M-row run was never done. End to end over HTTP the gap
 narrows to ~20 ms vs ~65 ms, because request overhead dominates once the query is a millisecond.
+
+**Rule 1 is also why your role costs nothing to read.** `fetchLists` already selects `role` off the
+membership row it roots at, so step 7's role-gated UI needed no extra round trip, no extra state, and
+works offline out of the cache. A new screen that wants "what may I do here" reads `list.role`; it
+does not ask the database again.
 
 **What to do:** treat rules 1–3 as the contract. A new policy on list data is another uncorrelated
 `in (select ... from public.my_memberships() ...)`; a new read of list data starts at `list_members`

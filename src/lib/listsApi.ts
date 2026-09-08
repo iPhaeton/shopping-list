@@ -25,6 +25,14 @@ type Failure = { message: string; code?: string | null } | null;
 type ItemRow = { id: string; title: string; done_at: string | null; created_at: string };
 type ListRow = { id: string; name: string; items: ItemRow[] };
 type MembershipRow = { role: Role; lists: ListRow };
+type MemberRow = { user_id: string; email: string; role: Role };
+
+/**
+ * Somebody who has access to a list. Not part of `State`: the roster is not cached, the reducer
+ * models no members, and there is nothing for `replay` to fold — so it lives here with `Result`,
+ * as an API shape, and the sharing screen holds it in `useState`.
+ */
+export type Member = { userId: string; email: string; role: Role };
 
 /**
  * One round trip, rooted at `list_members` rather than at `lists`.
@@ -61,6 +69,30 @@ export async function insertItem(id: string, listId: string, title: string): Pro
 }
 
 /**
+ * `.select()` is not decoration, and asking for the row back is the whole point of this function.
+ *
+ * Row-level security filters a refused rename down to *zero rows* rather than refusing it, and
+ * PostgREST answers that with `204 No Content` and no error — measured against the local stack, as
+ * a reader, on 2026-09-08. `resultFor` would read that as `ok`, the outbox would drop the write as
+ * delivered, the new name would sit on screen looking saved, and the old one would come back at the
+ * next fetch with nothing to explain it.
+ *
+ * Asking for the representation is what turns a silent no into a loud one — exactly what
+ * `set_item_done`'s `raise` does one table over.
+ */
+export async function updateListName(id: string, name: string): Promise<Result> {
+  const { data, error, status } = await supabase
+    .from('lists')
+    .update({ name })
+    .eq('id', id)
+    .select('id');
+
+  if (error) return resultFor(error, status);
+  if (data?.length) return { error: null, verdict: 'ok' };
+  return { error: 'You can no longer rename this list.', verdict: 'permanent' };
+}
+
+/**
  * Sends what the item should *be*, never a flip, so a retry cannot double-apply.
  *
  * Through an RPC rather than an update because the client is not allowed to write `done_at` — the
@@ -72,6 +104,61 @@ export async function setItemDone(itemId: string, done: boolean): Promise<Result
   const { error, status } = await supabase.rpc('set_item_done', {
     p_item_id: itemId,
     p_done: done,
+  });
+  return resultFor(error, status);
+}
+
+// --- Who else has access ---------------------------------------------------------------------
+
+/**
+ * The roster, and the three ways to change it.
+ *
+ * All four are RPCs because the `list_members` select policy shows you exactly one row — your own —
+ * and a select policy also gates what UPDATE and DELETE may touch, so an owner acting on somebody
+ * else has to go through a `security definer` function. `list_members_of` is gated on the caller's
+ * own membership, so a reader gets the full roster and a stranger gets nothing.
+ *
+ * None of these go through the outbox. `share_list` resolves the address server-side, so "no account
+ * with that email yet" has to be answered while the user is still looking at the field they typed it
+ * into — queued, it would arrive an hour later as an error about a stranger.
+ */
+export async function fetchMembers(
+  listId: string
+): Promise<{ members: Member[] | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('list_members_of', { p_list_id: listId });
+
+  if (error) return { members: null, error: error.message };
+  // `?? []` rather than a bare cast: a set-returning function with no rows to return can answer with
+  // a null body, and an empty roster is a fine answer — a crash is not.
+  return { members: ((data ?? []) as MemberRow[]).map(toMember), error: null };
+}
+
+export async function shareList(listId: string, email: string, role: Role): Promise<Result> {
+  const { error, status } = await supabase.rpc('share_list', {
+    p_list_id: listId,
+    p_email: email.trim(),
+    p_role: role,
+  });
+  return resultFor(error, status);
+}
+
+export async function setMemberRole(
+  listId: string,
+  userId: string,
+  role: Role
+): Promise<Result> {
+  const { error, status } = await supabase.rpc('set_member_role', {
+    p_list_id: listId,
+    p_user_id: userId,
+    p_role: role,
+  });
+  return resultFor(error, status);
+}
+
+export async function removeMember(listId: string, userId: string): Promise<Result> {
+  const { error, status } = await supabase.rpc('remove_member', {
+    p_list_id: listId,
+    p_user_id: userId,
   });
   return resultFor(error, status);
 }
@@ -96,6 +183,12 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
   // under the id it minted. This is what makes a retried insert safe rather than a second row.
   if (code === '23505') return 'applied';
 
+  // PostgREST answers `P0002` with 500 — measured, 2026-09-08 — and a 500 otherwise means "the
+  // server is having a moment, send it again". The sharing RPCs raise it for "no account with that
+  // email yet", which is the most likely thing to go wrong on the share screen and will never
+  // succeed on a retry. As with 23505, the code decides and the status does not.
+  if (code === 'P0002') return 'permanent';
+
   // Status 0 is how postgrest-js reports a failed fetch — no signal, DNS, TLS, a dropped socket.
   // In other words: offline, the case this whole feature exists for.
   if (status === 0 || status >= 500) return 'retryable';
@@ -118,4 +211,8 @@ function toList(row: MembershipRow): List {
 
 function toItem(row: ItemRow): Item {
   return { id: row.id, title: row.title, doneAt: row.done_at };
+}
+
+function toMember(row: MemberRow): Member {
+  return { userId: row.user_id, email: row.email, role: row.role };
 }

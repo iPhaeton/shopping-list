@@ -8,3 +8,6 @@
     - when a deleted list is updated
 8. Unsaved changes message flickering
 9. Item and list deletion
+10. Removing oneself from list
+11. List rename endpoint sshould return errors
+12. Pagination for lists, items, list members, users

@@ -10,6 +10,7 @@ import { dropDependents, enqueue, loadOutbox, saveOutbox } from './outbox';
 const USER = 'u1';
 
 const CREATE_GROCERIES: WriteAction = { type: 'list/created', id: 'l1', name: 'Groceries' };
+const RENAME_GROCERIES: WriteAction = { type: 'list/renamed', id: 'l1', name: 'Weekly shop' };
 const ADD_MILK: WriteAction = { type: 'item/added', listId: 'l1', id: 'i1', title: 'Milk' };
 const TICK_MILK: WriteAction = {
   type: 'item/setDone',
@@ -59,11 +60,34 @@ it('does not coalesce toggles of different items', () => {
   expect(enqueue([TICK_MILK], tickBread)).toEqual([TICK_MILK, tickBread]);
 });
 
+/** A name is an absolute value too: renaming a list five times is still one request. */
+it('replaces a queued rename of the same list, where it stands', () => {
+  const renameAgain: WriteAction = { ...RENAME_GROCERIES, name: 'Big shop' };
+
+  const ops = enqueue([RENAME_GROCERIES, ADD_MILK], renameAgain);
+
+  expect(ops).toEqual([renameAgain, ADD_MILK]);
+});
+
+it('does not coalesce renames of different lists', () => {
+  const renameOther: WriteAction = { type: 'list/renamed', id: 'l2', name: 'Hardware' };
+
+  expect(enqueue([RENAME_GROCERIES], renameOther)).toEqual([RENAME_GROCERIES, renameOther]);
+});
+
 /** Two inserts are two rows, however alike they look. */
 it('does not coalesce inserts', () => {
   const addMilkAgain: WriteAction = { ...ADD_MILK, id: 'i2' };
 
   expect(enqueue([ADD_MILK], addMilkAgain)).toEqual([ADD_MILK, addMilkAgain]);
+});
+
+/** A rename and a create carry the same id but are different writes; only the create is coalesced. */
+it('does not let a rename replace the insert of the same list', () => {
+  expect(enqueue([CREATE_GROCERIES], RENAME_GROCERIES)).toEqual([
+    CREATE_GROCERIES,
+    RENAME_GROCERIES,
+  ]);
 });
 
 it('drops the items of a list the database refused, and nothing else', () => {
@@ -73,6 +97,19 @@ it('drops the items of a list the database refused, and nothing else', () => {
   const ops = dropDependents([ADD_MILK, TICK_MILK, otherList, addNails], CREATE_GROCERIES);
 
   expect(ops).toEqual([otherList, addNails]);
+});
+
+/** A list the database never accepted cannot be renamed either — same refusal, same burst to avoid. */
+it('drops a queued rename of a list the database refused', () => {
+  const renameOther: WriteAction = { type: 'list/renamed', id: 'l2', name: 'Hardware' };
+
+  const ops = dropDependents([RENAME_GROCERIES, renameOther], CREATE_GROCERIES);
+
+  expect(ops).toEqual([renameOther]);
+});
+
+it('leaves the queue alone when a rename is refused', () => {
+  expect(dropDependents([ADD_MILK, TICK_MILK], RENAME_GROCERIES)).toEqual([ADD_MILK, TICK_MILK]);
 });
 
 it('drops the toggle of an item that was never inserted', () => {

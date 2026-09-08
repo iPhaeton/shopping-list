@@ -38,25 +38,32 @@ export function saveOutbox(userId: string, ops: WriteAction[]): Promise<void> {
 }
 
 /**
- * Appends — except for a toggle of an item already waiting, which replaces it where it stands.
- * Writes carry absolute values, so only the newest one is worth sending: ticking a checkbox five
- * times on a train is one request. Inserts are never coalesced; their ids are unique by
- * construction, and each one is a different row.
+ * Appends — except for a write that supersedes one already waiting, which replaces it where it
+ * stands. Those writes carry absolute values, so only the newest one is worth sending: ticking a
+ * checkbox five times on a train is one request, and so is renaming a list five times. Inserts are
+ * never coalesced; their ids are unique by construction, and each one is a different row.
  */
 export function enqueue(ops: WriteAction[], op: WriteAction): WriteAction[] {
-  if (op.type === 'item/setDone') {
-    const index = ops.findIndex(
-      (candidate) => candidate.type === 'item/setDone' && candidate.itemId === op.itemId
-    );
+  const index = ops.findIndex((candidate) => supersedes(op, candidate));
+  if (index === -1) return [...ops, op];
 
-    if (index !== -1) {
-      const next = [...ops];
-      next[index] = op;
-      return next;
-    }
+  const next = [...ops];
+  next[index] = op;
+  return next;
+}
+
+/** Whether sending `op` makes `queued` pointless: the same absolute value, about the same thing. */
+function supersedes(op: WriteAction, queued: WriteAction): boolean {
+  switch (op.type) {
+    case 'item/setDone':
+      return queued.type === 'item/setDone' && queued.itemId === op.itemId;
+
+    case 'list/renamed':
+      return queued.type === 'list/renamed' && queued.id === op.id;
+
+    default:
+      return false;
   }
-
-  return [...ops, op];
 }
 
 /**
@@ -67,11 +74,20 @@ export function enqueue(ops: WriteAction[], op: WriteAction): WriteAction[] {
 export function dropDependents(ops: WriteAction[], failed: WriteAction): WriteAction[] {
   switch (failed.type) {
     case 'list/created':
-      return ops.filter((op) => op.type === 'list/created' || op.listId !== failed.id);
+      return ops.filter((op) => {
+        // Every other list insert stands; a rename names the list by `id`, everything else by
+        // `listId`. All of them are about a list the database says does not exist.
+        if (op.type === 'list/created') return true;
+        if (op.type === 'list/renamed') return op.id !== failed.id;
+        return op.listId !== failed.id;
+      });
 
     case 'item/added':
       return ops.filter((op) => op.type !== 'item/setDone' || op.itemId !== failed.id);
 
+    // Neither strands anything: the list and the item both still exist, and the write that was
+    // refused was only ever about their contents.
+    case 'list/renamed':
     case 'item/setDone':
       return ops;
   }

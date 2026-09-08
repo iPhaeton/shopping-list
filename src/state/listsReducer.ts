@@ -21,6 +21,13 @@ export function listsReducer(state: State, action: Action): State {
       return { ...state, lists: [...state.lists, list] };
     }
 
+    case 'list/renamed': {
+      const name = action.name.trim();
+      if (!name) return state;
+
+      return updateList(state, action.id, (list) => (list.name === name ? list : { ...list, name }));
+    }
+
     case 'item/added': {
       const title = action.title.trim();
       if (!title) return state;

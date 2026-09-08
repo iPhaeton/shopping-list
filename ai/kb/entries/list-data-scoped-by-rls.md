@@ -4,10 +4,10 @@ title: Row-level security scopes list data to your membership row — the client
 type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence, sharing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-07
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
+last_verified: 2026-09-08
 verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && grep -q 'alter table public.list_members enable row level security;' supabase/migrations/20260907000000_list_sharing.sql && ! grep -rEA1 'create policy .* on public\.(lists|items)' supabase/migrations | grep -qi 'for delete' && ! grep -rqE "\.eq\('(owner_id|created_by|user_id)'" src && grep -q 'create policy "writers update items"' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql
-related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, scope-boundaries, supabase-local-stack]
+related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, scope-boundaries, supabase-local-stack]
 ---
 
 **Since step 7 the predicate is membership, not ownership, and this entry used to say the opposite** —
@@ -41,7 +41,11 @@ cut:
   The two must change together ([server-stamps-done-at](server-stamps-done-at.md)).
 - `lists` — new in step 7: the table grant is revoked and `update (name)` re-granted to
   `authenticated`, so "owners rename lists" means *rename* and not "rewrite `created_by`". Unlike
-  `items`, the policy stays reachable, on one column.
+  `items`, the policy stays reachable, on one column — and since step 7's UI it is actually
+  exercised: `updateListName` is the app's one direct `PATCH` of a table. Note what a *reader*'s
+  rename does with that policy: it is filtered to zero rows, not refused, so the request has to ask
+  for the row back to notice
+  ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)).
 
 Before assuming a client write is allowed, read the grants as well as the policies
 ([supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)).

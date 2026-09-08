@@ -4,8 +4,8 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-07
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-08
 verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 2;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
 related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, supabase-local-stack]
 ---
@@ -47,7 +47,9 @@ costs one fetch. **`outbox.ts` stayed at `1` on purpose:** a version mismatch th
 aside as broken, throwing away the unsent writes the outbox exists to protect, and a v1 outbox holds
 only actions that are still valid. So bump the cache version whenever the cached shape changes; bump
 the outbox version only when a queued action can no longer be replayed at all, and expect to write a
-migration instead if it ever comes to that.
+migration instead if it ever comes to that. Step 7's sharing UI is the worked example of *not*
+bumping either: it added a fourth `WriteAction` (`list/renamed`) and no field on `List`, so a cached
+v2 blob is still exactly right and a queued v1 op is still replayable.
 
 The `verify:` command asserts all of it: the acknowledged-rows effect still exists, `refresh` still
 caches the fetched array, nothing caches a `replay(...)` result, and the two versions are still `2`

@@ -22,6 +22,7 @@ jest.mock('../lib/listsApi', () => ({
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   insertItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  updateListName: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
 // The provider queues writes on disk now; without this each test inherits the last one's outbox.
@@ -137,6 +138,28 @@ it('says a write is waiting to sync instead of raising an error', async () => {
   ).toBeOnTheScreen();
   expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
   expect(screen.getByText('Groceries')).toBeOnTheScreen();
+});
+
+/**
+ * A list somebody shared with you says so; one you own reads exactly as it always has, so no
+ * existing query moves. It deliberately does not say how widely *your* list is shared — the
+ * `list_members` select policy shows you your own row only, so any count would read `1` for
+ * everybody.
+ */
+it('marks a list somebody else shared, in the label as well as on screen', async () => {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [
+      { id: 'l1', name: 'Groceries', role: 'reader', items: [] },
+      { id: 'l2', name: 'Hardware', role: 'owner', items: [] },
+    ],
+    error: null,
+  });
+
+  await renderScreen();
+
+  expect(screen.getByText('Shared with you')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Groceries, No items yet, shared with you')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Hardware, No items yet')).toBeOnTheScreen();
 });
 
 it('navigates to the list when a row is pressed', async () => {

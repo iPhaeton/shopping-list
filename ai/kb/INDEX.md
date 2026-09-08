@@ -14,7 +14,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes and database-enforced sharing in; every sharing screen, realtime and deletion out (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes and sharing end to end in; invites, leaving a list, realtime and deletion out (constraint)
 
 **Auth**
 
@@ -25,20 +25,21 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [Ids and timestamps are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
 - [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
-- [Writes are queued on disk and retried](ai/kb/entries/writes-retry-from-an-outbox.md) — optimistic, never dropped, and only a refusal re-fetches; the queries live in `src/lib/listsApi.ts` (decision)
+- [Writes are queued on disk and retried](ai/kb/entries/writes-retry-from-an-outbox.md) — optimistic, never dropped, only a refusal re-fetches; four reducer actions, and membership writes stay out (decision)
+- [A refused write comes back as zero rows](ai/kb/entries/refused-writes-return-zero-rows.md) — 204 and no error, so an UPDATE or DELETE must ask for the row back or it lies (gotcha)
 - [The list cache holds acknowledged rows](ai/kb/entries/list-cache-holds-acknowledged-rows.md) — never the replayed view, and not only what a fetch returned (gotcha)
 - [The database stamps `done_at`](ai/kb/entries/server-stamps-done-at.md) — the client sends a boolean through `set_item_done`, which raises on refusal, and cannot update `items` at all (decision)
 - [RLS scopes list data by membership](ai/kb/entries/list-data-scoped-by-rls.md) — reader/writer/owner, the client never filters, grants are half the story; the one delete policy is on `list_members` (constraint)
 - [The read starts at `list_members`](ai/kb/entries/read-rooted-at-list-members.md) — uncorrelated policy subqueries, no `or`, no definer helper in a policy; what a million lists cost (decision)
 - [A SELECT policy gates UPDATE and DELETE too](ai/kb/entries/select-policy-gates-update-and-delete.md) — self-only visibility silently zeroes an owner policy, so member management is RPCs (gotcha)
 - [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, `from public` leaves `anon`, and a policy's helper must keep them (gotcha)
-- [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'` (gotcha)
+- [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'`; it runs on every foreground now, and the flush guard lives in `refresh` (gotcha)
 
 **UI**
 
 - [Theme tokens only](ai/kb/entries/theme-tokens-only.md) — no color or spacing literals outside `src/theme.ts` (convention)
 - [Queries go through a11y labels](ai/kb/entries/queries-go-through-a11y-labels.md) — interactive elements keep role/label/state props; empty-state copy is asserted verbatim (convention)
-- [Screens take navigation props](ai/kb/entries/screens-take-navigation-props.md) — never `useNavigation()`, so tests can stub it (convention)
+- [Screens take navigation props](ai/kb/entries/screens-take-navigation-props.md) — never `useNavigation()`, so tests can stub it; a stub means `headerRight` never mounts (convention)
 
 **Testing**
 

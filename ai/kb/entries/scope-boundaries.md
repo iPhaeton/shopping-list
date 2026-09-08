@@ -1,12 +1,12 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes and database-enforced sharing in; sharing UI, realtime, and deletion out
+title: Scope — named lists, OTP sign-in, offline writes and sharing end to end in; invites, leaving a list, realtime and deletion out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md]
-last_verified: 2026-09-07
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, server-stamps-done-at, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md]
+last_verified: 2026-09-08
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
 Scope is set one task step at a time. What is in, as of step 7:
@@ -19,23 +19,39 @@ Scope is set one task step at a time. What is in, as of step 7:
 | step 4 | writes queued on disk and retried until they land; the lists readable with no signal |
 | step 5 | a cloud Supabase project as a second environment, which a physical device talks to |
 | step 6 (phase 1) | custom SMTP pushed to production; sign-in mail is real mail now, but the app stays structurally single-user until phase 2 |
-| step 7 | sharing at reader/writer/owner, enforced entirely in the database — no UI |
+| step 7 step 1 | sharing at reader/writer/owner, enforced entirely in the database — no UI |
+| step 7 step 2 | the UI for it: role-gated screens, list rename, a sharing screen (invite / change role / remove), a re-fetch when the app comes to the front |
 
-**Still deliberately out: every screen sharing would need, realtime, deletion, passwords, and
-conflict resolution beyond last-write-wins.**
+**Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
+you do not own, showing an owner how widely a list is shared without opening it, realtime, deletion,
+passwords, and conflict resolution beyond last-write-wins.**
 
-**Sharing moved in at step 7, and this entry used to list it as out.**
-[ai/tasks/7-list-sharing/description-step-1.md](../../tasks/7-list-sharing/description-step-1.md)
-asked for sharing "on the database level", and the cut agreed with the user before any code was
-written was: all the SQL — the `list_members` table, the role policies, `share_list`,
-`set_member_role`, `remove_member`, `list_members_of`, the last-owner trigger — plus the minimum
-client plumbing that design depends on (the re-rooted `fetchLists`, `role` on `List`). **No UI at
-all.** A `reader` today sees an enabled Add button and gets an error banner when they use it:
-correct, and not pleasant. What that leaves for later: a share sheet, role guards in the screens,
-list rename, re-fetch on foreground, and `list_invites` — `share_list` raises `P0002` for an address
-that has no account yet, so a stranger cannot be invited. See
-[list-data-scoped-by-rls](list-data-scoped-by-rls.md) for the rules and
-[read-rooted-at-list-members](read-rooted-at-list-members.md) for the shape they are written in.
+**Sharing moved in at step 7, in two steps, and this entry used to list all of it as out.**
+[Step 1](../../tasks/7-list-sharing/description-step-1.md) asked for sharing "on the database level"
+and built only that: the `list_members` table, the role policies, `share_list`, `set_member_role`,
+`remove_member`, `list_members_of`, the last-owner trigger, plus the minimum client plumbing that
+design depends on (the re-rooted `fetchLists`, `role` on `List`). **No UI at all** — a `reader` saw
+an enabled Add button and got an error banner when they used it.
+
+[Step 2](../../tasks/7-list-sharing/description-step-2.md) built the UI, and all four of
+`ai/suggestions/list-sharing-ui.md`'s staging steps landed together: `src/state/roles.ts` decides
+which controls exist (never whether a write is allowed — the database still decides that), list
+rename is the fourth queued write, `SharingScreen` does invite / change role / remove, and
+`AppState` / `visibilitychange` re-fetches on foreground. So "there is no way to share a list from
+the app" and "a reader is handed buttons that fail" are both out of date. See
+[list-data-scoped-by-rls](list-data-scoped-by-rls.md) for the rules,
+[read-rooted-at-list-members](read-rooted-at-list-members.md) for the shape they are written in, and
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) for why membership writes stay outside
+the outbox.
+
+**Two of the still-out items are database limits, not backlog laziness.** `share_list` raises
+`P0002` for an address with no account, so a stranger cannot be invited until a `list_invites` table
+claimed at sign-up exists; and a non-owner cannot remove their own membership — the delete is
+filtered to zero rows and answers `204`, so a "Leave this list" button would look like it worked and
+change nothing ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)). That one is
+item 10 in `backlog/backlog.txt`. A list you own also cannot say "shared with 2 people": the
+`list_members` select policy shows you your own row, so any count the client computed would read `1`
+for everybody.
 
 **List persistence moved in at step 3 and this entry used to say otherwise.**
 [ai/tasks/3/description-step-1.md](../../tasks/3/description-step-1.md) asked for persistence and
@@ -112,19 +128,24 @@ Supabase project alongside the local stack — but nothing in them is approved u
 the rest of it. Step 2
 implemented the auth half of `otp-biometric-auth.md` *only* because a task description asked for it,
 step 3 the first staging step of `supabase-persistence.md`, step 5 the project/schema/config sections
-of `production-supabase.md`, step 6 phase 1 of that document's custom-SMTP section (§4), and step 7
-the SQL of `list-sharing.md` — each because a task description asked for it. The biometric half is
-still just a proposal, and it needs a native dev build besides; so are realtime subscriptions, and so
-are `list-sharing.md`'s own staging steps 2 and 3, which are the UI. §4's phase 2 (a verified sending
-domain) is also still just a proposal — phase 1 is the only part of it that has landed.
+of `production-supabase.md`, step 6 phase 1 of that document's custom-SMTP section (§4), step 7
+step 1 the SQL of `list-sharing.md`, and step 7 step 2 the whole of `list-sharing-ui.md`, which
+covers that document's staging steps 2 and 3 — each because a task description asked for it. The
+biometric half of `otp-biometric-auth.md` is still just a proposal, and it needs a native dev build
+besides; so are realtime subscriptions. §4's phase 2 (a verified sending domain) is also still just a
+proposal — phase 1 is the only part of it that has landed.
 
-**A suggestion can be wrong as well as un-promoted, and step 7 found two errors in one.**
-`list-sharing.md`'s "owners remove members" policy cannot remove anyone
+**A suggestion can be wrong as well as un-promoted, and step 7 found three errors across two
+documents.** `list-sharing.md`'s "owners remove members" policy cannot remove anyone
 ([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md)), its last-owner
 trigger would have aborted account deletion, and its claim that `set search_path = ''` defeats the
 design was measured and does not hold
-([read-rooted-at-list-members](read-rooted-at-list-members.md)). The document is never edited to say
-so. Read a suggestion for its reasoning, then check the KB before trusting it.
+([read-rooted-at-list-members](read-rooted-at-list-members.md)). `list-sharing-ui.md` then
+contradicted *itself*: it made both header buttons owner-only and also said the sharing screen was
+reachable by every member, which cannot both be true when the button is the only way in. Caught while
+scripting the browser run; `Share list` renders for every member and only `Rename list` is gated. The
+documents are never edited to say any of this. Read a suggestion for its reasoning, then check the KB
+before trusting it — and check it against itself.
 
 **A suggestion can also be *overruled* by the step that implements the rest of it.**
 `production-supabase.md`'s

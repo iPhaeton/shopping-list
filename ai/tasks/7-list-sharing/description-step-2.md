@@ -1,0 +1,1 @@
+Implement the list sharing UI. Take into account the suggestion at `ai/suggestions/list-sharing-ui.md`

@@ -4,10 +4,10 @@ title: A SELECT policy also gates the rows UPDATE and DELETE may touch, so self-
 type: gotcha
 status: current
 tags: [supabase, postgres, rls, security]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-07
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql]
+last_verified: 2026-09-08
 verify: grep -A1 'create policy "read your own memberships" on public.list_members' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'for select using (user_id = (select auth.uid()));' && grep -A3 'create function public.set_member_role' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer' && grep -A3 'create function public.remove_member' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer'
-related: [list-data-scoped-by-rls, read-rooted-at-list-members, supabase-default-grants-defeat-revokes]
+related: [list-data-scoped-by-rls, read-rooted-at-list-members, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows]
 ---
 
 For `UPDATE` and `DELETE` Postgres must first **read** the row the `WHERE` clause names, so the
@@ -36,6 +36,12 @@ when the person named is not there. The two
 policies are kept anyway: what they *do* reach is real (an owner demoting or removing **themselves**,
 which is what the `keep_last_owner` trigger exists to police), and they are the rule the RPCs must
 stay in step with. Do not delete them as dead weight, and do not add a third way in.
+
+**Over HTTP the same silence is worse, because it reaches the app.** A client `DELETE` filtered to
+zero rows comes back `204` with no error and is read as success — measured for a non-owner trying to
+remove their own membership, which is why there is no "Leave this list" button. See
+[refused-writes-return-zero-rows](refused-writes-return-zero-rows.md) for what a client must do about
+it.
 
 **What to do:** when a role must act on rows it cannot see, reach for a definer function, not a
 policy. And when testing a policy, assert the **row count**, not the absence of an error — `DELETE 0`

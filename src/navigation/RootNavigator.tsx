@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SignOutButton } from '../components/SignOutButton';
 import { ListDetailScreen } from '../screens/ListDetailScreen';
 import { ListsScreen } from '../screens/ListsScreen';
+import { SharingScreen } from '../screens/SharingScreen';
 import { SignInScreen } from '../screens/SignInScreen';
 import { useSession, type AuthState } from '../state/SessionContext';
 import { colors } from '../theme';
@@ -62,6 +63,7 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
             options={{ title: 'My Lists', headerRight: () => <SignOutButton /> }}
           />
           <Stack.Screen name="ListDetail" component={ListDetailScreen} />
+          <Stack.Screen name="Sharing" component={SharingScreen} options={{ title: 'Sharing' }} />
         </>
       );
   }

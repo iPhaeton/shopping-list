@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { insertItem } from '../lib/listsApi';
+import { fetchLists, insertItem, updateListName } from '../lib/listsApi';
 import type { ListDetailScreenProps } from '../navigation/types';
+import type { List, Role } from '../state/types';
 import { ListsProvider, useLists } from '../state/ListsContext';
 import { ListDetailScreen } from './ListDetailScreen';
 
@@ -16,6 +17,7 @@ jest.mock('../lib/listsApi', () => ({
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   insertItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  updateListName: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
 const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
@@ -62,8 +64,64 @@ async function addItem(title: string) {
   await fireEvent.press(screen.getByLabelText('Add'));
 }
 
+const SHARED: List = {
+  id: 'l1',
+  name: 'Groceries',
+  role: 'reader',
+  items: [{ id: 'i1', title: 'Milk', doneAt: null }],
+};
+
+/**
+ * Renders the screen for a list that arrived from the database with a given role, together with the
+ * header the navigator would be showing.
+ *
+ * In the app the header lives outside the screen — `navigation.setOptions` hands `headerRight` to
+ * the navigator, which renders it. Here the stub keeps the last options in state and renders them in
+ * the *same* tree, so a header button press reaches the same screen instance rather than a second
+ * copy of it. That is what makes the rename bar assertable at all.
+ */
+function Chrome({ listId }: { listId: string }) {
+  const [options, setOptions] = useState<{ headerRight?: () => ReactNode }>({});
+
+  const nav = useMemo(
+    () => ({
+      navigate: navigation.navigate,
+      setOptions: (next: object) => {
+        navigation.setOptions(next);
+        setOptions(next);
+      },
+    }),
+    []
+  );
+
+  return (
+    <>
+      {options.headerRight?.()}
+      <ListDetailScreen
+        {...({ navigation: nav, route: { params: { listId } } } as unknown as ListDetailScreenProps)}
+      />
+    </>
+  );
+}
+
+async function renderAs(role: Role) {
+  jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...SHARED, role }], error: null });
+
+  await render(
+    <ListsProvider userId="u1">
+      <Chrome listId="l1" />
+    </ListsProvider>
+  );
+
+  // Every role renders the item; only the controls around it differ.
+  await screen.findByLabelText('Milk');
+}
+
 beforeEach(async () => {
+  jest.mocked(fetchLists).mockResolvedValue({ lists: [], error: null });
   navigation.setOptions.mockClear();
+  navigation.navigate.mockClear();
+  jest.mocked(updateListName).mockClear();
   // The provider queues writes on disk now; without this each test inherits the last one's outbox.
   await AsyncStorage.clear();
 });
@@ -77,7 +135,8 @@ it('shows an empty state for a list with no items', async () => {
 it('puts the list name in the header', async () => {
   await renderScreen('Hardware');
 
-  expect(navigation.setOptions).toHaveBeenCalledWith({ title: 'Hardware' });
+  // `objectContaining` because an owner's header carries `headerRight` alongside the title.
+  expect(navigation.setOptions).toHaveBeenCalledWith(expect.objectContaining({ title: 'Hardware' }));
 });
 
 it('adds items and shows them unchecked, in order', async () => {
@@ -153,4 +212,120 @@ it('falls back to a not-found state for an unknown list', async () => {
   );
 
   expect(screen.getByText('List not found')).toBeOnTheScreen();
+});
+
+// --- By role -----------------------------------------------------------------------------------
+
+/**
+ * The database refuses a reader's writes either way. The point of gating the controls is that a
+ * button which fails is a worse experience than one that was never offered.
+ */
+describe('a reader', () => {
+  it('gets no way to add an item, and is told why', async () => {
+    await renderAs('reader');
+
+    expect(screen.queryByLabelText('Add an item')).not.toBeOnTheScreen();
+    expect(
+      screen.getByText('Read only — you can see this list but not change it.')
+    ).toBeOnTheScreen();
+  });
+
+  /** Still a labelled checkbox: whether an item is done is information a reader wants. */
+  it('sees the checked state but cannot change it', async () => {
+    await renderAs('reader');
+
+    expect(screen.getByLabelText('Milk')).toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText('Milk'));
+    expect(screen.getByLabelText('Milk')).not.toBeChecked();
+  });
+
+  it('gets an empty state that does not ask them to add anything', async () => {
+    jest.mocked(fetchLists).mockResolvedValue({
+      lists: [{ ...SHARED, role: 'reader', items: [] }],
+      error: null,
+    });
+
+    await render(
+      <ListsProvider userId="u1">
+        <Chrome listId="l1" />
+      </ListsProvider>
+    );
+
+    // The title is unchanged; only the hint knows about roles.
+    expect(await screen.findByText('Nothing on this list')).toBeOnTheScreen();
+    expect(screen.getByText('Nobody has added anything yet.')).toBeOnTheScreen();
+  });
+
+  it('cannot rename the list', async () => {
+    await renderAs('reader');
+
+    expect(screen.queryByLabelText('Rename list')).not.toBeOnTheScreen();
+  });
+
+  /**
+   * `list_members_of` is gated on the caller's own membership rather than on ownership, so a reader
+   * gets the full roster back. "Who else can see my shopping list" is a fair question for them.
+   */
+  it('can still see who else has access', async () => {
+    await renderAs('reader');
+
+    await fireEvent.press(screen.getByLabelText('Share list'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('Sharing', { listId: 'l1' });
+  });
+});
+
+describe('a writer', () => {
+  it('gets the Add bar and no read-only note', async () => {
+    await renderAs('writer');
+
+    expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+    expect(
+      screen.queryByText('Read only — you can see this list but not change it.')
+    ).not.toBeOnTheScreen();
+  });
+
+  it('still cannot rename it — that stays with the owner', async () => {
+    await renderAs('writer');
+
+    expect(screen.queryByLabelText('Rename list')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Share list')).toBeOnTheScreen();
+  });
+});
+
+describe('an owner', () => {
+  it('can open the sharing screen from the header', async () => {
+    await renderAs('owner');
+
+    await fireEvent.press(screen.getByLabelText('Share list'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('Sharing', { listId: 'l1' });
+  });
+
+  it('renames the list from a bar the header button opens', async () => {
+    await renderAs('owner');
+
+    await fireEvent.press(screen.getByLabelText('Rename list'));
+
+    // The bar starts on the name it is about to replace, rather than empty.
+    expect(screen.getByLabelText('List name')).toHaveDisplayValue('Groceries');
+
+    await fireEvent.changeText(screen.getByLabelText('List name'), 'Weekly shop');
+    await fireEvent.press(screen.getByLabelText('Save'));
+
+    expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('List name')).not.toBeOnTheScreen();
+    expect(updateListName).toHaveBeenCalledWith('l1', 'Weekly shop');
+  });
+
+  it('closes the rename bar again without renaming anything', async () => {
+    await renderAs('owner');
+
+    await fireEvent.press(screen.getByLabelText('Rename list'));
+    await fireEvent.press(screen.getByLabelText('Rename list'));
+
+    expect(screen.queryByLabelText('List name')).not.toBeOnTheScreen();
+    expect(updateListName).not.toHaveBeenCalled();
+  });
 });
