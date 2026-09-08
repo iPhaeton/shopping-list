@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, config, auth, deployment, cloud]
 sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, supabase/config.toml]
-last_verified: 2026-09-03
+last_verified: 2026-09-07
 verify: grep -q '^\[remotes.production\]' supabase/config.toml && grep -q '^project_id = "gvosanjceygakbubjfkv"' supabase/config.toml && grep -q '^site_url = "shopping-list://"' supabase/config.toml && grep -q '^max_frequency = "60s"' supabase/config.toml && grep -q '^site_url = "http://127.0.0.1:3000"' supabase/config.toml && grep -q '^\[remotes.production.auth.rate_limit\]' supabase/config.toml && grep -q '^email_sent = 30' supabase/config.toml
 related: [otp-email-templates-carry-the-code, supabase-local-stack, supabase-target-picked-at-runtime, scope-boundaries]
 ---

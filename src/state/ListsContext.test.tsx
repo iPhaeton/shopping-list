@@ -37,7 +37,7 @@ const api = {
 const USER = 'u1';
 
 const MILK = { id: 'i1', title: 'Milk', doneAt: null };
-const GROCERIES = { id: 'l1', name: 'Groceries', items: [MILK] };
+const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, items: [MILK] };
 
 const OK: Result = { error: null, verdict: 'ok' };
 /** What a write looks like with no signal: postgrest-js reports a failed fetch as status 0. */

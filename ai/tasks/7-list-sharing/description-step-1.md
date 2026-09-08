@@ -1,0 +1,1 @@
+Implement list sharing on the database level according to the suggestion at ai/suggestions/list-sharing.md.

@@ -5,9 +5,20 @@ export type Item = {
   doneAt: string | null;
 };
 
+/**
+ * What you may do with a list you can see. `reader` reads it, `writer` also adds items and checks
+ * them off, `owner` also renames it and manages who else has access.
+ *
+ * The database decides — every rule here is a row-level security policy — so this is for showing the
+ * right controls, never for authorization.
+ */
+export type Role = 'reader' | 'writer' | 'owner';
+
 export type List = {
   id: string;
   name: string;
+  /** Your role on this list, from your `list_members` row. */
+  role: Role;
   items: Item[];
 };
 

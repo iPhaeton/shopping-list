@@ -14,7 +14,10 @@ export function listsReducer(state: State, action: Action): State {
       const name = action.name.trim();
       if (!name) return state;
 
-      const list: List = { id: action.id, name, items: [] };
+      // `owner` rather than something the action carries: the database's `on_list_created` trigger
+      // mints exactly this row for the creator, so the optimistic list already matches what the
+      // next fetch will return.
+      const list: List = { id: action.id, name, role: 'owner', items: [] };
       return { ...state, lists: [...state.lists, list] };
     }
 

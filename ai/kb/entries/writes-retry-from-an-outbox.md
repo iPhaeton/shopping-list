@@ -4,8 +4,8 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
-last_verified: 2026-09-02
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
+last_verified: 2026-09-07
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qE "removed'|deleted'" src/state/types.ts
 related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, scope-boundaries]
 ---
@@ -80,9 +80,17 @@ suites.
   Do not route a retryable failure to the red banner; crying wolf every time a lift loses signal is
   what the split exists to prevent.
 
-**Still not solved:** sharing, realtime, deletion, and conflict resolution beyond last-write-wins.
-There is no sync engine (PowerSync is the answer if this ever needs real convergence) and no warning
-when signing out with writes still pending.
+**Refusals stopped being hypothetical at step 7.** Until sharing, no user could provoke a `permanent`
+verdict — you owned everything you could see. A `reader` provokes one by tapping Add or ticking an
+item, so the drop-and-banner path is now a normal thing that happens to an honest user rather than a
+defence against a forged request. It also exposed the contract the loop rests on: an RPC that
+reported a refusal as a success would have the outbox drop a write it never delivered, which is why
+`set_item_done` now raises ([server-stamps-done-at](server-stamps-done-at.md)). Any new write path
+must fail loudly or not at all.
+
+**Still not solved:** a sharing UI, realtime, deletion, and conflict resolution beyond
+last-write-wins. There is no sync engine (PowerSync is the answer if this ever needs real
+convergence) and no warning when signing out with writes still pending.
 
 The `verify:` command asserts the shape rather than the plumbing: `ListsContext` is still the only
 file calling `useReducer`, **every dispatched write op is also enqueued** (the counts must match, so

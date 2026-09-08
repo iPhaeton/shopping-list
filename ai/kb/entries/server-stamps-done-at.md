@@ -4,18 +4,19 @@ title: The database stamps done_at — the client sends a boolean and holds no u
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
-sources: [ai/tasks/3/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-02
-verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && grep -q 'done_at = case when p_done then now() else null end' supabase/migrations/20260831000000_lists.sql && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-07
+verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && grep -q 'done_at = case when p_done then now() else null end' supabase/migrations/20260907000000_list_sharing.sql && grep -A30 'function public.set_item_done' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'if updated = 0 then' && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
 related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, ids-minted-outside-reducer, first-fetch-replaces-list-state]
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
 [src/lib/listsApi.ts](../../../src/lib/listsApi.ts) calls it with `supabase.rpc`, and
-[the migration](../../../supabase/migrations/20260831000000_lists.sql) writes
+[the function](../../../supabase/migrations/20260907000000_list_sharing.sql) writes
 `done_at = case when p_done then now() else null end`. `revoke update on public.items from anon,
 authenticated` means there is no other way in: a direct `PATCH` of `done_at` — or of `title` —
-returns 403.
+returns 403. **Step 7 replaced the function with `create or replace`, so it now lives in the sharing
+migration** rather than the step-3 one; read the newest definition, not the first.
 
 **Decision: a device's clock does not get to say when an item was checked off.** `done_at` was
 minted on the device until a review asked what happens when a phone's clock is a year out. The row
@@ -45,12 +46,26 @@ held in state as a time without re-fetching first, and note that the reducer con
 the value still arrives on the action rather than being read from a clock inside it
 ([ids-minted-outside-reducer](ids-minted-outside-reducer.md)).
 
+**Since step 7 it also `raise`s on refusal, and that closed a latent bug.** The old body was
+`language sql` returning void, so a refusal and a success were indistinguishable: the update matched
+zero rows, no error came back, and `resultFor` read that as `ok`. That could not bite while everyone owned every list they could see, which is why it
+survived three steps; with a `reader` it bites immediately, and silently, in the worst place: a
+queued toggle would come back `ok`, be dropped from the outbox as delivered, and sit on screen as a
+change the database never made. The function is `plpgsql` now, checks `row_count`, and raises `42501`
+when it updated nothing — PostgREST 403, which `verdictFor` already classifies `permanent`, so the
+write is dropped loudly with a banner and a re-fetch
+([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). **The general rule: a definer RPC
+that returns void must raise on refusal, or the outbox reports a lie as delivered.** Zero rows is
+unambiguously a refusal only because nothing deletes items; if item deletion ever lands, this branch
+has to tell "gone" from "refused".
+
 **What it cost, both parts deliberate.** The function has to be `security definer` — an invoker
 function would be denied by the very revoke that makes this worth doing — so it bypasses RLS and
-repeats the ownership test in its body, and that predicate must stay in step with the `update items
-of own lists` policy. And the revoke is table-wide, so renaming an item is impossible from the
-client too; nothing does that today, and a rename feature needs its own function rather than a
-re-granted column. See
+repeats the authorization test in its body. **That predicate is a role test now**
+(`list_members … role >= 'writer'`), not an ownership one, and it must stay in step with the
+`writers update items` policy. And the revoke is table-wide, so renaming an item is impossible from
+the client too; nothing does that today, and a rename feature needs its own function rather than a
+re-granted column — unlike `lists`, where step 7 did re-grant a single column. See
 [supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md) for why neither
 could be dodged, and [list-data-scoped-by-rls](list-data-scoped-by-rls.md) for the whole
 authorization picture.
@@ -60,6 +75,6 @@ never a `.update()`. Argument keys must match the parameter names exactly (`p_it
 PostgREST resolves an RPC by argument name, so a typo comes back as "function not found" rather
 than as a bad argument.
 
-The `verify:` command asserts all four halves — the client calls the RPC, the database stamps the
-time with `now()`, the update grant is still revoked, and `listsApi` has not grown a direct update
-of `items`.
+The `verify:` command asserts all five halves — the client calls the RPC, the current definition
+stamps the time with `now()`, it still raises on a zero-row update, the update grant is still
+revoked, and `listsApi` has not grown a direct update of `items`.

@@ -2,7 +2,7 @@ import { replay } from './replay';
 import type { List, WriteAction } from './types';
 
 const MILK = { id: 'i1', title: 'Milk', doneAt: null };
-const GROCERIES: List = { id: 'l1', name: 'Groceries', items: [MILK] };
+const GROCERIES: List = { id: 'l1', name: 'Groceries', role: 'owner', items: [MILK] };
 
 it('returns the fetched rows unchanged when nothing is queued', () => {
   expect(replay([GROCERIES], [])).toEqual([GROCERIES]);
@@ -13,7 +13,7 @@ it('puts a queued list back on top of what the database returned', () => {
 
   expect(replay([GROCERIES], [create])).toEqual([
     GROCERIES,
-    { id: 'l2', name: 'Hardware', items: [] },
+    { id: 'l2', name: 'Hardware', role: 'owner', items: [] },
   ]);
 });
 
@@ -25,7 +25,7 @@ it('replays a list and its items together', () => {
   ];
 
   expect(replay([], ops)).toEqual([
-    { id: 'l2', name: 'Hardware', items: [{ id: 'i2', title: 'Nails', doneAt: null }] },
+    { id: 'l2', name: 'Hardware', role: 'owner', items: [{ id: 'i2', title: 'Nails', doneAt: null }] },
   ]);
 });
 

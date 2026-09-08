@@ -1,4 +1,4 @@
-import type { Item, List } from '../state/types';
+import type { Item, List, Role } from '../state/types';
 import { supabase } from './supabase';
 
 /**
@@ -22,26 +22,34 @@ export type Verdict = 'ok' | 'applied' | 'retryable' | 'permanent';
 /** Structural, so this module stays the only one importing anything from supabase-js. */
 type Failure = { message: string; code?: string | null } | null;
 
-type ItemRow = { id: string; title: string; done_at: string | null };
+type ItemRow = { id: string; title: string; done_at: string | null; created_at: string };
 type ListRow = { id: string; name: string; items: ItemRow[] };
+type MembershipRow = { role: Role; lists: ListRow };
 
 /**
- * One round trip: `items ( ... )` is an embedded resource, so each list arrives with its own items
- * nested. Row-level security scopes both tables to the signed-in owner, so there is no user filter
- * here — and none that a bug could get wrong.
+ * One round trip, rooted at `list_members` rather than at `lists`.
+ *
+ * That rooting is the whole read path, not a stylistic choice. Asking `lists` "which of you may I
+ * see" makes the top-level scan proportional to how many lists *exist*; asking `list_members`
+ * "which memberships do I have, and what hangs off each" makes it proportional to how many lists
+ * *you are in*, with `lists` and `items` reached by primary key from there. Row-level security
+ * supplies `user_id = auth.uid()`, which is an index qual on `(user_id, created_at)` — so the client
+ * still filters nothing, and none of this is a rule a bug here could get wrong.
+ *
+ * Items are ordered here rather than with a second `referencedTable` spec, because that would be an
+ * order two embeds deep and sorting a handful of items in JS is not worth the doubt.
  */
 export async function fetchLists(): Promise<{ lists: List[] | null; error: string | null }> {
   const { data, error } = await supabase
-    .from('lists')
-    .select('id, name, items ( id, title, done_at )')
-    .order('created_at')
-    .order('created_at', { referencedTable: 'items' });
+    .from('list_members')
+    .select('role, lists!inner ( id, name, items ( id, title, done_at, created_at ) )')
+    .order('created_at');
 
   if (error) return { lists: null, error: error.message };
-  return { lists: (data as ListRow[]).map(toList), error: null };
+  return { lists: (data as unknown as MembershipRow[]).map(toList), error: null };
 }
 
-/** `owner_id` is deliberately not sent: it defaults to `auth.uid()` in the database. */
+/** `created_by` is deliberately not sent: it defaults to `auth.uid()` in the database. */
 export async function insertList(id: string, name: string): Promise<Result> {
   const { error, status } = await supabase.from('lists').insert({ id, name });
   return resultFor(error, status);
@@ -102,8 +110,10 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
   return 'retryable';
 }
 
-function toList(row: ListRow): List {
-  return { id: row.id, name: row.name, items: row.items.map(toItem) };
+/** Your role travels with the membership row; the list itself hangs off it. */
+function toList(row: MembershipRow): List {
+  const items = [...row.lists.items].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  return { id: row.lists.id, name: row.lists.name, role: row.role, items: items.map(toItem) };
 }
 
 function toItem(row: ItemRow): Item {

@@ -4,9 +4,9 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-02
-verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-07
+verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 2;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
 related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, supabase-local-stack]
 ---
 
@@ -40,5 +40,15 @@ instead, because losing it loses the user's writes. Keep that asymmetry when tou
 Sign-out clears the cache (a readable copy of an account's lists must not outlive its session) and
 deliberately keeps the outbox.
 
-The `verify:` command asserts all three halves: the acknowledged-rows effect still exists, `refresh`
-still caches the fetched array, and nothing caches a `replay(...)` result.
+**The same asymmetry governs the two `VERSION` constants, and they do not move together.** Step 7
+added a required `role` to `List` and took `listCache`'s `VERSION` to `2`, so a pre-sharing blob is
+dropped rather than rendered as `role: undefined` — that is exactly what the `v` check is for, and it
+costs one fetch. **`outbox.ts` stayed at `1` on purpose:** a version mismatch there moves the blob
+aside as broken, throwing away the unsent writes the outbox exists to protect, and a v1 outbox holds
+only actions that are still valid. So bump the cache version whenever the cached shape changes; bump
+the outbox version only when a queued action can no longer be replayed at all, and expect to write a
+migration instead if it ever comes to that.
+
+The `verify:` command asserts all of it: the acknowledged-rows effect still exists, `refresh` still
+caches the fetched array, nothing caches a `replay(...)` result, and the two versions are still `2`
+and `1` — a "tidy-up" that syncs them fails the check.

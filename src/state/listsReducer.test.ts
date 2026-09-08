@@ -16,7 +16,7 @@ function stateWithItems(...titles: string[]): State {
 describe('lists/loaded', () => {
   it('replaces the lists with what the database returned', () => {
     const lists = [
-      { id: 'l9', name: 'Hardware', items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT }] },
+      { id: 'l9', name: 'Hardware', role: 'reader' as const, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT }] },
     ];
 
     const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists });
@@ -39,7 +39,7 @@ describe('list/created', () => {
       name: 'Groceries',
     });
 
-    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', items: [] }]);
+    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', items: [] }]);
   });
 
   it('trims the name', () => {

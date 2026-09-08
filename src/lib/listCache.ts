@@ -10,8 +10,12 @@ import { inOrder } from './storageQueue';
  * Disposable by design — anything unreadable is dropped and re-fetched, which is the whole
  * difference between this and `src/lib/outbox.ts`. Losing the cache costs a round trip; losing the
  * outbox loses the user's writes.
+ *
+ * `2` since sharing: `List` gained a `role`, and the `v` check below is what stops a blob written
+ * before that from rendering lists with `role: undefined` and a UI left to guess. `outbox.ts`'s
+ * version deliberately did *not* move with it — a mismatch there discards unsent writes.
  */
-const VERSION = 1;
+const VERSION = 2;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 

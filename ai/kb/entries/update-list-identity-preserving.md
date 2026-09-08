@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [state, reducer, immutability]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-01
+last_verified: 2026-09-07
 verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && npx jest -t 'is a no-op' --silent
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox]
 ---

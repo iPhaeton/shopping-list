@@ -4,8 +4,8 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx]
-last_verified: 2026-09-03
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts]
+last_verified: 2026-09-07
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')"
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, rntl-14-api-changes]
 ---
@@ -27,6 +27,12 @@ faking PostgREST's chained builder (`.from().select().order()`) is far more work
 `fetchLists`. So the rule is not "one seam" but "one importer": query modules import
 `../lib/supabase`, and screens and providers import the query module. See
 [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md).
+
+**One suite is the exception, and it has to be: `listsApi`'s own.**
+[src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) (step 7) mocks `./supabase` — the seam
+*below* the module under test — and stubs the builder in five lines, because the chain is short and
+`fetchLists` is where a query shape can now be got wrong. A module cannot be tested through the mock
+of itself; every suite *above* `listsApi` still mocks `listsApi`.
 
 **Not every module beside it is a seam to mock, though.** Step 4's `src/lib/outbox.ts` and
 `src/lib/listCache.ts` are also plain modules under `lib/`, but the list suites deliberately let

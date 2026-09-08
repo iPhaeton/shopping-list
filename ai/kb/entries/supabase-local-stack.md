@@ -4,10 +4,10 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, README.md, .env.example]
-last_verified: 2026-09-03
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, README.md, .env.example]
+last_verified: 2026-09-07
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml
-related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls]
+related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes]
 ---
 
 **There are two Supabase environments since step 5**, and this entry used to open "There is no cloud
@@ -54,10 +54,14 @@ is accepted by the API and silently never arrives — same symptom, different ca
 once a verified sending domain lands (phase 2 of task 6, not yet done). Until then, README's "your
 real inbox" line means specifically the Resend account owner's inbox.
 
-**The cloud schema is kept current with `npx supabase db push`.** Both migrations were already
-applied there as of 2026-09-03, and the remote runs Postgres 17.6.1 against `major_version = 17` in
-`supabase/config.toml`. Ask `npx supabase migration list --linked` rather than assuming either fact
-still holds. Config is a separate push with different rules —
+**The cloud schema is kept current with `npx supabase db push`, and right now it is behind.** The
+first two migrations were applied there on 2026-09-03; **step 7's
+`20260907000000_list_sharing.sql` is committed but not pushed** — the local stack has sharing and the
+cloud project still has step 3's owner-only schema. Pushing it is the user's call, and one thing has
+to be checked first: `create unique index on public.users (lower(email))` fails if the production
+project holds two addresses differing only in case. The remote runs Postgres 17.6.1 against
+`major_version = 17` in `supabase/config.toml`. Ask `npx supabase migration list --linked` rather
+than assuming any of this still holds. Config is a separate push with different rules —
 [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md).
 
 **Env vars.** Copy [.env.example](../../../.env.example) to `.env` (gitignored). There are two
@@ -103,6 +107,19 @@ cannot be tested at all. Routing only `**/127.0.0.1:54321/**` to `route.abort()`
 version: the app starts normally and the database is unreachable, which is the scenario
 [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) exists for. Stopping the containers
 works too, but it is slower and takes Mailpit with it.
+
+**To test row-level security without a browser, switch role inside a psql transaction.**
+`set local role authenticated; set local request.jwt.claims = '{"sub":"<user-uuid>","role":"authenticated"}';`
+is what makes `auth.uid()` return that person, so a whole role matrix can be scripted against real
+policies — step 7 checked reader, writer, owner, non-member and `anon` against every operation this
+way. Mint the accounts through the local admin API (`/auth/v1/admin/users` with the service-role
+key). Two traps: assert the **row count**, since RLS refuses an UPDATE or DELETE by matching zero
+rows rather than by erroring
+([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md)), and read
+`pg_proc.proacl` and `information_schema.column_privileges` directly rather than trusting that a
+`revoke` did what it said
+([supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)). This
+complements the browser; it does not replace it.
 
 **Verify anything that touches Supabase in the browser** — auth since step 2, list data since step 3
 — with `psql` against port 54322 as the check on what actually landed in the tables. `npm run web`
