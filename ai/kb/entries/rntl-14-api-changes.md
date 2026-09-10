@@ -7,7 +7,7 @@ tags: [testing, rntl]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md]
 last_verified: 2026-08-31
 verify: grep -q '"@testing-library/react-native": "\^14' package.json
-related: [queries-go-through-a11y-labels, screens-take-navigation-props, supabase-client-module-boundary]
+related: [queries-go-through-a11y-labels, screens-take-navigation-props, supabase-client-module-boundary, tsconfig-explicit-types-array]
 ---
 
 React Native Testing Library 14 changed two things that break tests written from memory:

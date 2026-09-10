@@ -41,15 +41,32 @@ it('keeps a queued toggle that the fetched row does not have yet', () => {
 });
 
 /**
- * The reducer appends by id and does not dedupe, so replaying a write the fetched rows already
- * contain duplicates it. Nothing does that in practice — an op leaves the outbox the moment the
- * database acknowledges it, and `listCache` stores fetched rows rather than the replayed view — and
- * this test is here to state why both of those rules exist.
+ * **This used to duplicate, and the test used to say so.** The reducer appended by id without
+ * deduping, which was safe only because a row cannot be in the fetched set *and* still in the outbox
+ * — the provider never lets a fetch and a flush overlap. Realtime fetches far more often, so that
+ * invariant went from incidental to load-bearing and the reducer was made idempotent instead.
+ *
+ * The rules it used to justify have not gone away: an op still leaves the outbox the moment the
+ * database acknowledges it, and `listCache` still stores fetched rows rather than the replayed view,
+ * for its own separate reason.
  */
-it('duplicates a list if a write the fetch already contains is replayed anyway', () => {
+it('yields one row when a write the fetch already contains is replayed anyway', () => {
   const create: WriteAction = { type: 'list/created', id: 'l1', name: 'Groceries' };
 
-  expect(replay([GROCERIES], [create]).filter((list) => list.name === 'Groceries')).toHaveLength(2);
+  expect(replay([GROCERIES], [create])).toEqual([GROCERIES]);
+});
+
+it('yields one item when an add the fetch already contains is replayed anyway', () => {
+  const add: WriteAction = { type: 'item/added', listId: 'l1', id: 'i1', title: 'Milk' };
+
+  expect(replay([GROCERIES], [add])).toEqual([GROCERIES]);
+});
+
+/** The pending write still wins where the two disagree — that is what `replay` is for. */
+it('keeps the queued name over the fetched one', () => {
+  const rename: WriteAction = { type: 'list/created', id: 'l1', name: 'Weekly shop' };
+
+  expect(replay([GROCERIES], [rename])).toEqual([{ ...GROCERIES, name: 'Weekly shop' }]);
 });
 
 it('drops a queued write whose list is gone', () => {

@@ -4,10 +4,10 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
-last_verified: 2026-09-08
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
+last_verified: 2026-09-09
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qE "removed'|deleted'" src/state/types.ts
-related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, scope-boundaries]
+related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries]
 ---
 
 Step 4 replaced "fire once, re-fetch if it fails" with a durable queue.
@@ -130,9 +130,22 @@ default: a plain `PATCH` or `DELETE` filtered to zero rows by a policy answers `
 and is read as success unless it asked for the row back
 ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)).
 
-**Still not solved:** realtime, deletion, and conflict resolution beyond last-write-wins. There is no
-sync engine (PowerSync is the answer if this ever needs real convergence) and no warning when signing
-out with writes still pending.
+**Step 8 put a remote change in front of all this, and changed none of it — which is the point.**
+Somebody else's write now arrives as a nudge and is answered with the same fetch
+([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)), so fetched
+rows are still the base and the outbox still folds on top. One rule that used to be unreachable is
+now a normal occurrence and is the tempting thing to get wrong: **do not drop a queued write because
+a fetch says you may no longer make it.** A `role` in a fetch is a snapshot that can be seconds old
+and can move in both directions; the database is the authority and it answers with a status the
+outbox already classifies. Dropping locally would discard a write that might still be accepted, and
+"only a refusal removes a write" is the promise the whole offline design rests on. Being removed from
+a list is the same shape: the list leaves the fetch, `replay`'s `updateList` silently drops those ops
+from the *view*, and the ops themselves still flush and still earn one honest refusal.
+
+**Still not solved:** deletion, and conflict resolution beyond last-write-wins — realtime makes
+last-write-wins *visible* rather than different, and both mutating writes carry absolute values, so
+repeated or reordered delivery still converges. There is no sync engine (PowerSync is the answer if
+this ever needs real convergence) and no warning when signing out with writes still pending.
 
 The `verify:` command asserts the shape rather than the plumbing: `ListsContext` is still the only
 file calling `useReducer`, **every dispatched write op is also enqueued** (the counts must match, so

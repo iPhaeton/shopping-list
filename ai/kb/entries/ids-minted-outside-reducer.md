@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [state, reducer, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md]
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---
@@ -19,6 +19,11 @@ Every action that creates something carries the new id on it
 **As of step 3 the same rule governs a second value: the `doneAt` timestamp.** `item/setDone` carries
 the absolute value the item should hold — `new Date().toISOString()` or `null` — computed in the
 provider. The reducer is never asked to read the clock, and never asked to flip.
+
+**Step 8's idempotency change does not touch this.** `list/created` and `item/added` now match on the
+id the action already carries before deciding to append or update
+([update-list-identity-preserving](update-list-identity-preserving.md)); the id is still minted in
+the provider and the reducer still reads no clock.
 
 **The rule is about non-determinism, not about every field.** Step 7's `list/created` writes
 `role: 'owner'` inside the reducer without it arriving on the action, and that is fine: it is a

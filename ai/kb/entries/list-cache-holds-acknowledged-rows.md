@@ -4,10 +4,10 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-08
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-09
 verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 2;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
-related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, supabase-local-stack]
+related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, update-list-identity-preserving, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack]
 ---
 
 [src/lib/listCache.ts](../../../src/lib/listCache.ts) keeps the last known rows under
@@ -16,10 +16,19 @@ none. What goes in it is the part that is easy to get wrong, in two opposite dir
 were hit.
 
 **Never cache what is on screen.** The screen is server truth with the outbox replayed on top
-([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). Cache that, and the next load
-replays those same pending ops onto rows that already contain them: `list/created` appends by id and
-the reducer does not dedupe, so the list appears twice. `refresh` therefore caches the rows
-`fetchLists` returned, before `replay`.
+([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)); the cache holds only what the
+database has taken. `refresh` therefore caches the rows `fetchLists` returned, before `replay`.
+
+**The symptom that used to enforce that rule is gone as of step 8; the rule is not.** Until then,
+caching the replayed view duplicated a row on the next load — `list/created` appended by id and the
+reducer did not dedupe. Step 8 made `list/created` and `item/added` idempotent by id for realtime's
+own reasons ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md),
+[update-list-identity-preserving](update-list-identity-preserving.md)), so that breakage no longer
+happens. What is left is harder to debug, not easier: cache the replayed view now and you persist
+**unacknowledged** writes as though the database had confirmed them, with nothing visible going wrong
+to tell you. Treat "the cache holds acknowledged rows" as a definition kept on purpose rather than a
+rule the app will re-teach you — and note the `verify:` command still forbids
+`writeCachedLists(userId, replay…)` for exactly that reason.
 
 **But caching *only* fetched rows is a snapshot of the last cold start.** A fetch happens on mount
 and nowhere else, so everything written since is missing from the cache — after a session of

@@ -4,10 +4,10 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, README.md, .env.example]
-last_verified: 2026-09-07
-verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml
-related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, README.md, .env.example]
+last_verified: 2026-09-09
+verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && test -n "$(grep -rl "'.env', '.env.development', '.env.local', '.env.development.local'" node_modules/expo node_modules/@expo 2>/dev/null | head -1)"
+related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox]
 ---
 
 **There are two Supabase environments since step 5**, and this entry used to open "There is no cloud
@@ -54,12 +54,16 @@ is accepted by the API and silently never arrives — same symptom, different ca
 once a verified sending domain lands (phase 2 of task 6, not yet done). Until then, README's "your
 real inbox" line means specifically the Resend account owner's inbox.
 
-**The cloud schema is kept current with `npx supabase db push`, and right now it is behind.** The
-first two migrations were applied there on 2026-09-03; **step 7's
-`20260907000000_list_sharing.sql` is committed but not pushed** — the local stack has sharing and the
-cloud project still has step 3's owner-only schema. Pushing it is the user's call, and one thing has
-to be checked first: `create unique index on public.users (lower(email))` fails if the production
-project holds two addresses differing only in case. The remote runs Postgres 17.6.1 against
+**The cloud schema is kept current with `npx supabase db push`, and right now it is two migrations
+behind.** The first two were applied there on 2026-09-03; **step 7's
+`20260907000000_list_sharing.sql` and step 8's `20260909000000_realtime.sql` are both unpushed** —
+the local stack has sharing and realtime, and the cloud project still has step 3's owner-only schema.
+Pushing is the user's call, and two things have to be checked first: `create unique index on
+public.users (lower(email))` fails if the production project holds two addresses differing only in
+case; and the realtime migration creates a policy **on `realtime.messages`**, a table owned by
+`supabase_realtime_admin`, which applies cleanly as `postgres` locally but has never been tried
+against cloud — expect ownership to be the thing that bites, and treat that migration as unproven
+there ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). The remote runs Postgres 17.6.1 against
 `major_version = 17` in `supabase/config.toml`. Ask `npx supabase migration list --linked` rather
 than assuming any of this still holds. Config is a separate push with different rules —
 [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md).
@@ -84,8 +88,20 @@ Three things bite here:
   A unit test covers the same property from the other side.
 - The dev server must be **restarted** after editing `.env` — sometimes with `--clear` — because the
   values are inlined at build time.
-- **A shell variable beats `.env`.** That is what makes `EXPO_PUBLIC_SUPABASE_URL_CLOUD= npx expo
-  start` a way to prove which pair a runtime actually read.
+- **In the dev server a `.env` *file* beats the shell, and this entry used to say the opposite.**
+  Measured on 2026-09-09 by reading the served bundle: `EXPO_PUBLIC_SUPABASE_TARGET=local npx expo
+  start` with `.env` saying `cloud` produced an app that talked to **cloud**. Two mechanisms compose.
+  `@expo/env` refuses to overwrite a key already in `process.env`, so the shell value survives into
+  the CLI's environment — and then the dev-only virtual module `expo/virtual/env` computes
+  `{ ...process.env, ...['.env', '.env.development', '.env.local', '.env.development.local'] }`, so
+  the **file wins** and later files win over earlier ones. (Only a production export inlines from
+  `process.env` directly, where the shell does win — this project never runs one.) Consequences worth
+  keeping: a shell variable **not** named in any `.env` file does reach the bundle; the way to
+  override a key that *is* in `.env` is a gitignored **`.env.local`** plus `--clear`; and to prove
+  which value a runtime actually read, grep the served bundle
+  (`curl -s 'http://localhost:8081/index.bundle?platform=web&dev=true'`) rather than trusting the
+  shell. The `verify:` command pins that merge order in the installed Expo packages, so an upgrade
+  that changes it goes red.
 
 **After editing a migration or `supabase/config.toml`:** `npx supabase start` on already-running
 containers prints status and does *not* apply migrations, and the auth container does not reread

@@ -13,6 +13,7 @@ import { AppState, Platform } from 'react-native';
 
 import { newId } from '../lib/ids';
 import { readCachedLists, writeCachedLists } from '../lib/listCache';
+import { subscribeToChanges } from '../lib/listsChannel';
 import {
   fetchLists,
   insertItem,
@@ -30,6 +31,13 @@ import type { List, WriteAction } from './types';
 /** Backoff floor and ceiling. Doubling from one second gets to the cap in six attempts. */
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
+
+/**
+ * How long a nudge from another device waits for company. Somebody adding five items sends five
+ * nudges; this collapses them into one fetch, and is short enough that the screen still reads as
+ * live.
+ */
+const NUDGE_DEBOUNCE_MS = 300;
 
 type ListsContextValue = {
   lists: List[];
@@ -82,6 +90,11 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   const attempt = useRef(0);
   const live = useRef(true);
 
+  // Realtime's two. `nudge` is the debounce timer collapsing a burst of somebody else's writes;
+  // `owed` is a nudge the guards turned away, remembered so it can be honoured later.
+  const nudge = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const owed = useRef(false);
+
   useEffect(() => {
     live.current = true;
 
@@ -89,6 +102,8 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       live.current = false;
       if (retry.current) clearTimeout(retry.current);
       retry.current = null;
+      if (nudge.current) clearTimeout(nudge.current);
+      nudge.current = null;
     };
   }, []);
 
@@ -125,6 +140,21 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       fetching.current = false;
     }
   }, [userId]);
+
+  /**
+   * The nudge that arrived while a write of ours was in the air, honoured now that it has landed.
+   *
+   * Without this the app would be stalest exactly when it is busiest: somebody else editing the list
+   * while your own write is retrying is precisely when `refresh` stands down, and a nudge is a
+   * one-shot — nothing redelivers it. `hydrate` rather than `refresh` only because `refresh` is
+   * defined below this; the guards are re-checked here, which is what `refresh` would have done.
+   */
+  const drainOwed = useCallback(() => {
+    if (!owed.current || flushing.current || retry.current) return;
+
+    owed.current = false;
+    void hydrate();
+  }, [hydrate]);
 
   /**
    * Sends the head of the outbox, one at a time, until it is empty or the network refuses to
@@ -175,9 +205,10 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
         }
       } finally {
         flushing.current = false;
+        drainOwed();
       }
     },
-    [persist, hydrate]
+    [persist, hydrate, drainOwed]
   );
 
   /**
@@ -190,8 +221,35 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
    */
   const refresh = useCallback(async () => {
     if (flushing.current || retry.current) return;
+    owed.current = false;
     await hydrate();
   }, [hydrate]);
+
+  /**
+   * Somebody else changed a list you are in. Trailing debounce, so a burst of their writes is one
+   * fetch rather than one each.
+   *
+   * The nudge itself is never applied to state — it says *that* something changed, not what, and the
+   * fetch is the mechanism. That is deliberate: `replay` is the only place that knows how server
+   * truth and pending writes combine, a dropped message costs staleness while a mis-applied delta
+   * costs divergence, and server-stamped values like `done_at` arrive correct only by being read.
+   *
+   * When the guards `refresh` carries turn the fetch away, the nudge is *remembered* rather than
+   * dropped — see `drainOwed`.
+   */
+  const refreshSoon = useCallback(() => {
+    if (nudge.current) return;
+
+    nudge.current = setTimeout(() => {
+      nudge.current = null;
+      if (flushing.current || retry.current) {
+        owed.current = true;
+        return;
+      }
+
+      void refresh();
+    }, NUDGE_DEBOUNCE_MS);
+  }, [refresh]);
 
   // Hydrate: the outbox and the cached rows first, so the app is usable with no network at all,
   // then the database.
@@ -274,6 +332,21 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     });
     return () => subscription.remove();
   }, [flush, refresh]);
+
+  /**
+   * Somebody else's change, as it happens, instead of whenever this app next comes to the front.
+   *
+   * The effect above stays exactly as it was, and that is the point: this is an optimisation over a
+   * path that already works. A socket that never connects, or a message dropped in flight, costs
+   * latency rather than correctness, because the foreground re-fetch is still there to repair it.
+   *
+   * Gated on `'ready'` because a fetch before the mount hydration has settled would race it, and
+   * `lists/loaded` replaces list state wholesale.
+   */
+  useEffect(() => {
+    if (status !== 'ready') return;
+    return subscribeToChanges(userId, refreshSoon, refreshSoon);
+  }, [userId, status, refreshSoon]);
 
   const enqueueOp = useCallback(
     async (op: WriteAction) => {

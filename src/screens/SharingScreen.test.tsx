@@ -32,6 +32,9 @@ jest.mock('../lib/listsApi', () => ({
   removeMember: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
+/** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
+jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
+
 /** The signed-in account, matching the `userId` the provider is given below. */
 const ALICE: Member = { userId: 'u1', email: 'alice@example.com', role: 'owner' };
 const BOB: Member = { userId: 'u2', email: 'bob@example.com', role: 'reader' };

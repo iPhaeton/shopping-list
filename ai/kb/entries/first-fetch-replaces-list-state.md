@@ -4,10 +4,10 @@ title: Hydration replaces list state, so nothing may write before status is 'rea
 type: gotcha
 status: current
 tags: [state, persistence, testing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
-last_verified: 2026-09-08
-verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current) return;' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
+last_verified: 2026-09-09
+verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'owed.current = false;' && grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'void refresh();' && ! grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'hydrate(' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox]
 ---
 
 `lists/loaded` **replaces** the whole array — it does not merge. It is used for the mount-time
@@ -55,6 +55,22 @@ now on every one of those.
 fetch against a flush: a read issued while a write is in the air can come back without that write
 just as the loop dequeues it, and the row disappears from the screen until the next fetch.
 
+**Step 8 raised the stakes again: a nudge from somebody else's device is now a third reason to
+re-fetch**, and it fires while you are looking at the screen rather than only when you come back to
+it ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). Two
+consequences, both about this guard:
+
+- **A nudge goes through `refresh`, never `hydrate`.** The fetch rate is far higher now, so "a read
+  issued while a write is in the air" stopped being a corner and became routine.
+- **A nudge the guard turns away is *remembered*, not dropped, and the remembering lives in
+  `refreshSoon` — deliberately not in `refresh`.** The suggestion proposed rewriting the guard line
+  itself into `{ owed.current = true; return; }`; instead `refreshSoon` sets `owed.current` when it
+  finds the guards up, `drainOwed` honours it at the end of the flush loop, and `refresh` clears it
+  (`owed.current = false`) so a foreground re-read settles the debt. `refresh` stays the one
+  documented guarded door; remembering a turned-away nudge is realtime's business. Nothing
+  redelivers a nudge, so without this the app would be stalest exactly when it is busiest — somebody
+  else editing while your own write is retrying.
+
 **The guard cannot be moved down into `hydrate`, however much it looks like it belongs there.** The
 flush loop's own rollback re-fetch — the one that repairs a `permanent` refusal — runs *with*
 `flushing.current` set, and it has to go through. Putting the guard inside `hydrate` makes that
@@ -68,6 +84,7 @@ resolves a microtask later, not synchronously.
 
 The `verify:` command asserts all of it: that `lists/loaded` still assigns the action's array
 wholesale, that `ListsScreen` still gates on `status`, that the replay happens in the provider and
-**not** inside the reducer, that `refresh` still carries the flush guard while `hydrate` is still
-called bare, and that the web `visibilitychange` listener is still there. If hydration ever becomes a
-merge, this entry is what changed.
+**not** inside the reducer, that `refresh` still carries the flush guard *and* still clears the owed
+nudge, that `refreshSoon` still routes through `refresh` and never calls `hydrate` behind its back,
+that `hydrate` is still called bare somewhere, and that the web `visibilitychange` listener is still
+there. If hydration ever becomes a merge, this entry is what changed.

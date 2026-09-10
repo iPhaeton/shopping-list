@@ -4,10 +4,10 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts]
-last_verified: 2026-09-08
-verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')"
-related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, rntl-14-api-changes]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts]
+last_verified: 2026-09-09
+verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl 'ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done
+related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes]
 ---
 
 [src/lib/supabase.ts](../../../src/lib/supabase.ts) creates the client and is the only file under
@@ -28,6 +28,22 @@ plain query functions — four after step 3, nine after step 7's sharing UI adde
 (`.from().select().order()`) is far more work than faking `fetchLists`. So the rule is not "one seam"
 but "one importer": query modules import `../lib/supabase`, and screens and providers import the
 query module. See [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md).
+
+**Step 8 added a second module at that seam, and it is not a query module.**
+[src/lib/listsChannel.ts](../../../src/lib/listsChannel.ts) holds `subscribeToChanges` — the whole
+client side of the realtime socket
+([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). It sits
+beside `listsApi` rather than inside it because a subscription is not a query: it has a lifetime, and
+that module's promise is "every read and write of list data". Its own suite mocks `./supabase`, the
+seam below it, like `listsApi.test.ts` does.
+
+**The consequence every list suite pays: a suite that renders `ListsProvider` must
+`jest.mock('../lib/listsChannel', …)`, or the provider opens a websocket under jest.** Four suites
+carry that line today, and the `verify:` command asserts every `ListsProvider`-rendering suite has
+one — a new one that forgets fails the check rather than hanging or spraying connection errors. In
+`ListsContext.test.tsx` the mock is also the *handle*: it captures the two callbacks so a test can
+deliver a nudge or a reconnect by hand, wrapped in `act` because it is an external update
+([rntl-14-api-changes](rntl-14-api-changes.md)).
 
 **A screen may call the query module directly, and one does.** `SharingScreen` calls `fetchMembers`
 / `shareList` / `setMemberRole` / `removeMember` itself rather than going through `ListsContext`,

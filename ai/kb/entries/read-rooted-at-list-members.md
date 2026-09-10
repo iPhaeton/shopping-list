@@ -4,10 +4,10 @@ title: The read starts at list_members, and every policy predicate is an uncorre
 type: decision
 status: current
 tags: [supabase, postgres, rls, performance, persistence]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
-last_verified: 2026-09-08
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
+last_verified: 2026-09-09
 verify: grep -q "from('list_members')" src/lib/listsApi.ts && grep -q 'lists!inner' src/lib/listsApi.ts && grep -q 'create index on public.list_members (user_id, created_at);' supabase/migrations/20260907000000_list_sharing.sql && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security invoker' && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q "set search_path = ''"
-related: [list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, supabase-local-stack]
+related: [list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack]
 ---
 
 Sharing had a hard performance requirement — 1,000,000 rows in `lists` and "the lists I can see" must
@@ -67,6 +67,13 @@ seed.
 **One caveat on the headline claim.** Size-independence is read off the plan — no node's row count
 tracks the table — rather than measured; a 10M-row run was never done. End to end over HTTP the gap
 narrows to ~20 ms vs ~65 ms, because request overhead dominates once the query is a millisecond.
+
+**Step 8 added the one read that wants the *primary key* instead, and it is worth knowing before
+anyone tidies either index.** The realtime fan-out trigger does `select user_id from list_members
+where list_id = ?` — a prefix scan of the `(list_id, user_id)` PK, not of the `(user_id, created_at)`
+index this entry is built around
+([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). Two readers,
+two access orders, both load-bearing; measured at ≈0.08 ms per member per change.
 
 **Rule 1 is also why your role costs nothing to read.** `fetchLists` already selects `role` off the
 membership row it roots at, so step 7's role-gated UI needed no extra round trip, no extra state, and

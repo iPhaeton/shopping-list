@@ -1,15 +1,15 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes and sharing end to end in; invites, leaving a list, realtime and deletion out
+title: Scope — named lists, OTP sign-in, offline writes, sharing and realtime in; invites, leaving a list and deletion out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md]
-last_verified: 2026-09-08
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md]
+last_verified: 2026-09-09
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
-Scope is set one task step at a time. What is in, as of step 7:
+Scope is set one task step at a time. What is in, as of step 8:
 
 | | |
 |---|---|
@@ -21,10 +21,22 @@ Scope is set one task step at a time. What is in, as of step 7:
 | step 6 (phase 1) | custom SMTP pushed to production; sign-in mail is real mail now, but the app stays structurally single-user until phase 2 |
 | step 7 step 1 | sharing at reader/writer/owner, enforced entirely in the database — no UI |
 | step 7 step 2 | the UI for it: role-gated screens, list rename, a sharing screen (invite / change role / remove), a re-fetch when the app comes to the front |
+| step 8 | realtime: a change by one member reaches every other member in about a second, both apps in the foreground |
 
 **Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
-you do not own, showing an owner how widely a list is shared without opening it, realtime, deletion,
+you do not own, showing an owner how widely a list is shared without opening it, deletion,
 passwords, and conflict resolution beyond last-write-wins.**
+
+**Realtime moved in at step 8, and this entry used to list it as out.**
+[ai/tasks/8-realtime/description-step-1.md](../../tasks/8-realtime/description-step-1.md) promoted
+`ai/suggestions/realtime-sync.md` — staging steps 1 and 2 whole, plus one piece of its optional step
+3 (idempotent replay). Scope inside that was settled with the user before any code: **echo
+suppression (`x-client-id`) and a "just updated" `SyncBanner` affordance were offered and declined**,
+and the migration was applied to the local stack only, leaving `npx supabase db push` to the user. So
+"two people see each other's edits only when one of them backgrounds the app" is out of date; see
+[realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md) for the design
+and for what it deliberately still does not solve — no presence, no per-field conflict UI, and
+last-write-wins made *visible* rather than replaced.
 
 **Sharing moved in at step 7, in two steps, and this entry used to list all of it as out.**
 [Step 1](../../tasks/7-list-sharing/description-step-1.md) asked for sharing "on the database level"
@@ -129,22 +141,30 @@ the rest of it. Step 2
 implemented the auth half of `otp-biometric-auth.md` *only* because a task description asked for it,
 step 3 the first staging step of `supabase-persistence.md`, step 5 the project/schema/config sections
 of `production-supabase.md`, step 6 phase 1 of that document's custom-SMTP section (§4), step 7
-step 1 the SQL of `list-sharing.md`, and step 7 step 2 the whole of `list-sharing-ui.md`, which
-covers that document's staging steps 2 and 3 — each because a task description asked for it. The
+step 1 the SQL of `list-sharing.md`, step 7 step 2 the whole of `list-sharing-ui.md`, which
+covers that document's staging steps 2 and 3, and step 8 `realtime-sync.md`'s staging steps 1 and 2
+plus one piece of its optional step 3 — each because a task description asked for it. The
 biometric half of `otp-biometric-auth.md` is still just a proposal, and it needs a native dev build
-besides; so are realtime subscriptions. §4's phase 2 (a verified sending domain) is also still just a
+besides. §4's phase 2 (a verified sending domain) is also still just a
 proposal — phase 1 is the only part of it that has landed.
 
-**A suggestion can be wrong as well as un-promoted, and step 7 found three errors across two
-documents.** `list-sharing.md`'s "owners remove members" policy cannot remove anyone
+**A suggestion can be wrong as well as un-promoted — four errors across three documents so far.**
+`list-sharing.md`'s "owners remove members" policy cannot remove anyone
 ([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md)), its last-owner
 trigger would have aborted account deletion, and its claim that `set search_path = ''` defeats the
 design was measured and does not hold
 ([read-rooted-at-list-members](read-rooted-at-list-members.md)). `list-sharing-ui.md` then
 contradicted *itself*: it made both header buttons owner-only and also said the sharing screen was
 reachable by every member, which cannot both be true when the button is the only way in. Caught while
-scripting the browser run; `Share list` renders for every member and only `Rename list` is gated. The
-documents are never edited to say any of this. Read a suggestion for its reasoning, then check the KB
+scripting the browser run; `Share list` renders for every member and only `Rename list` is gated.
+**Step 8 found a fourth, and it is the instructive one because it was a *warning* rather than a
+design:** `realtime-sync.md` asserts that `coalesce(new.list_id, old.list_id)` would raise
+`record "new" is not assigned yet` on a DELETE and break every un-share. Measured on PostgreSQL 17, a
+row-level DELETE trigger reads `NEW` as null and does not raise, so the warning was false; the shipped
+migration branches on `tg_op` anyway, for the different and real reason that no column is shared by
+all three tables. A suggestion's *cautions* deserve the same measurement its designs do, and a claim
+that survives into a code comment as fact is the expensive version of this mistake. The documents are
+never edited to say any of this. Read a suggestion for its reasoning, then check the KB
 before trusting it — and check it against itself.
 
 **A suggestion can also be *overruled* by the step that implements the rest of it.**

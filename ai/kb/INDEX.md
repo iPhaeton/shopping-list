@@ -14,7 +14,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes and sharing end to end in; invites, leaving a list, realtime and deletion out (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing and realtime in; invites, leaving a list and deletion out (constraint)
 
 **Auth**
 
@@ -33,7 +33,8 @@ Run `npm run kb:audit` to check every entry still holds.
 - [The read starts at `list_members`](ai/kb/entries/read-rooted-at-list-members.md) — uncorrelated policy subqueries, no `or`, no definer helper in a policy; what a million lists cost (decision)
 - [A SELECT policy gates UPDATE and DELETE too](ai/kb/entries/select-policy-gates-update-and-delete.md) — self-only visibility silently zeroes an owner policy, so member management is RPCs (gotcha)
 - [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, `from public` leaves `anon`, and a policy's helper must keep them (gotcha)
-- [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'`; it runs on every foreground now, and the flush guard lives in `refresh` (gotcha)
+- [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'`; it runs on every foreground and every nudge now, and the flush guard lives in `refresh` (gotcha)
+- [Realtime is a nudge to a per-user inbox](ai/kb/entries/realtime-is-a-nudge-to-a-per-user-inbox.md) — the database fans out `user:<uid>` broadcasts, the client answers with the fetch it already had; never a delta, never `postgres_changes` (decision)
 
 **UI**
 
@@ -44,7 +45,6 @@ Run `npm run kb:audit` to check every entry still holds.
 **Testing**
 
 - [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent/unmount; `toBeChecked` replaced `toHaveAccessibilityState`; `act` for external updates (gotcha)
-- [tsconfig needs an explicit types array](ai/kb/entries/tsconfig-explicit-types-array.md) — without it the jest globals don't resolve (gotcha)
 - [expo-crypto is undefined under jest](ai/kb/entries/expo-crypto-undefined-under-jest.md) — `randomUUID()` returns `undefined` silently; `jest.setup.ts` maps it to Node's and holds AsyncStorage's in-memory mock (gotcha)
 
 ---

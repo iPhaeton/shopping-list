@@ -11,6 +11,7 @@ import {
   updateListName,
   type Result,
 } from '../lib/listsApi';
+import { subscribeToChanges } from '../lib/listsChannel';
 import { saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
 
@@ -35,6 +36,12 @@ jest.mock('../lib/listsApi', () => ({
   updateListName: jest.fn(),
 }));
 
+/**
+ * The realtime channel is mocked at its own seam, so no websocket is opened and the two callbacks
+ * can be driven by hand — the same shape `SessionContext.test.tsx` uses to push an auth transition.
+ */
+jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn() }));
+
 const api = {
   fetchLists: jest.mocked(fetchLists),
   insertList: jest.mocked(insertList),
@@ -42,6 +49,12 @@ const api = {
   setItemDone: jest.mocked(setItemDone),
   updateListName: jest.mocked(updateListName),
 };
+
+const unsubscribe = jest.fn();
+
+/** Captured so a test can deliver a nudge, or a reconnect, the way the database would. */
+let nudge: () => void;
+let resubscribe: () => void;
 
 const USER = 'u1';
 
@@ -55,6 +68,8 @@ const OK: Result = { error: null, verdict: 'ok' };
 const OFFLINE: Result = { error: 'TypeError: Failed to fetch', verdict: 'retryable' };
 const REFUSED: Result = { error: 'permission denied', verdict: 'permanent' };
 const DUPLICATE: Result = { error: 'duplicate key value violates unique constraint', verdict: 'applied' };
+/** The provider's trailing debounce on a nudge, mirrored here as the backoff tests mirror theirs. */
+const NUDGE_DEBOUNCE = 300;
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -65,6 +80,12 @@ beforeEach(async () => {
   api.insertItem.mockResolvedValue(OK);
   api.setItemDone.mockResolvedValue(OK);
   api.updateListName.mockResolvedValue(OK);
+
+  jest.mocked(subscribeToChanges).mockImplementation((_userId, onChange, onResubscribe) => {
+    nudge = onChange;
+    resubscribe = onResubscribe;
+    return unsubscribe;
+  });
 });
 
 afterEach(() => {
@@ -430,4 +451,100 @@ it('does not duplicate a pending write across a restart', async () => {
 
   expect(screen.getByText('l1 Groceries: Milk, Bread')).toBeOnTheScreen();
   expect(screen.getByText('pending: 1')).toBeOnTheScreen();
+});
+
+// --- Realtime ------------------------------------------------------------------------------
+
+/**
+ * A nudge says *that* a list changed, never what — so every assertion here is about `fetchLists`
+ * being called, and never about a payload being applied.
+ *
+ * `renderProbe` has already awaited the mount fetch, so `fetchLists` stands at 1 when these start.
+ */
+it('subscribes to the account inbox once there is state to replace', async () => {
+  await renderProbe();
+
+  expect(subscribeToChanges).toHaveBeenCalledTimes(1);
+  expect(jest.mocked(subscribeToChanges).mock.calls[0][0]).toBe(USER);
+});
+
+it('re-reads when another device changes a list', async () => {
+  jest.useFakeTimers();
+  await renderProbe();
+
+  await act(async () => nudge());
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+});
+
+/** Somebody adding five items sends five nudges. That is one fetch, not five. */
+it('collapses a burst of nudges into one fetch', async () => {
+  jest.useFakeTimers();
+  await renderProbe();
+
+  await act(async () => {
+    nudge();
+    nudge();
+    nudge();
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+});
+
+/** Delivery is at-most-once: whatever was sent while the socket was down is gone, so re-read. */
+it('re-reads when the socket comes back', async () => {
+  jest.useFakeTimers();
+  await renderProbe();
+
+  await act(async () => resubscribe());
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+});
+
+/**
+ * The case the app would otherwise get wrong at exactly the worst moment: somebody else editing
+ * while a write of ours is still in the air. `refresh` stands down while a flush is running, and
+ * nothing redelivers a nudge — so it has to be remembered and honoured when the write lands.
+ */
+it('remembers a nudge that arrived while a write was in flight', async () => {
+  jest.useFakeTimers();
+
+  let settleInsert = (_result: Result) => {};
+  api.insertList.mockReturnValue(
+    new Promise<Result>((resolve) => {
+      settleInsert = resolve;
+    })
+  );
+
+  await renderProbe();
+  await fireEvent.press(screen.getByLabelText('create'));
+  await screen.findByText('pending: 1');
+
+  await act(async () => nudge());
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  // Turned away, not dropped: a fetch now could come back without the write we are still sending.
+  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+
+  await act(async () => settleInsert(OK));
+
+  await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
+});
+
+it('closes the channel when the provider goes away', async () => {
+  await renderProbe();
+  await screen.unmount();
+
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
 });

@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [navigation, screens, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, 6ef87a2]
-last_verified: 2026-09-08
+last_verified: 2026-09-09
 verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'headerRight' src/screens/ListDetailScreen.test.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels]
 ---

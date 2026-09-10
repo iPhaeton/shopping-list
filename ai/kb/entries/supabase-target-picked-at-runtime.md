@@ -4,8 +4,8 @@ title: The Supabase environment is chosen at runtime by platform, not compiled i
 type: decision
 status: current
 tags: [supabase, environment, expo, config, architecture]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
-last_verified: 2026-09-03
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
+last_verified: 2026-09-09
 verify: grep -q "Platform.OS === 'web'" src/lib/supabaseTarget.ts && grep -q "Device.isDevice ? 'cloud' : 'local'" src/lib/supabaseTarget.ts && test "$(grep -c 'process\.env\.EXPO_PUBLIC_SUPABASE_\(URL\|ANON_KEY\)_\(LOCAL\|CLOUD\)' src/lib/supabaseTarget.ts)" = 4 && test "$(grep -rl 'process\.env\.EXPO_PUBLIC_SUPABASE' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.')" = src/lib/supabaseTarget.ts && grep -q "from './supabaseTarget'" src/lib/supabase.ts
 related: [supabase-local-stack, supabase-client-module-boundary, native-build-toolchain, supabase-config-push-sends-the-whole-root, expo-crypto-undefined-under-jest]
 ---
@@ -20,7 +20,8 @@ start, which Supabase the client talks to:
 | physical device | cloud | a phone cannot reach this machine's `127.0.0.1:54321` at all |
 
 `EXPO_PUBLIC_SUPABASE_TARGET=local|cloud` overrides all of it, which is how you put two clients on
-one database. Addresses and keys are in
+one database — **set it in `.env` or a gitignored `.env.local`, not in the shell**, for the reason at
+the bottom of this entry. Addresses and keys are in
 [supabase-local-stack](supabase-local-stack.md).
 
 **Decision: runtime, not build time.** One `expo start` serves the browser and Expo Go from the same
@@ -64,14 +65,26 @@ there would drag `@supabase/supabase-js` into a jest run, which
 
 **Proving which target a native runtime picked takes making the wrong answer fail.** Booting Expo Go
 and seeing the app work proves nothing when both pairs are filled in — either branch would render.
-Because a shell variable beats `.env`, blank the pair the app should *not* be using and see whether
-it still boots:
 
-```bash
-EXPO_PUBLIC_SUPABASE_URL_CLOUD= EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD= npx expo start   # simulator must still boot
-EXPO_PUBLIC_SUPABASE_URL_LOCAL= EXPO_PUBLIC_SUPABASE_ANON_KEY_LOCAL= EXPO_PUBLIC_SUPABASE_TARGET=cloud npx expo start
-```
+**The recipe this entry used to give for that does not work, and the correction is step 8's.** It
+said "a shell variable beats `.env`, so blank the pair the app should not be using" and printed
+`EXPO_PUBLIC_SUPABASE_URL_CLOUD= npx expo start`. Two separate mechanisms defeat it, both read out of
+the installed Expo packages and confirmed against a served bundle on 2026-09-09
+([supabase-local-stack](supabase-local-stack.md) has the details and pins the merge order with a
+check):
 
-The client throws on a missing pair, naming the target it chose, so a boot to the sign-in screen is
-the positive result. This is how the simulator's branch was confirmed; a physical phone has still
-never been run.
+1. **In the dev server the `.env` file wins over the shell.** The virtual `expo/virtual/env` module
+   spreads the `.env*` files *over* `process.env`. Only a production export inlines from
+   `process.env`, and this project never runs one.
+2. **A blank value in a `.env*` file is dropped, not set.** Expo's transform keeps a parsed key only
+   when its value is truthy, so `EXPO_PUBLIC_SUPABASE_URL_CLOUD=` in a file removes nothing — the
+   lower-precedence file's value is still there.
+
+So there is no "blank it and watch it throw" available. What works: put a **different, non-empty**
+value (or `EXPO_PUBLIC_SUPABASE_TARGET`) in a gitignored `.env.local`, which does beat `.env`,
+restart with `--clear`; and read the answer out of the served bundle rather than out of the shell —
+`curl -s 'http://localhost:8081/index.bundle?platform=ios' | grep -o 'EXPO_PUBLIC_SUPABASE_TARGET[^,}]*'`
+shows both the value the polyfill carries and the value the `.env` module supplies. The client still
+throws on a *missing* pair, naming the target it chose, which remains the loudest signal when a pair
+genuinely is not there. The simulator's branch was confirmed under the old reading; a physical phone
+has still never been run.

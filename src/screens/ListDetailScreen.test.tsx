@@ -20,6 +20,9 @@ jest.mock('../lib/listsApi', () => ({
   updateListName: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
+/** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
+jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
+
 const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
 function detailProps(listId: string) {

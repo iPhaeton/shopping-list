@@ -11,3 +11,4 @@
 10. Removing oneself from list
 11. List rename endpoint sshould return errors
 12. Pagination for lists, items, list members, users
+13. Push notifications on list/item completed/created/deleted
