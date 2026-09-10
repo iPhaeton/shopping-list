@@ -5,7 +5,7 @@ type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
 sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, README.md, .env.example]
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && test -n "$(grep -rl "'.env', '.env.development', '.env.local', '.env.development.local'" node_modules/expo node_modules/@expo 2>/dev/null | head -1)"
 related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox]
 ---
@@ -36,12 +36,19 @@ supabase` — a globally installed one may be a different version.
 **Why local is still the verification path:** the six-digit sign-in code is machine-readable in
 Mailpit, so the whole OTP flow can be driven end to end by Playwright. On cloud the code lands in a
 real inbox and a human has to relay it. Adding cloud did not change that — it added a target for the
-phone, which cannot reach this machine's loopback at all. **Confirming anything else about cloud
-config isn't scriptable against an API either:** the access token `npx supabase login` stores in the
-macOS keychain is not scoped for the Management API — `GET /v1/projects/{ref}/config/auth` and even a
-plain project list both come back `403`. The dashboard — read by eye, or driven with Playwright after
-a human signs in — is the only read-back path that works without minting a separate personal access
-token.
+phone, which cannot reach this machine's loopback at all.
+
+**Cloud *schema* reads back from the CLI; cloud *auth config* does not.** The split matters, because
+the second half used to be stated as if it covered both. `npx supabase migration list --linked` and
+`npx supabase db dump --linked [-s <schema>]` both work with nothing but the stored login — they open
+a database connection (the CLI prints `Initialising login role...`), and `db dump` reports objects
+the connecting role does not own, so a policy on `realtime.messages` shows up in `-s realtime`. That
+makes any schema question about cloud — did a migration land, does this policy exist there —
+answerable in one scriptable command. **Auth config is the part that is not:** the access token
+`npx supabase login` stores in the macOS keychain is not scoped for the Management API, so
+`GET /v1/projects/{ref}/config/auth` and even a plain project list both come back `403`. For those,
+the dashboard — read by eye, or driven with Playwright after a human signs in — is still the only
+read-back path without minting a separate personal access token.
 
 **Reading the code during development:** open Mailpit at http://127.0.0.1:54324. Nothing local is
 ever sent to a real address. **Cloud mail is real mail, and since step 6 it goes out through Resend,
@@ -54,18 +61,24 @@ is accepted by the API and silently never arrives — same symptom, different ca
 once a verified sending domain lands (phase 2 of task 6, not yet done). Until then, README's "your
 real inbox" line means specifically the Resend account owner's inbox.
 
-**The cloud schema is kept current with `npx supabase db push`, and right now it is two migrations
-behind.** The first two were applied there on 2026-09-03; **step 7's
-`20260907000000_list_sharing.sql` and step 8's `20260909000000_realtime.sql` are both unpushed** —
-the local stack has sharing and realtime, and the cloud project still has step 3's owner-only schema.
-Pushing is the user's call, and two things have to be checked first: `create unique index on
-public.users (lower(email))` fails if the production project holds two addresses differing only in
-case; and the realtime migration creates a policy **on `realtime.messages`**, a table owned by
-`supabase_realtime_admin`, which applies cleanly as `postgres` locally but has never been tried
-against cloud — expect ownership to be the thing that bites, and treat that migration as unproven
-there ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). The remote runs Postgres 17.6.1 against
-`major_version = 17` in `supabase/config.toml`. Ask `npx supabase migration list --linked` rather
-than assuming any of this still holds. Config is a separate push with different rules —
+**The cloud schema is kept current with `npx supabase db push`, and as of 2026-09-10 it is level —
+this entry used to say it was two migrations behind.** All four migrations report both a `local` and
+a `remote` timestamp: the first two landed 2026-09-03, and step 7's `20260907000000_list_sharing.sql`
+and step 8's `20260909000000_realtime.sql` both landed since. **Both worries this entry raised about
+that push turned out to be nothing, and each is worth knowing for the next one.** `create unique
+index on public.users (lower(email))` was expected to fail if production held two addresses differing
+only in case — it exists there now (`users_lower_idx`), so it did not. And the realtime migration
+creates a policy **on `realtime.messages`**, a table `supabase_realtime_admin` owns rather than
+`postgres`; that was expected to bite on ownership and did not. The policy row is on cloud, read back
+directly rather than inferred from the push succeeding
+([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). **This is
+schema-level proof, not delivery proof** — nothing has connected a client to the cloud project's
+realtime socket. The remote runs Postgres 17.6.1 against `major_version = 17` in
+`supabase/config.toml`. Ask `npx supabase migration list --linked` rather than assuming any of this
+still holds; nothing in `verify:` asserts it, deliberately, because the state of a remote database is
+a dated observation rather than an invariant this repo can hold true, and a check that needs the
+network fails for reasons that have nothing to do with the fact. Config is a separate push with
+different rules —
 [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md).
 
 **Env vars.** Copy [.env.example](../../../.env.example) to `.env` (gitignored). There are two

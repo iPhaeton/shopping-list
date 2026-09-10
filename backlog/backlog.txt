@@ -12,3 +12,5 @@
 11. List rename endpoint sshould return errors
 12. Pagination for lists, items, list members, users
 13. Push notifications on list/item completed/created/deleted
+14. Rename item
+15. Refactor authentication. Users should have names

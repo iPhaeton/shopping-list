@@ -5,7 +5,7 @@ type: constraint
 status: current
 tags: [scope, product]
 sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md]
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
@@ -31,8 +31,14 @@ passwords, and conflict resolution beyond last-write-wins.**
 [ai/tasks/8-realtime/description-step-1.md](../../tasks/8-realtime/description-step-1.md) promoted
 `ai/suggestions/realtime-sync.md` — staging steps 1 and 2 whole, plus one piece of its optional step
 3 (idempotent replay). Scope inside that was settled with the user before any code: **echo
-suppression (`x-client-id`) and a "just updated" `SyncBanner` affordance were offered and declined**,
-and the migration was applied to the local stack only, leaving `npx supabase db push` to the user. So
+suppression (`x-client-id`) and a "just updated" `SyncBanner` affordance were offered and declined**.
+**The migration reached cloud on 2026-09-10, and this paragraph used to say it was applied to the
+local stack only with `npx supabase db push` left to the user.** That push has happened, along with
+step 7's — all four migrations now report a `remote` timestamp, and the receive policy on
+`realtime.messages` reads back from the production project. As with step 6's SMTP push below, treat
+that as schema-level proof, not delivery proof: no client has connected to the cloud realtime socket
+and no nudge has been observed arriving there, so nothing yet says realtime works on cloud
+end to end. So
 "two people see each other's edits only when one of them backgrounds the app" is out of date; see
 [realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md) for the design
 and for what it deliberately still does not solve — no presence, no per-field conflict UI, and

@@ -5,7 +5,7 @@ type: decision
 status: current
 tags: [supabase, realtime, rls, security, state, architecture]
 sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }, () => onChange()" src/lib/listsChannel.ts && grep -q 'return subscribeToChanges(userId, refreshSoon, refreshSoon);' src/state/ListsContext.tsx
 related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, supabase-local-stack, scope-boundaries]
 ---
@@ -87,10 +87,21 @@ stays stale. Everything else is closed by a resubscribe or a foreground. Echo su
 (`x-client-id`) and a "just updated" affordance were offered and declined; your own write nudges you
 back in ~30 ms and that echo is the cheapest correct way to pick up server-stamped values.
 
-**Not verified: cloud.** The migration is local-only, and the policy is created on
-`realtime.messages`, a table `supabase_realtime_admin` owns — it applies as `postgres` locally and
-was never tried against the cloud project ([supabase-local-stack](supabase-local-stack.md)). Nor a
-physical device, nor any scale beyond one Docker stack.
+**On cloud: the schema is there, the delivery is not proven — and this entry used to say the
+migration was local-only.** It was pushed and confirmed on 2026-09-10. The worry it recorded was that
+the receive policy is created on `realtime.messages`, a table `supabase_realtime_admin` owns rather
+than `postgres`, so it applied locally but had never been tried against cloud; ownership did not
+bite. `npx supabase db dump --linked -s realtime` shows `create policy "receive your own inbox" on
+realtime.messages` on the production project, and the `public` dump shows `notify_list_members` with
+all three triggers — read back directly, not inferred from the push exiting 0
+([supabase-local-stack](supabase-local-stack.md)).
+
+**Treat that as schema-level proof, not delivery proof.** No client has connected to the cloud
+project's realtime socket, no two-device run has happened, and nothing has observed a nudge actually
+arriving there — the ~1s figure at the top of this entry is a local-stack measurement and remains
+one. The other two gaps are untouched: no physical device, and no scale beyond one Docker stack. Do
+not read this paragraph as "realtime works on cloud"; read it as "nothing in the schema is left to
+stop it".
 
 **If you re-run the security probe, tag every message with its recipient.** The first attempt pushed
 two subscribers' messages into one array, so the writer's own echo counted as a message the removed
