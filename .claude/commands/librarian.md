@@ -11,6 +11,16 @@ Follow your charter and `ai/kb/CHARTER.md`." Then relay its report to the user v
 subagent's output is not shown to them otherwise. Do not curate the KB yourself; the librarian is
 the only writer to `ai/kb/entries/`.
 
+Hand it the implementation log path and nothing else. **Do not also point it at the step's
+suggestion document**: the log records where the shipped code diverged from the proposal, so naming
+both makes it read hundreds of lines twice and reconcile two accounts of the same work.
+
+**`deposit <n> pass 2`** — the second half of a wide step, spawned the same way with "Run deposit
+pass 2 for task step `<n>`." A wide step is split by the charter's rule 5, and the librarian's pass
+1 report ends by saying whether a pass 2 is owed. **Relay that request to the user rather than
+chaining straight into it** — the split exists so the expensive half can be interrupted, deferred,
+or skipped once they have seen what pass 1 found.
+
 **`audit`** — run `npm run kb:audit` and summarize. For any failure, say whether the *fact* changed
 or the *check* was wrong. Offer to spawn the librarian to fix the entries; do not edit them from
 here, and never edit project code to make a check pass.

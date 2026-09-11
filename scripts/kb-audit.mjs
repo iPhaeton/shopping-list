@@ -28,6 +28,11 @@ const STATUSES = ['current', 'superseded', 'retired'];
 const REQUIRED = ['id', 'title', 'type', 'status', 'last_verified'];
 const STALE_AFTER_DAYS = 90;
 const INDEX_BUDGET = 25;
+// Lines per entry, frontmatter included. A warning rather than an error, like the index budget:
+// every deposit pass reads every entry before it may dedup, so length is paid for on every future
+// pass — but a red audit would push whoever tripped it into trimming under pressure, and the prose
+// that earns an entry its place is easier to cut than the narrative that does not.
+const ENTRY_BUDGET = 120;
 const VERIFY_TIMEOUT_MS = 120_000;
 
 const errors = [];
@@ -190,6 +195,17 @@ for (const file of files) {
   }
   if (fields.last_verified && Number.isNaN(Date.parse(fields.last_verified))) {
     errors.push(`${relative}: last_verified \`${fields.last_verified}\` is not a date`);
+  }
+
+  // Superseded and retired entries are frozen records, so their length is nobody's problem: a
+  // deposit pass reads the current set.
+  if (fields.status === 'current') {
+    const lines = source.split('\n').filter((line, i, all) => i < all.length - 1 || line !== '').length;
+    if (lines > ENTRY_BUDGET) {
+      warnings.push(
+        `${relative}: ${lines} lines, budget is ${ENTRY_BUDGET} — split it, or move the step-by-step narrative to the log it came from`
+      );
+    }
   }
 
   if (fields.status !== 'current') {

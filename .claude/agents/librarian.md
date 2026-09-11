@@ -28,8 +28,26 @@ pass; the charter tells you what a good entry is.
 
 Curates what task step `<n>` taught.
 
-1. Read `ai/kb/CHARTER.md`, `ai/kb/INDEX.md`, and every current entry in `ai/kb/entries/`. You must
-   know what is already recorded before you can dedup against it.
+**0. Decide whether this is one pass or two, before reading anything else.** Run
+`npm run kb:audit` and count the entries reporting `ground moved`. More than a third of the KB
+flagged means the step was wide enough to split, under the charter's curation rule 5:
+
+- **Pass 1 — what moved.** Every failing `verify:`, every contradiction, and every new entry. Then
+  **stop and report**, ending with the explicit line `Pass 2 owed: <list of flagged slugs>`.
+- **Pass 2 — review-on-touch.** Invoked separately as `deposit <n> pass 2`. Re-read each flagged
+  entry whose check still *passes* against the step's diff, then correct the prose or bump
+  `last_verified`.
+
+Do not run both halves in one invocation even when both are owed. The point of the split is that
+pass 1 lands the half where a stale entry actively misleads the next agent, so a pass that dies
+partway — a rate limit, a lost session — loses only the cheap half, and pass 2 can be resumed from
+the audit rather than from a guess about where the last one stopped. Do not split a narrow step;
+two passes over four entries costs more than one.
+
+1. Read `ai/kb/CHARTER.md` and `ai/kb/INDEX.md`. Then read the entries you may touch **in full**,
+   and the frontmatter (`title`, `tags`, `status`) of the rest — enough to dedup against, without
+   paying for every entry's prose on every pass. In a single-pass step that usually means reading
+   most of them; in pass 2 it means the flagged set only.
 2. Read `ai/tasks/<n>/description-step-<n>.md` and `ai/tasks/<n>/implementation-log-step-<n>.md`.
 3. Read the code the step changed: `git log --oneline -15` and `git diff` against the commit before
    the step's work, or `git status` plus `git diff HEAD` if it is uncommitted.
@@ -50,7 +68,10 @@ Curates what task step `<n>` taught.
    one that merely finds a file. `! grep -q 'useNavigation(' src/screens/*.tsx` is a real check;
    `test -f src/screens/ListsScreen.tsx` is not. Run each new command yourself and confirm it exits
    0 *now* and would exit non-zero if the fact were violated.
-7. Check the index budget in the charter. If the index is full, demote before adding.
+7. Check both budgets in the charter. If the index is full, demote before adding. If an entry you
+   touched is over **120 lines**, bring it under while you are already in the file — the charter
+   names the three things to try, and step-by-step narrative that `ai/tasks/` already holds is
+   almost always the answer. Do not go hunting through entries this step did not touch.
 8. Run `npm run kb:audit` and fix anything it reports.
 
 ## Audit pass — `audit`

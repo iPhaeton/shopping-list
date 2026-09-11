@@ -116,8 +116,46 @@ Run `npm run kb:audit` to execute every check.
 4. For each candidate fact, decide exactly one of: **new** / **update** an existing entry /
    **contradicts** an existing entry (write the new truth, mark the loser superseded, link both) /
    **drop** (fails the admission test — say why).
+5. **A wide step is deposited in two passes.** Measure before starting: run `npm run kb:audit` and
+   count the entries reporting `ground moved`. **More than a third of the KB flagged means split
+   the pass.**
+
+   | | what it covers |
+   |---|---|
+   | **Pass 1 — what moved** | every failing `verify:`, every contradiction, and every new entry. Report and stop. |
+   | **Pass 2 — review-on-touch** | the flagged entries whose checks still *pass*: re-read each against the diff, then correct the prose or bump `last_verified`. |
+
+   The split is by **risk**, not by size, and that is the point. Pass 1 is where a stale entry
+   actively misleads the next agent; pass 2 is where prose has merely drifted. A pass that dies
+   halfway — a rate limit, a lost session — then loses the cheap half rather than an arbitrary
+   half, and it can be resumed by re-running the audit rather than by reconstructing where it got
+   to. Step 9 is the worked example: 24 source files changed, 16 of 30 entries flagged, one pass,
+   and it was killed mid-way with no way to tell what had been judged.
+
+   Do not split a narrow step. Two passes over four entries costs more than one.
 
 ## Budgets
+
+**An entry holds at most 120 lines, frontmatter included.** This is the budget that compounds:
+every deposit pass reads every current entry before it may dedup against them, and `/librarian ask`
+greps the lot, so a long entry is paid for again on every future pass rather than once when it was
+written. At 30 entries the KB is already a fixed several-thousand-line read before any pass does
+useful work.
+
+Over budget means one of three things, in the order to try them:
+
+1. **Narrative that belongs in a log.** "Step 7 did X, then step 8 changed it to Y" is provenance —
+   `ai/tasks/` already holds it, immutably and with dates. An entry states what is true *now* and
+   keeps only the history that stops a reader re-deriving a dead end.
+2. **Two facts in one file.** Split, and link them. One fact per entry is the format for a reason,
+   and a split entry costs a reader only the half they needed.
+3. **Genuinely one long fact.** Rare, and a real answer — say so in the entry rather than
+   padding the budget silently. A `constraint` covering a whole subsystem can earn it.
+
+The audit **warns** rather than fails here, exactly as it does for the index. A cap that turned the
+audit red would push whoever tripped it into trimming the prose that earns the entry its place
+instead of the narrative that does not, which is the wrong repair made under pressure. Bring an
+entry under budget when review-on-touch brings you to it anyway.
 
 `INDEX.md` holds at most **25** lines. An entry that nothing has retrieved or referenced across
 **5** task steps is demoted out of the index; its file stays in git and can be promoted back.

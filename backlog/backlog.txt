@@ -7,10 +7,9 @@
 7. Human readable errors: 
     - when a deleted list is updated
 8. Unsaved changes message flickering
-9. Item and list deletion
+(9. Item and list deletion)
 10. Removing oneself from list
-11. List rename endpoint sshould return errors
-12. Pagination for lists, items, list members, users
-13. Push notifications on list/item completed/created/deleted
-14. Rename item
-15. Refactor authentication. Users should have names
+11. Pagination for lists, items, list members, users
+12. Push notifications on list/item completed/created/deleted
+13. Rename item
+14. Refactor authentication. Users should have names

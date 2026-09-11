@@ -4,12 +4,14 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime and
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md]
 last_verified: 2026-09-11
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
-Scope is set one task step at a time. What is in, as of step 9:
+Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
+step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 9:
 
 | | |
 |---|---|
@@ -18,209 +20,78 @@ Scope is set one task step at a time. What is in, as of step 9:
 | step 3 | lists and items in Postgres, one owner each, surviving a reload |
 | step 4 | writes queued on disk and retried until they land; the lists readable with no signal |
 | step 5 | a cloud Supabase project as a second environment, which a physical device talks to |
-| step 6 (phase 1) | custom SMTP pushed to production; sign-in mail is real mail now, but the app stays structurally single-user until phase 2 |
+| step 6 | custom SMTP (phase 1) pushed to production — sign-in mail is real mail now |
 | step 7 step 1 | sharing at reader/writer/owner, enforced entirely in the database — no UI |
 | step 7 step 2 | the UI for it: role-gated screens, list rename, a sharing screen (invite / change role / remove), a re-fetch when the app comes to the front |
 | step 8 | realtime: a change by one member reaches every other member in about a second, both apps in the foreground |
 | step 9 | deleting lists and items — as tombstones behind a "Show deleted" checkbox, restorable by whoever may delete, purged after 30 days |
 
+(The `-step-N` suffix counts steps *within* a task, not tasks: task 3's files are `-step-1`, and task
+2 is the only one whose suffix happens to match its directory.)
+
 **Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
 you do not own, showing an owner how widely a list is shared without opening it, passwords, and
 conflict resolution beyond last-write-wins.**
 
-**Deletion moved in at step 9, and this entry listed it as out twice over — once in the line above
-and once in a paragraph explaining that the answer, when the question was put, had been "no item
-deletion so far".** Both are now out of date.
-[ai/tasks/9-deletion/description-step-1.md](../../tasks/9-deletion/description-step-1.md) promoted
-`ai/suggestions/deletion.md`, and scope inside it was settled with the user before any code: **all six
-of that document's staging steps in one step** — schema, state, API, error messages, UI, purge — with
-the `pg_cron` schedule shipping alongside the purge function rather than following it. The approach
-was not open either: an earlier draft proposed a hard delete plus a clear error message, and the user
-chose tombstones, with deleted things staying visible behind a checkbox, owners restoring them, and an
-owner who writes to something another owner deleted being offered a restore while a writer's write
-just drops. It absorbed two backlog items on the way past: 7 (human-readable errors) and 11 (the
-rename endpoint returning errors). See [deletion-is-a-tombstone](deletion-is-a-tombstone.md) for the
-design and [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md) for the conflict rule.
+**Three of those are database limits, not backlog laziness** — none is an afternoon of UI work:
 
-Three things step 9 deliberately did **not** do, which are easy to assume it did: it changed **no
-policy** — a tombstone is still a row and members must see it to restore it; it needed **no realtime
-migration** at all, because a soft delete is an `UPDATE` the existing triggers already cover; and it
-left `my_memberships()`, `listsChannel`, `replay`, `storageQueue`, `supabase.ts` and the navigator
-untouched. It also does not solve happens-before (the rule is who you are, not whose change came
-first), does not restore a list's items when the list is restored, and has not been verified against
-cloud at all — neither of its two migrations has been pushed
-([supabase-local-stack](supabase-local-stack.md)).
+- `share_list` raises `P0002` for an address with no account, so a stranger cannot be invited until a
+  `list_invites` table claimed at sign-up exists.
+- A non-owner cannot remove their own membership: the delete is filtered to zero rows and answers
+  `204`, so a "Leave this list" button would look like it worked and change nothing
+  ([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md),
+  [refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)). That is item 10 in
+  `backlog/backlog.txt`.
+- A list you own cannot say "shared with 2 people": the `list_members` select policy shows you your
+  own row, so any count the client computed would read `1` for everybody.
 
-**Realtime moved in at step 8, and this entry used to list it as out.**
-[ai/tasks/8-realtime/description-step-1.md](../../tasks/8-realtime/description-step-1.md) promoted
-`ai/suggestions/realtime-sync.md` — staging steps 1 and 2 whole, plus one piece of its optional step
-3 (idempotent replay). Scope inside that was settled with the user before any code: **echo
-suppression (`x-client-id`) and a "just updated" `SyncBanner` affordance were offered and declined**.
-**The migration reached cloud on 2026-09-10, and this paragraph used to say it was applied to the
-local stack only with `npx supabase db push` left to the user.** That push has happened, along with
-step 7's — all four migrations now report a `remote` timestamp, and the receive policy on
-`realtime.messages` reads back from the production project. As with step 6's SMTP push below, treat
-that as schema-level proof, not delivery proof: no client has connected to the cloud realtime socket
-and no nudge has been observed arriving there, so nothing yet says realtime works on cloud
-end to end. So
-"two people see each other's edits only when one of them backgrounds the app" is out of date; see
-[realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md) for the design
-and for what it deliberately still does not solve — no presence, no per-field conflict UI, and
-last-write-wins made *visible* rather than replaced.
-
-**Sharing moved in at step 7, in two steps, and this entry used to list all of it as out.**
-[Step 1](../../tasks/7-list-sharing/description-step-1.md) asked for sharing "on the database level"
-and built only that: the `list_members` table, the role policies, `share_list`, `set_member_role`,
-`remove_member`, `list_members_of`, the last-owner trigger, plus the minimum client plumbing that
-design depends on (the re-rooted `fetchLists`, `role` on `List`). **No UI at all** — a `reader` saw
-an enabled Add button and got an error banner when they used it.
-
-[Step 2](../../tasks/7-list-sharing/description-step-2.md) built the UI, and all four of
-`ai/suggestions/list-sharing-ui.md`'s staging steps landed together: `src/state/roles.ts` decides
-which controls exist (never whether a write is allowed — the database still decides that), list
-rename is the fourth queued write, `SharingScreen` does invite / change role / remove, and
-`AppState` / `visibilitychange` re-fetches on foreground. So "there is no way to share a list from
-the app" and "a reader is handed buttons that fail" are both out of date. See
-[list-data-scoped-by-rls](list-data-scoped-by-rls.md) for the rules,
-[read-rooted-at-list-members](read-rooted-at-list-members.md) for the shape they are written in, and
-[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) for why membership writes stay outside
-the outbox.
-
-**Two of the still-out items are database limits, not backlog laziness.** `share_list` raises
-`P0002` for an address with no account, so a stranger cannot be invited until a `list_invites` table
-claimed at sign-up exists; and a non-owner cannot remove their own membership — the delete is
-filtered to zero rows and answers `204`, so a "Leave this list" button would look like it worked and
-change nothing ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)). That one is
-item 10 in `backlog/backlog.txt`. A list you own also cannot say "shared with 2 people": the
-`list_members` select policy shows you your own row, so any count the client computed would read `1`
-for everybody.
-
-**List persistence moved in at step 3 and this entry used to say otherwise.**
-[ai/tasks/3/description-step-1.md](../../tasks/3/description-step-1.md) asked for persistence and
-explicitly deferred sharing, so `lists` and `items` got owner-only row-level security and no
-membership table. Step 7 replaced those policies wholesale — see
-[list-data-scoped-by-rls](list-data-scoped-by-rls.md). Step 3 is staging step 1 of
-`ai/suggestions/supabase-persistence.md`; the rest of that document is still a proposal, and its
-`is_list_member` helper was rejected outright when sharing arrived.
-(Note the filename: task 3's description and log are `-step-1`, not `-step-3`.)
-
-**Auth moved in at step 2**, from
-[ai/tasks/2/description-step-2.md](../../tasks/2/description-step-2.md): email OTP sign-in with
-Supabase and "the `users` table" — singular, and read literally, so list data stayed in memory for
-one more step. Between step 2 and step 3 the session survived a reload and the lists did not; that
-gap is now closed, and any advice you remember to the contrary is out of date.
+Equally deliberate, and in the same family: a sole owner deleting their account leaves an **ownerless
+list nobody can see or clean up**, because the alternative was cascading and destroying lists other
+people are in ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)).
 
 **"The user can create a list" means *many* named lists, not one standing list.** The step-1
 description was singular and genuinely ambiguous; the question went to the user and the answer was
-many. That reading is why there are two list screens (`Lists` → `ListDetail`) and why the app
-depends on React Navigation at all. Treat it as settled: do not "simplify" the product back to one
-list, and do not re-litigate the ambiguity from the description alone.
+many. That reading is why there are two list screens (`Lists` → `ListDetail`) and why the app depends
+on React Navigation at all. Treat it as settled: do not "simplify" the product back to one list, and
+do not re-litigate the ambiguity from the description alone.
 
-**Deleting lists and items was deliberately not built until step 9, and the shape of that absence is
-worth keeping, because step 9 did not simply reverse it.** Deletion was absent from every description
-up to step 6, so it was left out on purpose; then the `writer` brief said "add and delete items" and
-the answer, when the question was put, was **no item deletion so far**. This entry then predicted the
-cost of changing that: `set_item_done` read zero updated rows as "refused" *because* nothing deleted
-items, so deletion would be a bigger change than one policy plus one action. That prediction was
-right and the fix was not the expected one — there is **still** no delete policy on `lists` or
-`items`, and the one `for delete` policy in the schema is still on `list_members`. What changed is
-that `set_item_done`'s zero-row branch now splits three ways and the function returns an outcome
-instead of void ([server-stamps-done-at](server-stamps-done-at.md),
-[writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
+## What a landed step did *not* land
 
-**Offline moved in at step 4, and this entry used to forbid it** — "do not build a queue, a retry
-loop or a local cache speculatively" was right until
-[ai/tasks/4-offline-support/description-step-1.md](../../tasks/4-offline-support/description-step-1.md)
-asked for changes to be *guaranteed* to reach the database. All three now exist: an outbox, a
-backoff loop and a cached copy of the lists
-([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md),
-[list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)). Reading offline came
-in with it, decided with the user before the work started: without a cached copy a cold start with
-no signal shows an empty app, and the shop-with-no-bars scenario the queue exists for never happens.
+Each of these is easy to assume and wrong:
 
-What step 4 still left out, on purpose: no sync engine (PowerSync is the answer if this ever needs
-real convergence), no connectivity library, no conflict resolution beyond last-write-wins, and no
-"wait for sync" confirmation when signing out with writes pending.
+- **step 4, offline** — no sync engine (PowerSync is the answer if this ever needs real convergence),
+  no connectivity library, no conflict resolution beyond last-write-wins, and no "wait for sync"
+  confirmation when signing out with writes pending. Reading offline *did* come in with it, decided
+  with the user before the work started: without a cached copy a cold start with no signal shows an
+  empty app, and the shop-with-no-bars scenario the queue exists for never happens
+  ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md),
+  [list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)).
+- **step 5, cloud** — no user-facing feature and no schema change. Nothing about the local-first
+  workflow changed; web is still where work is verified
+  ([supabase-local-stack](supabase-local-stack.md)).
+- **step 6, SMTP** — not multi-user sign-in. Resend's sandbox sender (`onboarding@resend.dev`)
+  delivers only to the address that owns the Resend account, so a stranger's `signInWithOtp` is
+  accepted by the API and the mail silently never arrives: the app stays structurally single-user
+  until phase 2 verifies a sending domain. The push plus a dashboard read-back is config-level proof,
+  not delivery proof — no physical-device sign-in has been run against it
+  ([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md),
+  [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)).
+- **step 8, realtime** — no echo suppression (`x-client-id`) and no "just updated" `SyncBanner`; both
+  were offered to the user and declined. No presence and no per-field conflict UI either:
+  last-write-wins is made *visible* rather than replaced
+  ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
+- **step 9, deletion** — no policy change at all (a tombstone is still a row, and a member must see
+  it to restore it), no realtime migration (a soft delete is an `UPDATE` the existing triggers
+  already cover), and no restore of a list's items when the list itself is restored. It does not
+  solve happens-before: the rule is who you are, not whose change came first
+  ([deletion-is-a-tombstone](deletion-is-a-tombstone.md),
+  [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
 
-**A cloud environment moved in at step 5**, from
-[ai/tasks/5-supabase-cloud/description-step-1.md](../../tasks/5-supabase-cloud/description-step-1.md):
-a linked project, `supabase/config.toml` split into local truth plus production overrides, and a
-physical device pointed at cloud. What did *not* move in at step 5: any user-facing feature, any
-schema change, custom SMTP, and the `config push` itself — the file was written, the production
-project had not been updated from it. Nothing about the local-first workflow changed; web is still
-where work is verified ([supabase-local-stack](supabase-local-stack.md)).
-
-**Custom SMTP moved in at step 6, phase 1 only — and the step-5 paragraph above used to say the
-`config push` itself hadn't happened. It has now.**
-[ai/tasks/6-custom-smtp/description-step-1.md](../../tasks/6-custom-smtp/description-step-1.md)
-pushed `[remotes.production.auth.email.smtp]` (Resend) and raised
-`[remotes.production.auth.rate_limit] email_sent` to 30; a live dashboard read-back confirmed both
-landed, along with the two OTP templates the push carries by inheritance
-([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md),
-[supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)). What did
-*not* move in: multi-user sign-in. Resend's sandbox sender (`onboarding@resend.dev`) delivers only to
-the address that owns the Resend account, so a stranger's `signInWithOtp` request is accepted by the
-API and the mail silently never arrives — the app stays structurally single-user until phase 2
-verifies a sending domain. Also not done: an actual physical-device sign-in against the new config,
-which needs two runs (a brand-new address, then the same one again) that nothing has run yet. Treat
-the push and the dashboard read-back as config-level proof, not delivery proof — do not read this
-entry as saying device sign-in now works end to end.
-
-**`ai/suggestions/*.md` are proposals, not scope.** They read like plans because they are — full
-schema and design for Supabase-backed list persistence, a biometric unlock layer, and a cloud
-Supabase project alongside the local stack — but nothing in them is approved until it arrives as an
-`ai/tasks/<n>/description-step-<n>.md`, and a document being *partly* implemented does not promote
-the rest of it. Step 2
-implemented the auth half of `otp-biometric-auth.md` *only* because a task description asked for it,
-step 3 the first staging step of `supabase-persistence.md`, step 5 the project/schema/config sections
-of `production-supabase.md`, step 6 phase 1 of that document's custom-SMTP section (§4), step 7
-step 1 the SQL of `list-sharing.md`, step 7 step 2 the whole of `list-sharing-ui.md`, which
-covers that document's staging steps 2 and 3, step 8 `realtime-sync.md`'s staging steps 1 and 2
-plus one piece of its optional step 3, and step 9 the whole of `deletion.md` — all six of its staging
-steps at once, which is the only time a suggestion has landed complete in one step — each because a
-task description asked for it. The
-biometric half of `otp-biometric-auth.md` is still just a proposal, and it needs a native dev build
-besides. §4's phase 2 (a verified sending domain) is also still just a
-proposal — phase 1 is the only part of it that has landed.
-
-**Step 9 corrected three more things in `deletion.md`, and the first is the one to learn from:** its
-`set_item_done` tested "is the target in the bin" *before* the permission check, which would tell a
-stranger holding an item id that a row they cannot see exists and is deleted — the shipped function
-raises `42501` first; its `purge_deleted` used `deleted_at < cutoff`, which collects nothing at a
-zero-second interval because `now()` is frozen per transaction, making the one call that proves the
-function works a silent no-op; and its conflict prompt would have been announced before the fetch that
-tells it what to offer. None of the three is a typo — each is a design that reads correctly and fails
-only when run. The document also got something exactly right that nothing else would have caught: it
-predicted this KB's own audit would go green over a claim that had stopped being true, and it did
-([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) has the case-sensitive grep that let
-`'item/setDeleted'` through).
-
-**A suggestion can be wrong as well as un-promoted — four errors across three documents before that.**
-`list-sharing.md`'s "owners remove members" policy cannot remove anyone
-([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md)), its last-owner
-trigger would have aborted account deletion, and its claim that `set search_path = ''` defeats the
-design was measured and does not hold
-([read-rooted-at-list-members](read-rooted-at-list-members.md)). `list-sharing-ui.md` then
-contradicted *itself*: it made both header buttons owner-only and also said the sharing screen was
-reachable by every member, which cannot both be true when the button is the only way in. Caught while
-scripting the browser run; `Share list` renders for every member and only `Rename list` is gated.
-**Step 8 found a fourth, and it is the instructive one because it was a *warning* rather than a
-design:** `realtime-sync.md` asserts that `coalesce(new.list_id, old.list_id)` would raise
-`record "new" is not assigned yet` on a DELETE and break every un-share. Measured on PostgreSQL 17, a
-row-level DELETE trigger reads `NEW` as null and does not raise, so the warning was false; the shipped
-migration branches on `tg_op` anyway, for the different and real reason that no column is shared by
-all three tables. A suggestion's *cautions* deserve the same measurement its designs do, and a claim
-that survives into a code comment as fact is the expensive version of this mistake. The documents are
-never edited to say any of this. Read a suggestion for its reasoning, then check the KB
-before trusting it — and check it against itself.
-
-**A suggestion can also be *overruled* by the step that implements the rest of it.**
-`production-supabase.md`'s
-"Environment selection" section argued against runtime target-switching; step 5 did it anyway,
-because the task made the phone a target and removed the section's premise
-([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)). So a suggestion is not
-merely un-promoted until a task lands — parts of it can be wrong afterwards, and the document is
-never edited to say so. Check the KB before treating a suggestion's reasoning as current.
+**Cloud is two migrations behind local.** The four migrations up to realtime are pushed and read back
+from the production project; step 9's two (`20260910000000_deletion.sql`,
+`20260910000001_purge_schedule.sql`) have not been pushed at all, and no client has ever connected to
+the cloud realtime socket. A pushed migration is schema-level proof, never behaviour-level
+([supabase-local-stack](supabase-local-stack.md)).
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
 absence as a gap worth flagging in a review. When a new task description lands, re-read this entry
