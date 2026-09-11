@@ -81,6 +81,9 @@ function supersedes(op: WriteAction, queued: WriteAction): boolean {
     case 'item/setDeleted':
       return queued.type === 'item/setDeleted' && queued.itemId === op.itemId;
 
+    case 'item/renamed':
+      return queued.type === 'item/renamed' && queued.itemId === op.itemId;
+
     case 'list/renamed':
       return queued.type === 'list/renamed' && queued.id === op.id;
 
@@ -112,11 +115,12 @@ export function dropDependents(ops: WriteAction[], failed: WriteAction): WriteAc
       });
 
     case 'item/added':
-      // Both of the item's own writes are stranded by a refused insert. Note that this arm is a
-      // filter predicate rather than a `switch`, so nothing here breaks the build when a new item
+      // All three of the item's own writes are stranded by a refused insert. Note that this arm is
+      // a filter predicate rather than a `switch`, so nothing here breaks the build when a new item
       // action appears — it just silently keeps it.
       return ops.filter(
         (op) =>
+          (op.type !== 'item/renamed' || op.itemId !== failed.id) &&
           (op.type !== 'item/setDone' || op.itemId !== failed.id) &&
           (op.type !== 'item/setDeleted' || op.itemId !== failed.id)
       );
@@ -126,6 +130,7 @@ export function dropDependents(ops: WriteAction[], failed: WriteAction): WriteAc
     // was, so anything queued behind it is still perfectly sendable.
     case 'list/renamed':
     case 'list/setDeleted':
+    case 'item/renamed':
     case 'item/setDone':
     case 'item/setDeleted':
       return ops;

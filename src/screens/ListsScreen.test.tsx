@@ -21,6 +21,7 @@ jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  renameItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   renameList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setListDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),

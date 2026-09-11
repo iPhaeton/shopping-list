@@ -158,6 +158,97 @@ describe('item/added', () => {
   });
 });
 
+describe('item/renamed', () => {
+  it('renames only the targeted item', () => {
+    const state = listsReducer(stateWithItems('Milk', 'Bread', 'Eggs'), {
+      type: 'item/renamed',
+      listId: 'l1',
+      itemId: 'i2',
+      title: 'Sourdough',
+    });
+
+    expect(state.lists[0].items.map((item) => item.title)).toEqual(['Milk', 'Sourdough', 'Eggs']);
+  });
+
+  /** A replayed rename must not undo a tick or a restore that happened since. */
+  it('leaves whether the item is done, and whether it is binned, alone', () => {
+    const ticked = listsReducer(stateWithItems('Milk'), {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i1',
+      doneAt: DONE_AT,
+    });
+    const binned = listsReducer(ticked, {
+      type: 'item/setDeleted',
+      listId: 'l1',
+      itemId: 'i1',
+      deletedAt: DONE_AT,
+    });
+
+    const renamed = listsReducer(binned, {
+      type: 'item/renamed',
+      listId: 'l1',
+      itemId: 'i1',
+      title: 'Oat milk',
+    });
+
+    expect(renamed.lists[0].items[0]).toEqual({
+      id: 'i1',
+      title: 'Oat milk',
+      doneAt: DONE_AT,
+      deletedAt: DONE_AT,
+    });
+  });
+
+  it('trims the title and ignores a blank one', () => {
+    const trimmed = listsReducer(stateWithItems('Milk'), {
+      type: 'item/renamed',
+      listId: 'l1',
+      itemId: 'i1',
+      title: '  Oat milk  ',
+    });
+    expect(trimmed.lists[0].items[0].title).toBe('Oat milk');
+
+    const before = stateWithItems('Milk');
+    const blank = listsReducer(before, {
+      type: 'item/renamed',
+      listId: 'l1',
+      itemId: 'i1',
+      title: '  ',
+    });
+    expect(blank).toBe(before);
+  });
+
+  it('returns the same state object when the title is unchanged', () => {
+    const before = stateWithItems('Milk');
+
+    expect(
+      listsReducer(before, { type: 'item/renamed', listId: 'l1', itemId: 'i1', title: 'Milk' })
+    ).toBe(before);
+  });
+
+  it('is a no-op for an unknown list or item', () => {
+    const before = stateWithItems('Milk');
+
+    expect(
+      listsReducer(before, {
+        type: 'item/renamed',
+        listId: 'nope',
+        itemId: 'i1',
+        title: 'Oat milk',
+      })
+    ).toBe(before);
+    expect(
+      listsReducer(before, {
+        type: 'item/renamed',
+        listId: 'l1',
+        itemId: 'nope',
+        title: 'Oat milk',
+      })
+    ).toBe(before);
+  });
+});
+
 describe('item/setDone', () => {
   it('marks an item done and back again', () => {
     const before = stateWithItems('Milk');

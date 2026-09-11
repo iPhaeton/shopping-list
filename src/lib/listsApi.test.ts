@@ -3,6 +3,7 @@ import {
   fetchLists,
   fetchMembers,
   removeMember,
+  renameItem,
   renameList,
   setItemDeleted,
   setItemDone,
@@ -163,6 +164,24 @@ describe('the writes that go through the outbox', () => {
       p_id: 'i1',
       p_list_id: 'l1',
       p_title: 'Milk',
+    });
+  });
+
+  it('renames an item through the RPC, by argument name', async () => {
+    const rpc = respondToRpcWith({ data: 'applied', error: null, status: 200 });
+
+    expect(await renameItem('i1', 'Oat milk')).toEqual({ error: null, verdict: 'ok' });
+    expect(rpc).toHaveBeenCalledWith('rename_item', { p_item_id: 'i1', p_title: 'Oat milk' });
+  });
+
+  /** The same contract `set_item_done` keeps: a rename of a binned item is delivered, not refused. */
+  it('carries a target_deleted outcome on a rename too', async () => {
+    respondToRpcWith({ data: 'target_deleted', error: null, status: 200 });
+
+    expect(await renameItem('i1', 'Oat milk')).toEqual({
+      error: null,
+      verdict: 'ok',
+      outcome: 'target_deleted',
     });
   });
 

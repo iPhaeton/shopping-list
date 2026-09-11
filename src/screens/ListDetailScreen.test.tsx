@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   addItem as addItemRequest,
   fetchLists,
+  renameItem,
   renameList,
   setItemDeleted,
   setListDeleted,
@@ -22,6 +23,7 @@ jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  renameItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   renameList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setListDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -134,6 +136,7 @@ beforeEach(async () => {
   navigation.setOptions.mockClear();
   navigation.navigate.mockClear();
   jest.mocked(renameList).mockClear();
+  jest.mocked(renameItem).mockClear();
   // The provider queues writes on disk now; without this each test inherits the last one's outbox.
   await AsyncStorage.clear();
 });
@@ -275,6 +278,12 @@ describe('a reader', () => {
     expect(screen.queryByLabelText('Rename list')).not.toBeOnTheScreen();
   });
 
+  it('gets no way to rename an item', async () => {
+    await renderAs('reader');
+
+    expect(screen.queryByLabelText('Rename Milk')).not.toBeOnTheScreen();
+  });
+
   /**
    * `list_members_of` is gated on the caller's own membership rather than on ownership, so a reader
    * gets the full roster back. "Who else can see my shopping list" is a fair question for them.
@@ -303,6 +312,70 @@ describe('a writer', () => {
 
     expect(screen.queryByLabelText('Rename list')).not.toBeOnTheScreen();
     expect(screen.getByLabelText('Share list')).toBeOnTheScreen();
+  });
+
+  /** The editor opens in place of the row, seeded with the title it is about to replace. */
+  it('renames an item from its row', async () => {
+    await renderAs('writer');
+
+    await fireEvent.press(screen.getByLabelText('Rename Milk'));
+
+    expect(screen.getByLabelText('Item name')).toHaveDisplayValue('Milk');
+    expect(screen.queryByLabelText('Milk')).not.toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Item name'), 'Oat milk');
+    await fireEvent.press(screen.getByLabelText('Save'));
+
+    expect(screen.queryByLabelText('Item name')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Oat milk')).not.toBeChecked();
+    expect(renameItem).toHaveBeenCalledWith('i1', 'Oat milk');
+  });
+
+  it('saves from the keyboard too', async () => {
+    await renderAs('writer');
+
+    await fireEvent.press(screen.getByLabelText('Rename Milk'));
+    await fireEvent.changeText(screen.getByLabelText('Item name'), 'Oat milk');
+    await fireEvent(screen.getByLabelText('Item name'), 'submitEditing');
+
+    expect(screen.getByLabelText('Oat milk')).toBeOnTheScreen();
+    expect(renameItem).toHaveBeenCalledWith('i1', 'Oat milk');
+  });
+
+  it('closes the editor again without renaming anything', async () => {
+    await renderAs('writer');
+
+    await fireEvent.press(screen.getByLabelText('Rename Milk'));
+    await fireEvent.changeText(screen.getByLabelText('Item name'), 'Oat milk');
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+
+    expect(screen.queryByLabelText('Item name')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Milk')).toBeOnTheScreen();
+    expect(renameItem).not.toHaveBeenCalled();
+  });
+
+  it('will not save a blank title', async () => {
+    await renderAs('writer');
+
+    await fireEvent.press(screen.getByLabelText('Rename Milk'));
+    await fireEvent.changeText(screen.getByLabelText('Item name'), '   ');
+
+    expect(screen.getByLabelText('Save')).toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText('Save'));
+    expect(screen.getByLabelText('Item name')).toBeOnTheScreen();
+    expect(renameItem).not.toHaveBeenCalled();
+  });
+
+  /** Saving the name it already has is not a change, so nothing is queued and nothing is sent. */
+  it('sends nothing when the title is saved unchanged', async () => {
+    await renderAs('writer');
+
+    await fireEvent.press(screen.getByLabelText('Rename Milk'));
+    await fireEvent.press(screen.getByLabelText('Save'));
+
+    expect(screen.getByLabelText('Milk')).toBeOnTheScreen();
+    expect(renameItem).not.toHaveBeenCalled();
   });
 });
 
@@ -420,6 +493,16 @@ it('will not let a deleted item be toggled', async () => {
   expect(screen.getByLabelText('Bread')).toBeDisabled();
 });
 
+/** Nor renamed, for the same reason — Restore is the one thing to offer it. */
+it('offers a deleted item no rename, only a restore', async () => {
+  await renderWithBin('writer');
+  await fireEvent.press(screen.getByLabelText('Show 1 deleted'));
+
+  expect(screen.queryByLabelText('Rename Bread')).not.toBeOnTheScreen();
+  expect(screen.getByLabelText('Restore Bread')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Rename Milk')).toBeOnTheScreen();
+});
+
 /**
  * The count is a claim about what is on the list, and a binned item must not inflate it — nor
  * silence the empty state once every live item is gone.
@@ -467,6 +550,7 @@ describe('a list opened from the bin', () => {
 
     expect(screen.queryByLabelText('Add an item')).not.toBeOnTheScreen();
     expect(screen.queryByLabelText('Rename list')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Rename Milk')).not.toBeOnTheScreen();
     expect(screen.queryByLabelText('Delete Milk')).not.toBeOnTheScreen();
   });
 

@@ -122,6 +122,62 @@ it('leaves the queue alone when a toggle is refused', () => {
   expect(dropDependents([ADD_MILK], TICK_MILK)).toEqual([ADD_MILK]);
 });
 
+// --- Renaming an item ---------------------------------------------------------------------------
+
+const RENAME_MILK: WriteAction = {
+  type: 'item/renamed',
+  listId: 'l1',
+  itemId: 'i1',
+  title: 'Oat milk',
+};
+
+/** An item title is an absolute value like a list name: renaming it five times is one request. */
+it('replaces a queued rename of the same item, where it stands', () => {
+  const renameAgain: WriteAction = { ...RENAME_MILK, title: 'Soy milk' };
+
+  const ops = enqueue([RENAME_MILK, TICK_MILK], renameAgain);
+
+  expect(ops).toEqual([renameAgain, TICK_MILK]);
+});
+
+it('does not coalesce renames of different items', () => {
+  const renameBread: WriteAction = { ...RENAME_MILK, itemId: 'i2', title: 'Sourdough' };
+
+  expect(enqueue([RENAME_MILK], renameBread)).toEqual([RENAME_MILK, renameBread]);
+});
+
+/** Like coalesces only with like: a rename, a toggle and a delete of one item are three writes. */
+it('does not let a rename replace a queued toggle or delete of the same item', () => {
+  const binMilk: WriteAction = { ...TICK_MILK, type: 'item/setDeleted', deletedAt: null };
+
+  expect(enqueue([TICK_MILK, binMilk], RENAME_MILK)).toEqual([TICK_MILK, binMilk, RENAME_MILK]);
+});
+
+it('does not let a rename replace the insert of the same item', () => {
+  expect(enqueue([ADD_MILK], RENAME_MILK)).toEqual([ADD_MILK, RENAME_MILK]);
+});
+
+/**
+ * The `item/added` arm of `dropDependents` is a filter predicate, not a `switch`, so a new item
+ * action is silently kept unless it is spelled out there. This is the test that notices.
+ */
+it('drops a queued rename of an item that was never inserted', () => {
+  const renameOther: WriteAction = { ...RENAME_MILK, itemId: 'i2' };
+
+  expect(dropDependents([RENAME_MILK, renameOther], ADD_MILK)).toEqual([renameOther]);
+});
+
+it('drops a queued item rename when the list itself was refused', () => {
+  const renameNails: WriteAction = { ...RENAME_MILK, listId: 'l2', itemId: 'i2' };
+
+  expect(dropDependents([RENAME_MILK, renameNails], CREATE_GROCERIES)).toEqual([renameNails]);
+});
+
+/** A refused rename leaves the row exactly as it was; nothing behind it is stranded. */
+it('leaves the queue alone when an item rename is refused', () => {
+  expect(dropDependents([ADD_MILK, TICK_MILK], RENAME_MILK)).toEqual([ADD_MILK, TICK_MILK]);
+});
+
 /**
  * Unsent writes are the promise this feature makes. A blob that cannot be replayed is not something
  * to overwrite quietly — it is the user's data in a shape we failed to read.

@@ -7,6 +7,7 @@ import {
   addItem,
   fetchLists,
   insertList,
+  renameItem,
   renameList,
   setItemDeleted,
   setItemDone,
@@ -35,6 +36,7 @@ jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(),
   insertList: jest.fn(),
   addItem: jest.fn(),
+  renameItem: jest.fn(),
   setItemDone: jest.fn(),
   renameList: jest.fn(),
   setListDeleted: jest.fn(),
@@ -51,6 +53,7 @@ const api = {
   fetchLists: jest.mocked(fetchLists),
   insertList: jest.mocked(insertList),
   addItem: jest.mocked(addItem),
+  renameItem: jest.mocked(renameItem),
   setItemDone: jest.mocked(setItemDone),
   renameList: jest.mocked(renameList),
   setListDeleted: jest.mocked(setListDeleted),
@@ -91,6 +94,7 @@ beforeEach(async () => {
   api.fetchLists.mockResolvedValue({ lists: [], error: null });
   api.insertList.mockResolvedValue(OK);
   api.addItem.mockResolvedValue(OK);
+  api.renameItem.mockResolvedValue(OK);
   api.setItemDone.mockResolvedValue(OK);
   api.renameList.mockResolvedValue(OK);
   api.setListDeleted.mockResolvedValue(OK);
@@ -118,6 +122,7 @@ function Probe() {
     createList,
     renameList,
     addItem,
+    renameItem,
     toggleItem,
     setListDeleted,
     setItemDeleted,
@@ -151,6 +156,9 @@ function Probe() {
       <Button label="toggle" onPress={() => toggleItem('l1', 'i1')} />
       <Button label="rename" onPress={() => renameList('l1', 'Weekly shop')} />
       <Button label="rename blank" onPress={() => renameList('l1', '   ')} />
+      <Button label="rename item" onPress={() => renameItem('l1', 'i1', 'Oat milk')} />
+      <Button label="rename item again" onPress={() => renameItem('l1', 'i1', 'Soy milk')} />
+      <Button label="rename item blank" onPress={() => renameItem('l1', 'i1', '   ')} />
       <Button label="bin list" onPress={() => setListDeleted('l1', true)} />
       <Button label="restore list" onPress={() => setListDeleted('l1', false)} />
       <Button label="bin item" onPress={() => setItemDeleted('l1', 'i1', true)} />
@@ -278,6 +286,43 @@ it('does not rename a list to nothing', async () => {
   expect(api.renameList).not.toHaveBeenCalled();
 });
 
+it('renames an item optimistically and sends the new title', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+
+  await renderProbe();
+  await fireEvent.press(screen.getByLabelText('rename item'));
+
+  expect(screen.getByText('l1 Groceries: Oat milk')).toBeOnTheScreen();
+  await waitFor(() => expect(api.renameItem).toHaveBeenCalledWith('i1', 'Oat milk'));
+});
+
+it('does not rename an item to nothing', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+
+  await renderProbe();
+  await fireEvent.press(screen.getByLabelText('rename item blank'));
+
+  expect(api.renameItem).not.toHaveBeenCalled();
+  expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
+});
+
+/** A title is an absolute value like a list name, so only the newest of a queued run is sent. */
+it('sends one write for an item renamed repeatedly with no signal', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+  api.renameItem.mockResolvedValue(OFFLINE);
+
+  await renderProbe();
+  await fireEvent.press(screen.getByLabelText('rename item'));
+  await fireEvent.press(screen.getByLabelText('rename item again'));
+
+  expect(await screen.findByText('pending: 1')).toBeOnTheScreen();
+  expect(screen.getByText('l1 Groceries: Soy milk')).toBeOnTheScreen();
+  expect(api.renameItem).toHaveBeenCalledTimes(1);
+  expect(await loadOutbox(USER)).toEqual([
+    { type: 'item/renamed', listId: 'l1', itemId: 'i1', title: 'Soy milk' },
+  ]);
+});
+
 /**
  * The screens hide the controls a reader may not use, so none of these three are reachable by
  * tapping. They are written anyway: the database is the only real boundary, and the next screen to
@@ -314,9 +359,18 @@ describe('a list you only have read access to', () => {
     expect(api.renameList).not.toHaveBeenCalled();
     expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
   });
+
+  it('refuses to rename an item', async () => {
+    await renderProbe();
+    await fireEvent.press(screen.getByLabelText('rename item'));
+
+    expect(screen.getByText('error: You have read-only access to this list.')).toBeOnTheScreen();
+    expect(api.renameItem).not.toHaveBeenCalled();
+    expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
+  });
 });
 
-/** A writer adds and ticks but does not manage the list itself. */
+/** A writer adds, renames and ticks items but does not manage the list itself. */
 it('lets a writer change items but not the name', async () => {
   api.fetchLists.mockResolvedValue({ lists: [{ ...GROCERIES, role: 'writer' }], error: null });
 
@@ -324,6 +378,10 @@ it('lets a writer change items but not the name', async () => {
 
   await fireEvent.press(screen.getByLabelText('add'));
   expect(screen.getByText('l1 Groceries: Milk, Bread')).toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByLabelText('rename item'));
+  expect(screen.getByText('l1 Groceries: Oat milk, Bread')).toBeOnTheScreen();
+  await waitFor(() => expect(api.renameItem).toHaveBeenCalledWith('i1', 'Oat milk'));
 
   await fireEvent.press(screen.getByLabelText('rename'));
   expect(api.renameList).not.toHaveBeenCalled();

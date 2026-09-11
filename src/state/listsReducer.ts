@@ -59,6 +59,26 @@ export function listsReducer(state: State, action: Action): State {
       });
     }
 
+    case 'item/renamed': {
+      const title = action.title.trim();
+      if (!title) return state;
+
+      // Only the title moves. `doneAt` and `deletedAt` are left exactly as they are, for the same
+      // reason `item/added`'s "already here" branch leaves them: a rename folded back over fetched
+      // rows must not undo a tick or a restore that happened since.
+      return updateList(state, action.listId, (list) => {
+        const item = list.items.find((candidate) => candidate.id === action.itemId);
+        if (!item || item.title === title) return list;
+
+        return {
+          ...list,
+          items: list.items.map((candidate) =>
+            candidate.id === action.itemId ? { ...candidate, title } : candidate
+          ),
+        };
+      });
+    }
+
     case 'item/setDone': {
       return updateList(state, action.listId, (list) => {
         const item = list.items.find((candidate) => candidate.id === action.itemId);
@@ -104,7 +124,7 @@ export function listsReducer(state: State, action: Action): State {
  * Replaces one list via `update`. Returns the original state object untouched when the
  * list is unknown, or when `update` decided there was nothing to change.
  *
- * **All four write actions are idempotent by id, and `list/created` and `item/added` were not
+ * **Every write action is idempotent by id, and `list/created` and `item/added` were not
  * always.** They appended unconditionally, which is only safe while a row cannot be in the fetched
  * set *and* still in the outbox — an invariant the provider keeps by never letting a fetch and a
  * flush overlap. Realtime made that invariant load-bearing rather than incidental, by fetching far

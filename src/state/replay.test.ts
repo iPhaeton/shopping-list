@@ -69,6 +69,14 @@ it('keeps the queued name over the fetched one', () => {
   expect(replay([GROCERIES], [rename])).toEqual([{ ...GROCERIES, name: 'Weekly shop' }]);
 });
 
+it('keeps the queued item title over the fetched one', () => {
+  const rename: WriteAction = { type: 'item/renamed', listId: 'l1', itemId: 'i1', title: 'Oat milk' };
+
+  expect(replay([GROCERIES], [rename])).toEqual([
+    { ...GROCERIES, items: [{ ...MILK, title: 'Oat milk' }] },
+  ]);
+});
+
 it('drops a queued write whose list is gone', () => {
   const add: WriteAction = { type: 'item/added', listId: 'gone', id: 'i9', title: 'Nails' };
 

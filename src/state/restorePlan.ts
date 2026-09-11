@@ -57,7 +57,7 @@ export function blockedList(lists: List[], blocked: Blocked): boolean {
  * Which list an action is about. Written as a `switch` rather than `'listId' in op ? … : op.id`
  * precisely because the latter compiles forever: `list/renamed` and `list/setDeleted` name the list
  * `id` while the item actions name it `listId`, and only the exhaustive form makes TypeScript point
- * here when a seventh action arrives.
+ * here when the next action arrives.
  */
 export function listIdOf(op: WriteAction): string {
   switch (op.type) {
@@ -67,6 +67,7 @@ export function listIdOf(op: WriteAction): string {
       return op.id;
 
     case 'item/added':
+    case 'item/renamed':
     case 'item/setDone':
     case 'item/setDeleted':
       return op.listId;
@@ -79,6 +80,7 @@ function itemIdOf(op: WriteAction): string | null {
     case 'item/added':
       return op.id;
 
+    case 'item/renamed':
     case 'item/setDone':
     case 'item/setDeleted':
       return op.itemId;

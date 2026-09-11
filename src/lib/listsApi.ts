@@ -128,6 +128,22 @@ export async function renameList(id: string, name: string): Promise<Result> {
 }
 
 /**
+ * Renaming an item, at the writer rung rather than the owner one.
+ *
+ * An RPC for the reason `set_item_done` is: the client holds no UPDATE privilege on `items` at all,
+ * and a definer function is also the only thing that can tell a binned target from a refusal. Like
+ * every other write here the value is absolute — the title the row should have — so a retry is
+ * harmless and the outbox can replace a queued rename with a newer one.
+ */
+export async function renameItem(itemId: string, title: string): Promise<Result> {
+  const { data, error, status } = await supabase.rpc('rename_item', {
+    p_item_id: itemId,
+    p_title: title,
+  });
+  return writeResult(error, status, data);
+}
+
+/**
  * Putting a list or an item in the bin, and taking it back out.
  *
  * A boolean rather than two verbs, exactly like `set_item_done`: the value is absolute, so a retry
@@ -231,7 +247,7 @@ function resultFor(error: Failure, status: number): Result {
 }
 
 /**
- * `resultFor` for the six writes that go through the outbox, which differ from the rest in two ways:
+ * `resultFor` for the seven writes that go through the outbox, which differ from the rest in two ways:
  * they can report an outcome, and their failures reach a red banner minutes or days after the tap
  * that caused them.
  *

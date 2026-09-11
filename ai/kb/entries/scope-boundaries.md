@@ -4,14 +4,14 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime and
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md]
 last_verified: 2026-09-11
 related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 9:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 10:
 
 | | |
 |---|---|
@@ -25,6 +25,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 7 step 2 | the UI for it: role-gated screens, list rename, a sharing screen (invite / change role / remove), a re-fetch when the app comes to the front |
 | step 8 | realtime: a change by one member reaches every other member in about a second, both apps in the foreground |
 | step 9 | deleting lists and items — as tombstones behind a "Show deleted" checkbox, restorable by whoever may delete, purged after 30 days |
+| step 10 | renaming an item, by an owner or writer — an inline editor on the row, sent through a `rename_item` RPC like every other item write |
 
 (The `-step-N` suffix counts steps *within* a task, not tasks: task 3's files are `-step-1`, and task
 2 is the only one whose suffix happens to match its directory.)
@@ -86,12 +87,16 @@ Each of these is easy to assume and wrong:
   solve happens-before: the rule is who you are, not whose change came first
   ([deletion-is-a-tombstone](deletion-is-a-tombstone.md),
   [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
+- **step 10, item rename** — no re-granted `title` column and no policy change: the write is a
+  `security definer` RPC because the client still holds no UPDATE on `items` at all
+  ([server-stamps-done-at](server-stamps-done-at.md)). No realtime migration either, and no
+  happens-before between a rename and a delete of the same item from two devices.
 
-**Cloud is two migrations behind local.** The four migrations up to realtime are pushed and read back
-from the production project; step 9's two (`20260910000000_deletion.sql`,
-`20260910000001_purge_schedule.sql`) have not been pushed at all, and no client has ever connected to
-the cloud realtime socket. A pushed migration is schema-level proof, never behaviour-level
-([supabase-local-stack](supabase-local-stack.md)).
+**Cloud is three migrations behind local.** The four migrations up to realtime are pushed and read
+back from the production project; step 9's two (`20260910000000_deletion.sql`,
+`20260910000001_purge_schedule.sql`) and step 10's `20260911000000_rename_item.sql` have not been
+pushed at all, and no client has ever connected to the cloud realtime socket. A pushed migration is
+schema-level proof, never behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
 absence as a gap worth flagging in a review. When a new task description lands, re-read this entry

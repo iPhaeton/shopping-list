@@ -18,6 +18,7 @@ import {
   addItem as addItemRequest,
   fetchLists,
   insertList,
+  renameItem as renameItemRequest,
   renameList as renameListRequest,
   setItemDeleted as setItemDeletedRequest,
   setItemDone,
@@ -64,6 +65,7 @@ type ListsContextValue = {
   createList: (name: string) => string | null;
   renameList: (listId: string, name: string) => void;
   addItem: (listId: string, title: string) => void;
+  renameItem: (listId: string, itemId: string, title: string) => void;
   toggleItem: (listId: string, itemId: string) => void;
   setListDeleted: (listId: string, deleted: boolean) => void;
   setItemDeleted: (listId: string, itemId: string, deleted: boolean) => void;
@@ -472,6 +474,31 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     [state.lists, enqueueOp]
   );
 
+  /**
+   * `renameList` one rung down: whoever may add an item may rename one. Same shape too — no id to
+   * mint, an absolute value, so a retry cannot double-apply and a queued rename is replaced by a
+   * newer one rather than sent twice.
+   */
+  const renameItem = useCallback(
+    (listId: string, itemId: string, title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+
+      const list = state.lists.find((candidate) => candidate.id === listId);
+      const item = list?.items.find((candidate) => candidate.id === itemId);
+      if (!list || !item) return;
+      if (!canEditItems(list.role)) {
+        setError('You have read-only access to this list.');
+        return;
+      }
+
+      const op: WriteAction = { type: 'item/renamed', listId, itemId, title: trimmed };
+      dispatch(op);
+      void enqueueOp(op);
+    },
+    [state.lists, enqueueOp]
+  );
+
   const toggleItem = useCallback(
     (listId: string, itemId: string) => {
       const list = state.lists.find((candidate) => candidate.id === listId);
@@ -628,6 +655,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       createList,
       renameList,
       addItem,
+      renameItem,
       toggleItem,
       setListDeleted,
       setItemDeleted,
@@ -645,6 +673,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       createList,
       renameList,
       addItem,
+      renameItem,
       toggleItem,
       setListDeleted,
       setItemDeleted,
@@ -675,6 +704,9 @@ function send(op: WriteAction): Promise<Result> {
 
     case 'item/added':
       return addItemRequest(op.id, op.listId, op.title);
+
+    case 'item/renamed':
+      return renameItemRequest(op.itemId, op.title);
 
     case 'item/setDone':
       return setItemDone(op.itemId, op.doneAt !== null);

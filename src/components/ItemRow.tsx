@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { Item } from '../state/types';
 import { colors, radius, spacing } from '../theme';
@@ -8,11 +9,13 @@ type Props = {
   /** A `reader` still sees whether an item is done; they just cannot change it. */
   editable?: boolean;
   onToggle: () => void;
+  /** Absent for a `reader`, who may not rename an item. Called with the new title, untrimmed. */
+  onRename?: (title: string) => void;
   /** Absent for a `reader`, who may neither bin an item nor bring one back. */
   onSetDeleted?: (deleted: boolean) => void;
 };
 
-export function ItemRow({ item, editable = true, onToggle, onSetDeleted }: Props) {
+export function ItemRow({ item, editable = true, onToggle, onRename, onSetDeleted }: Props) {
   // `doneAt` records when the item was checked off; nothing here shows the time, only the fact.
   const done = item.doneAt !== null;
 
@@ -20,6 +23,63 @@ export function ItemRow({ item, editable = true, onToggle, onSetDeleted }: Props
   // database keeps it for thirty days — so it stays readable rather than being greyed into
   // illegibility, and the checkbox stops working because there is nothing to check off.
   const deleted = item.deletedAt !== null;
+
+  // The rename editor, in place of the row rather than in a bar at the top of the screen, so on a
+  // long list it opens where the user just tapped. The draft is seeded from the title when the editor
+  // opens and not after — like `AddBar`'s `initialValue`, a starting point rather than a controlled
+  // value, so a rename arriving from another device while this one is typing does not clobber the
+  // field. Row-local state, which a `FlatList` may discard if the row is scrolled far enough to be
+  // unmounted; accepted, as an open `AddBar` draft is.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const canSave = draft.trim().length > 0;
+
+  function openEditor() {
+    setDraft(item.title);
+    setEditing(true);
+  }
+
+  function save() {
+    if (!canSave) return;
+    // Unchanged is not a rename: nothing is queued, so nothing is sent.
+    if (draft.trim() !== item.title) onRename?.(draft);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <View style={styles.row}>
+        <TextInput
+          style={styles.input}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Item name"
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel="Item name"
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={save}
+          autoCorrect={false}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save"
+          accessibilityState={{ disabled: !canSave }}
+          disabled={!canSave}
+          onPress={save}
+          style={({ pressed }) => [styles.action, pressed && canSave && styles.rowPressed]}>
+          <Text style={[styles.actionText, !canSave && styles.actionTextDisabled]}>Save</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          onPress={() => setEditing(false)}
+          style={({ pressed }) => [styles.action, pressed && styles.rowPressed]}>
+          <Text style={styles.actionTextMuted}>Cancel</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.row, deleted && styles.rowDeleted]}>
@@ -45,6 +105,18 @@ export function ItemRow({ item, editable = true, onToggle, onSetDeleted }: Props
       </Pressable>
 
       {deleted ? <Text style={styles.tag}>Deleted</Text> : null}
+
+      {/* Not for a binned row, for the reason its checkbox is disabled: a rename would come straight
+          back `target_deleted`, and Restore is the one thing to offer it. */}
+      {onRename && !deleted ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Rename ${item.title}`}
+          onPress={openEditor}
+          style={({ pressed }) => [styles.action, pressed && styles.rowPressed]}>
+          <Text style={styles.actionText}>Rename</Text>
+        </Pressable>
+      ) : null}
 
       {onSetDeleted ? (
         <Pressable
@@ -84,6 +156,20 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.7,
   },
+  // Sized like `AddBar`'s field, and set in from the row's edge by the same margin the title has.
+  input: {
+    flex: 1,
+    height: 44,
+    marginVertical: spacing.sm,
+    marginLeft: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    color: colors.text,
+    fontSize: 16,
+  },
   tag: {
     fontSize: 12,
     fontWeight: '600',
@@ -97,6 +183,13 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 14,
     color: colors.accent,
+  },
+  actionTextDisabled: {
+    color: colors.accentDisabled,
+  },
+  actionTextMuted: {
+    fontSize: 14,
+    color: colors.textMuted,
   },
   checkbox: {
     width: 24,

@@ -23,6 +23,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     pending,
     blocked,
     addItem,
+    renameItem,
     toggleItem,
     renameList,
     setListDeleted,
@@ -145,6 +146,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
             item={item}
             editable={editable}
             onToggle={() => toggleItem(list.id, item.id)}
+            onRename={editable ? (title) => renameItem(list.id, item.id, title) : undefined}
             onSetDeleted={
               editable ? (deleted) => setItemDeleted(list.id, item.id, deleted) : undefined
             }

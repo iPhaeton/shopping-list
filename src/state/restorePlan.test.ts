@@ -62,6 +62,20 @@ describe('what has to come out of the bin', () => {
   it('ignores an item tombstone the blocked write was not about', () => {
     expect(restorePlan(listWith({ itemDeleted: true }), blockedOn(RENAME))).toEqual([]);
   });
+
+  /** An item rename names its item by `itemId`, like a toggle, and its list by `listId`. */
+  it('lifts the item when a rename of it was what was blocked', () => {
+    const renameMilk: WriteAction = {
+      type: 'item/renamed',
+      listId: 'l1',
+      itemId: 'i1',
+      title: 'Oat milk',
+    };
+
+    expect(restorePlan(listWith({ itemDeleted: true }), blockedOn(renameMilk))).toEqual([
+      { type: 'item/setDeleted', listId: 'l1', itemId: 'i1', deletedAt: null },
+    ]);
+  });
 });
 
 /**
