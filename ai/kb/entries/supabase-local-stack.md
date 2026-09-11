@@ -4,10 +4,10 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, README.md, .env.example]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example]
 last_verified: 2026-09-10
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && test -n "$(grep -rl "'.env', '.env.development', '.env.local', '.env.development.local'" node_modules/expo node_modules/@expo 2>/dev/null | head -1)"
-related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox]
+related: [otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
 
 **There are two Supabase environments since step 5**, and this entry used to open "There is no cloud
@@ -61,10 +61,18 @@ is accepted by the API and silently never arrives — same symptom, different ca
 once a verified sending domain lands (phase 2 of task 6, not yet done). Until then, README's "your
 real inbox" line means specifically the Resend account owner's inbox.
 
-**The cloud schema is kept current with `npx supabase db push`, and as of 2026-09-10 it is level —
-this entry used to say it was two migrations behind.** All four migrations report both a `local` and
-a `remote` timestamp: the first two landed 2026-09-03, and step 7's `20260907000000_list_sharing.sql`
-and step 8's `20260909000000_realtime.sql` both landed since. **Both worries this entry raised about
+**The cloud schema is kept current with `npx supabase db push`, and as of 2026-09-10 it is two
+migrations behind again.** Four of the six report both a `local` and a `remote` timestamp: the first
+two landed 2026-09-03, and step 7's `20260907000000_list_sharing.sql` and step 8's
+`20260909000000_realtime.sql` both landed since. Step 9's pair —
+`20260910000000_deletion.sql` and `20260910000001_purge_schedule.sql` — is local only, and pushing it
+is the user's to run. **The second of those is the one that may be refused**: `create extension
+pg_cron` is confirmed only against this Docker stack, which is exactly why the schedule is a separate
+file, and why the cost of a refusal is the schedule rather than the whole feature
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)). Know the shape of that failure before it
+happens: **an unapplied migration wedges every later `db push`**, because the CLI retries from the
+earliest unapplied file forward, so the next feature cannot ship until it is fixed or
+`npx supabase migration repair --status applied 20260910000001` is run. **Both worries this entry raised about
 that push turned out to be nothing, and each is worth knowing for the next one.** `create unique
 index on public.users (lower(email))` was expected to fail if production held two addresses differing
 only in case — it exists there now (`users_lower_idx`), so it did not. And the realtime migration

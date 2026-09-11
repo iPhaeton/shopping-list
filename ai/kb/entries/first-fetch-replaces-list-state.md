@@ -4,10 +4,10 @@ title: Hydration replaces list state, so nothing may write before status is 'rea
 type: gotcha
 status: current
 tags: [state, persistence, testing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
-last_verified: 2026-09-09
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
+last_verified: 2026-09-11
 verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'owed.current = false;' && grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'void refresh();' && ! grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'hydrate(' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox]
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone]
 ---
 
 `lists/loaded` **replaces** the whole array — it does not merge. It is used for the mount-time
@@ -70,6 +70,14 @@ consequences, both about this guard:
   documented guarded door; remembering a turned-away nudge is realtime's business. Nothing
   redelivers a nudge, so without this the app would be stalest exactly when it is busiest — somebody
   else editing while your own write is retrying.
+
+**Step 9 gave the flush loop a second reason to call `hydrate` directly, and made the *timing* of one
+load-bearing.** When a write comes back `target_deleted`, the loop awaits `hydrate()` **before** it
+announces anything, because the tombstone is somebody else's write and the decision about what to
+offer is taken from state. Announcing first reads the pre-delete view and silently discards the write
+([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)). It also added a third guard,
+`stuck`, beside `flushing` and `fetching`: the loop stops while a blocked write sits at the head of
+the queue.
 
 **The guard cannot be moved down into `hydrate`, however much it looks like it belongs there.** The
 flush loop's own rollback re-fetch — the one that repairs a `permanent` refusal — runs *with*

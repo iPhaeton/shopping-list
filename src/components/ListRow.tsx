@@ -1,13 +1,28 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { countDone } from '../state/listsReducer';
+import { countDone, liveItems } from '../state/listsReducer';
 import type { List } from '../state/types';
 import { colors, radius, spacing } from '../theme';
 
-export function ListRow({ list, onPress }: { list: List; onPress: () => void }) {
+export function ListRow({
+  list,
+  onPress,
+  onSetDeleted,
+}: {
+  list: List;
+  onPress: () => void;
+  /** Absent for anyone but an owner, who alone may bin a list or bring one back. */
+  onSetDeleted?: (deleted: boolean) => void;
+}) {
   const done = countDone(list);
-  const summary =
-    list.items.length === 0 ? 'No items yet' : `${done} of ${list.items.length} done`;
+
+  // `liveItems`, not `list.items`: a binned item is still a row on this list, and counting it would
+  // read "2 of 47 done" with 42 of them in the bin — right in every test that never deletes
+  // anything, and wrong in the app the moment somebody does.
+  const total = liveItems(list).length;
+  const summary = total === 0 ? 'No items yet' : `${done} of ${total} done`;
+
+  const deleted = list.deletedAt !== null;
 
   // Somebody else's list that you have been given access to. It deliberately does not say *how
   // widely* a list you own is shared: the `list_members` select policy shows you your own row only,
@@ -15,18 +30,31 @@ export function ListRow({ list, onPress }: { list: List; onPress: () => void }) 
   const shared = list.role !== 'owner';
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={shared ? `${list.name}, ${summary}, shared with you` : `${list.name}, ${summary}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <View style={styles.text}>
-        <Text style={styles.name}>{list.name}</Text>
-        <Text style={styles.summary}>{summary}</Text>
-        {shared ? <Text style={styles.summary}>Shared with you</Text> : null}
-      </View>
-      <Text style={styles.chevron}>›</Text>
-    </Pressable>
+    <View style={[styles.row, deleted && styles.rowDeleted]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={shared ? `${list.name}, ${summary}, shared with you` : `${list.name}, ${summary}`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.tap, pressed && styles.rowPressed]}>
+        <View style={styles.text}>
+          <Text style={styles.name}>{list.name}</Text>
+          <Text style={styles.summary}>{summary}</Text>
+          {shared ? <Text style={styles.summary}>Shared with you</Text> : null}
+          {deleted ? <Text style={styles.tag}>Deleted</Text> : null}
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </Pressable>
+
+      {onSetDeleted ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${deleted ? 'Restore' : 'Delete'} ${list.name}`}
+          onPress={() => onSetDeleted(!deleted)}
+          style={({ pressed }) => [styles.action, pressed && styles.rowPressed]}>
+          <Text style={styles.actionText}>{deleted ? 'Restore' : 'Delete'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -35,14 +63,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
+    paddingRight: spacing.lg,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  rowDeleted: {
+    backgroundColor: colors.background,
+  },
+  // The padding lives on the tappable half so the whole row stays a comfortable target.
+  tap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
   rowPressed: {
     opacity: 0.7,
+  },
+  tag: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  action: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  actionText: {
+    fontSize: 14,
+    color: colors.accent,
   },
   text: {
     flex: 1,

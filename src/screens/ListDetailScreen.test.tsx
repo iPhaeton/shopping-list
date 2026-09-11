@@ -2,7 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { fetchLists, insertItem, updateListName } from '../lib/listsApi';
+import {
+  addItem as addItemRequest,
+  fetchLists,
+  renameList,
+  setItemDeleted,
+  setListDeleted,
+} from '../lib/listsApi';
 import type { ListDetailScreenProps } from '../navigation/types';
 import type { List, Role } from '../state/types';
 import { ListsProvider, useLists } from '../state/ListsContext';
@@ -15,9 +21,11 @@ import { ListDetailScreen } from './ListDetailScreen';
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
-  insertItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
-  updateListName: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  renameList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  setListDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  setItemDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
@@ -71,7 +79,8 @@ const SHARED: List = {
   id: 'l1',
   name: 'Groceries',
   role: 'reader',
-  items: [{ id: 'i1', title: 'Milk', doneAt: null }],
+  deletedAt: null,
+  items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null }],
 };
 
 /**
@@ -124,7 +133,7 @@ beforeEach(async () => {
   jest.mocked(fetchLists).mockResolvedValue({ lists: [], error: null });
   navigation.setOptions.mockClear();
   navigation.navigate.mockClear();
-  jest.mocked(updateListName).mockClear();
+  jest.mocked(renameList).mockClear();
   // The provider queues writes on disk now; without this each test inherits the last one's outbox.
   await AsyncStorage.clear();
 });
@@ -197,7 +206,7 @@ it('toggles only the item that was pressed', async () => {
 /** With no signal the item is still added — it is queued, and the screen says so quietly. */
 it('keeps an item added offline and says it is waiting to sync', async () => {
   jest
-    .mocked(insertItem)
+    .mocked(addItemRequest)
     .mockResolvedValueOnce({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
 
   await renderScreen();
@@ -245,7 +254,7 @@ describe('a reader', () => {
 
   it('gets an empty state that does not ask them to add anything', async () => {
     jest.mocked(fetchLists).mockResolvedValue({
-      lists: [{ ...SHARED, role: 'reader', items: [] }],
+      lists: [{ ...SHARED, role: 'reader', deletedAt: null, items: [] }],
       error: null,
     });
 
@@ -319,7 +328,7 @@ describe('an owner', () => {
 
     expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
     expect(screen.queryByLabelText('List name')).not.toBeOnTheScreen();
-    expect(updateListName).toHaveBeenCalledWith('l1', 'Weekly shop');
+    expect(renameList).toHaveBeenCalledWith('l1', 'Weekly shop');
   });
 
   it('closes the rename bar again without renaming anything', async () => {
@@ -329,6 +338,161 @@ describe('an owner', () => {
     await fireEvent.press(screen.getByLabelText('Rename list'));
 
     expect(screen.queryByLabelText('List name')).not.toBeOnTheScreen();
-    expect(updateListName).not.toHaveBeenCalled();
+    expect(renameList).not.toHaveBeenCalled();
+  });
+});
+
+// --- The bin ------------------------------------------------------------------------------------
+
+const BINNED_AT = '2026-09-10T09:00:00.000Z';
+
+/** Renders a list holding one live item and one in the bin. */
+async function renderWithBin(role: Role = 'owner') {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [
+      {
+        ...SHARED,
+        role,
+        items: [
+          { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null },
+          { id: 'i2', title: 'Bread', doneAt: null, deletedAt: BINNED_AT },
+        ],
+      },
+    ],
+    error: null,
+  });
+
+  await render(
+    <ListsProvider userId="u1">
+      <Chrome listId="l1" />
+    </ListsProvider>
+  );
+
+  await screen.findByLabelText('Milk');
+}
+
+it('leaves deleted items off the list until they are asked for', async () => {
+  await renderWithBin();
+
+  expect(screen.queryByLabelText('Bread')).not.toBeOnTheScreen();
+  expect(screen.getByLabelText('Show 1 deleted')).not.toBeChecked();
+});
+
+it('reveals them behind the checkbox, with no second request', async () => {
+  await renderWithBin();
+  jest.mocked(fetchLists).mockClear();
+
+  await fireEvent.press(screen.getByLabelText('Show 1 deleted'));
+
+  expect(screen.getByLabelText('Show 1 deleted')).toBeChecked();
+  expect(screen.getByLabelText('Bread')).toBeOnTheScreen();
+  expect(fetchLists).not.toHaveBeenCalled();
+});
+
+it('does not offer the checkbox when nothing has been deleted', async () => {
+  await renderAs('writer');
+
+  expect(screen.queryByLabelText('Show 1 deleted')).not.toBeOnTheScreen();
+});
+
+it('sends an item to the bin and brings it back', async () => {
+  await renderWithBin('writer');
+
+  await fireEvent.press(screen.getByLabelText('Delete Milk'));
+  expect(setItemDeleted).toHaveBeenCalledWith('i1', true);
+
+  await fireEvent.press(screen.getByLabelText('Show 2 deleted'));
+  await fireEvent.press(screen.getByLabelText('Restore Bread'));
+  expect(setItemDeleted).toHaveBeenCalledWith('i2', false);
+});
+
+it('gives a reader no way to delete an item', async () => {
+  await renderWithBin('reader');
+
+  expect(screen.queryByLabelText('Delete Milk')).not.toBeOnTheScreen();
+});
+
+/** A binned item cannot be ticked: there is nothing live to check off. */
+it('will not let a deleted item be toggled', async () => {
+  await renderWithBin('writer');
+  await fireEvent.press(screen.getByLabelText('Show 1 deleted'));
+
+  expect(screen.getByLabelText('Bread')).toBeDisabled();
+});
+
+/**
+ * The count is a claim about what is on the list, and a binned item must not inflate it — nor
+ * silence the empty state once every live item is gone.
+ */
+it('says the list is empty when every live item has been deleted', async () => {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [
+      {
+        ...SHARED,
+        role: 'owner',
+        items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: BINNED_AT }],
+      },
+    ],
+    error: null,
+  });
+
+  await render(
+    <ListsProvider userId="u1">
+      <Chrome listId="l1" />
+    </ListsProvider>
+  );
+
+  expect(await screen.findByText('Nothing on this list')).toBeOnTheScreen();
+});
+
+describe('a list opened from the bin', () => {
+  async function renderBinnedList(role: Role = 'owner') {
+    jest.mocked(fetchLists).mockResolvedValue({
+      lists: [{ ...SHARED, role, deletedAt: BINNED_AT }],
+      error: null,
+    });
+
+    await render(
+      <ListsProvider userId="u1">
+        <Chrome listId="l1" />
+      </ListsProvider>
+    );
+
+    await screen.findByLabelText('Milk');
+  }
+
+  /** It opens and reads normally — it is a real list still — but nothing may write to it. */
+  it('takes away every control that would write to it', async () => {
+    await renderBinnedList();
+
+    expect(screen.queryByLabelText('Add an item')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Rename list')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Delete Milk')).not.toBeOnTheScreen();
+  });
+
+  /**
+   * Said out loud because the two tombstones are independent: restore a list you binned items
+   * inside, and you get it back missing them, with nothing otherwise to say where they went.
+   */
+  it('warns that restoring it will not bring back separately deleted items', async () => {
+    await renderBinnedList();
+
+    expect(
+      screen.getByText(/Restoring it brings back everything except the items you deleted separately/)
+    ).toBeOnTheScreen();
+  });
+
+  it('offers an owner a way out', async () => {
+    await renderBinnedList();
+
+    await fireEvent.press(screen.getByLabelText('Restore Groceries'));
+
+    expect(setListDeleted).toHaveBeenCalledWith('l1', false);
+  });
+
+  it('offers a writer none, since only an owner may restore a list', async () => {
+    await renderBinnedList('writer');
+
+    expect(screen.queryByLabelText('Restore Groceries')).not.toBeOnTheScreen();
   });
 });

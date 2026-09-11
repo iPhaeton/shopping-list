@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import { fetchLists, insertList } from '../lib/listsApi';
+import { fetchLists, insertList, setListDeleted } from '../lib/listsApi';
 import type { ListsScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
 import type { List } from '../state/types';
@@ -20,9 +20,11 @@ import { ListsScreen } from './ListsScreen';
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
-  insertItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
-  updateListName: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  renameList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  setListDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  setItemDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
@@ -152,8 +154,8 @@ it('says a write is waiting to sync instead of raising an error', async () => {
 it('marks a list somebody else shared, in the label as well as on screen', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [
-      { id: 'l1', name: 'Groceries', role: 'reader', items: [] },
-      { id: 'l2', name: 'Hardware', role: 'owner', items: [] },
+      { id: 'l1', name: 'Groceries', role: 'reader', deletedAt: null, items: [] },
+      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: null, items: [] },
     ],
     error: null,
   });
@@ -174,4 +176,98 @@ it('navigates to the list when a row is pressed', async () => {
   expect(navigation.navigate).toHaveBeenCalledWith('ListDetail', {
     listId: expect.any(String),
   });
+});
+
+// --- The bin ------------------------------------------------------------------------------------
+
+const BINNED_AT = '2026-09-10T09:00:00.000Z';
+
+/** One live list and one in the bin, both owned. */
+function withBin() {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [
+      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] },
+      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [] },
+    ],
+    error: null,
+  });
+}
+
+it('leaves deleted lists off the screen until they are asked for', async () => {
+  withBin();
+
+  await renderScreen();
+
+  expect(screen.getByText('Groceries')).toBeOnTheScreen();
+  expect(screen.queryByText('Hardware')).not.toBeOnTheScreen();
+});
+
+/**
+ * Deleted rows arrive in the same fetch as live ones, so this is instant: no spinner and no round
+ * trip. That is most of why the bin reads better than a separate screen would.
+ */
+it('reveals them behind the checkbox, with no second request', async () => {
+  withBin();
+
+  await renderScreen();
+  jest.mocked(fetchLists).mockClear();
+
+  const toggle = screen.getByLabelText('Show 1 deleted');
+  expect(toggle).not.toBeChecked();
+
+  await fireEvent.press(toggle);
+
+  expect(screen.getByLabelText('Show 1 deleted')).toBeChecked();
+  expect(screen.getByText('Hardware')).toBeOnTheScreen();
+  expect(screen.getByText('Deleted')).toBeOnTheScreen();
+  expect(fetchLists).not.toHaveBeenCalled();
+});
+
+/** A control that reveals nothing is noise, and there is nothing else in the app like it. */
+it('does not offer the checkbox when the bin is empty', async () => {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] }],
+    error: null,
+  });
+
+  await renderScreen();
+
+  expect(screen.queryByLabelText('Show 1 deleted')).not.toBeOnTheScreen();
+});
+
+it('sends a list to the bin and brings it back', async () => {
+  withBin();
+
+  await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Delete Groceries'));
+  expect(setListDeleted).toHaveBeenCalledWith('l1', true);
+
+  await fireEvent.press(screen.getByLabelText('Show 2 deleted'));
+  await fireEvent.press(screen.getByLabelText('Restore Hardware'));
+  expect(setListDeleted).toHaveBeenCalledWith('l2', false);
+});
+
+/** Roles decide which controls exist; the database still decides whether a write is allowed. */
+it('gives a non-owner no way to delete a list', async () => {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [{ id: 'l1', name: 'Groceries', role: 'writer', deletedAt: null, items: [] }],
+    error: null,
+  });
+
+  await renderScreen();
+
+  expect(screen.queryByLabelText('Delete Groceries')).not.toBeOnTheScreen();
+});
+
+/** The empty state is a claim about the account, and a binned list must not silence it. */
+it('still says the account has no lists when the only one is in the bin', async () => {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [{ id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [] }],
+    error: null,
+  });
+
+  await renderScreen();
+
+  expect(screen.getByText('No lists yet')).toBeOnTheScreen();
 });

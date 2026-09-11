@@ -4,19 +4,25 @@ title: The database stamps done_at — the client sends a boolean and holds no u
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-08
-verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && grep -q 'done_at = case when p_done then now() else null end' supabase/migrations/20260907000000_list_sharing.sql && grep -A30 'function public.set_item_done' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'if updated = 0 then' && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
-related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, supabase/migrations/20260910000000_deletion.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-10
+verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && D="$(grep -rl 'function public.set_item_done' supabase/migrations | sort | tail -1)" && grep -q 'done_at = case when p_done then now() else null end' "$D" && grep -A6 'create function public.set_item_done' "$D" | grep -q 'returns public.write_outcome' && grep -A50 'create function public.set_item_done' "$D" | grep -q "raise exception using errcode = '42501'" && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
+related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state, writes-can-land-on-a-tombstone, deletion-is-a-tombstone]
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
 [src/lib/listsApi.ts](../../../src/lib/listsApi.ts) calls it with `supabase.rpc`, and
-[the function](../../../supabase/migrations/20260907000000_list_sharing.sql) writes
+[the function](../../../supabase/migrations/20260910000000_deletion.sql) writes
 `done_at = case when p_done then now() else null end`. `revoke update on public.items from anon,
 authenticated` means there is no other way in: a direct `PATCH` of `done_at` — or of `title` —
-returns 403. **Step 7 replaced the function with `create or replace`, so it now lives in the sharing
-migration** rather than the step-3 one; read the newest definition, not the first.
+returns 403. **The function has been rewritten twice and lives in the newest migration that names
+it** — step 7's sharing migration, then step 9's deletion migration; this entry's `verify:` finds it
+by sorting the migrations rather than naming one, and so should you. Step 9 could not use
+`create or replace`: the return type changed from `void`, which that statement refuses, so the
+function is **dropped and recreated** — which takes its grants with it, hence the re-issued
+`revoke`/`grant` pair below it, and hence the `notify pgrst, 'reload schema'` ending the migration,
+because a signature change is exactly when PostgREST answers "could not find the function in the
+schema cache".
 
 **Decision: a device's clock does not get to say when an item was checked off.** `done_at` was
 minted on the device until a review asked what happens when a phone's clock is a year out. The row
@@ -52,12 +58,17 @@ zero rows, no error came back, and `resultFor` read that as `ok`. That could not
 survived three steps; with a `reader` it bites immediately, and silently, in the worst place: a
 queued toggle would come back `ok`, be dropped from the outbox as delivered, and sit on screen as a
 change the database never made. The function is `plpgsql` now, checks `row_count`, and raises `42501`
-when it updated nothing — PostgREST 403, which `verdictFor` already classifies `permanent`, so the
+when it genuinely refused — PostgREST 403, which `verdictFor` already classifies `permanent`, so the
 write is dropped loudly with a banner and a re-fetch
 ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). **The general rule: a definer RPC
-that returns void must raise on refusal, or the outbox reports a lie as delivered.** Zero rows is
-unambiguously a refusal only because nothing deletes items; if item deletion ever lands, this branch
-has to tell "gone" from "refused".
+that returns void must raise on refusal, or the outbox reports a lie as delivered.**
+
+**This entry used to add "zero rows is unambiguously a refusal only because nothing deletes items",
+and step 9 collected on it.** The function returns `public.write_outcome` rather than void now, and
+its zero-row branch splits three ways: row missing → `target_deleted`, caller not a writer →
+`raise 42501`, otherwise → `target_deleted`. The order is a security decision and the reasoning lives
+in [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md). Raising is still what a
+*refusal* does; what changed is that not every zero-row update is one.
 
 **Step 7's UI found the same bug one table over, arriving through PostgREST rather than through a
 function.** A `reader`'s plain `PATCH` of `lists.name` is filtered to zero rows and answers `204`
@@ -80,8 +91,12 @@ authorization picture.
 **What to do:** a new write to `items` is a function in the migration plus a `supabase.rpc` call,
 never a `.update()`. Argument keys must match the parameter names exactly (`p_item_id`, `p_done`):
 PostgREST resolves an RPC by argument name, so a typo comes back as "function not found" rather
-than as a bad argument.
+than as a bad argument. Step 9's `add_item` is the worked example — inserting an item is an RPC now
+too, for a reason of its own.
 
-The `verify:` command asserts all five halves — the client calls the RPC, the current definition
-stamps the time with `now()`, it still raises on a zero-row update, the update grant is still
-revoked, and `listsApi` has not grown a direct update of `items`.
+The `verify:` command resolves the newest migration defining `set_item_done` and asserts against
+*that*, which is the part the previous version got wrong: it named step 7's file, kept passing
+against a definition the database no longer had, and went green over prose that had stopped being
+true. It checks that the client calls the RPC, that the live definition stamps the time with `now()`,
+that it returns `public.write_outcome`, that it still raises `42501` somewhere in its body, that the
+update grant is still revoked, and that `listsApi` has not grown a direct update of `items`.

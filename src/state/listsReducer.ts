@@ -1,4 +1,4 @@
-import type { Action, List, State } from './types';
+import type { Action, Item, List, State } from './types';
 
 export const initialState: State = { lists: [] };
 
@@ -23,7 +23,7 @@ export function listsReducer(state: State, action: Action): State {
         return updateList(state, action.id, (list) => (list.name === name ? list : { ...list, name }));
       }
 
-      const list: List = { id: action.id, name, role: 'owner', items: [] };
+      const list: List = { id: action.id, name, role: 'owner', deletedAt: null, items: [] };
       return { ...state, lists: [...state.lists, list] };
     }
 
@@ -40,9 +40,15 @@ export function listsReducer(state: State, action: Action): State {
 
       return updateList(state, action.listId, (list) => {
         const item = list.items.find((candidate) => candidate.id === action.id);
-        if (!item) return { ...list, items: [...list.items, { id: action.id, title, doneAt: null }] };
+        if (!item) {
+          return {
+            ...list,
+            items: [...list.items, { id: action.id, title, doneAt: null, deletedAt: null }],
+          };
+        }
 
-        // Already here: leave `doneAt` alone, since somebody may have checked it off since.
+        // Already here: leave `doneAt` and `deletedAt` alone, since somebody may have checked it off
+        // or binned it since.
         if (item.title === title) return list;
         return {
           ...list,
@@ -65,6 +71,31 @@ export function listsReducer(state: State, action: Action): State {
           ),
         };
       });
+    }
+
+    case 'item/setDeleted': {
+      return updateList(state, action.listId, (list) => {
+        const item = list.items.find((candidate) => candidate.id === action.itemId);
+        if (!item || item.deletedAt === action.deletedAt) return list;
+
+        return {
+          ...list,
+          items: list.items.map((candidate) =>
+            candidate.id === action.itemId
+              ? { ...candidate, deletedAt: action.deletedAt }
+              : candidate
+          ),
+        };
+      });
+    }
+
+    case 'list/setDeleted': {
+      // Through `updateList` like every other change to a list, and deliberately not a `filter` on
+      // `state.lists`: a binned list stays in the array, where the bin can show it and a restore
+      // can find it.
+      return updateList(state, action.id, (list) =>
+        list.deletedAt === action.deletedAt ? list : { ...list, deletedAt: action.deletedAt }
+      );
     }
   }
 }
@@ -95,6 +126,24 @@ function updateList(state: State, listId: string, update: (list: List) => List):
   return { ...state, lists };
 }
 
+/**
+ * The rows a screen shows unless it has been asked for the bin as well.
+ *
+ * Everything that counts or renders has to go through one of these two. A tombstone reads exactly
+ * like a live row otherwise, so the mistake is invisible in any test that does not delete something
+ * first: a list quietly reads "2 of 47 done" with 42 of them in the bin, and "Nothing on this list"
+ * stops appearing once a list has ever held anything.
+ *
+ * Both return a new array, so a screen passing one to a `FlatList` should memoise it.
+ */
+export function liveItems(list: List): Item[] {
+  return list.items.filter((item) => item.deletedAt === null);
+}
+
+export function liveLists(lists: List[]): List[] {
+  return lists.filter((list) => list.deletedAt === null);
+}
+
 export function countDone(list: List): number {
-  return list.items.filter((item) => item.doneAt !== null).length;
+  return liveItems(list).filter((item) => item.doneAt !== null).length;
 }

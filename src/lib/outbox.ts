@@ -52,14 +52,40 @@ export function enqueue(ops: WriteAction[], op: WriteAction): WriteAction[] {
   return next;
 }
 
-/** Whether sending `op` makes `queued` pointless: the same absolute value, about the same thing. */
+/**
+ * Puts `op` at the **front**, for the one caller that needs to overtake what is already queued: a
+ * restore offered because the write at the head of the queue landed on something in the bin. That
+ * write is still queued and still first, so appending the restore would send it *after* the thing it
+ * was meant to unblock, and the same refusal would come back.
+ *
+ * Deliberately not folded into `enqueue` as a flag. Every ordinary write appends; this is the
+ * exception, and it should look like one at the call site.
+ */
+export function queueFirst(ops: WriteAction[], op: WriteAction): WriteAction[] {
+  return [op, ...ops.filter((candidate) => !supersedes(op, candidate))];
+}
+
+/**
+ * Whether sending `op` makes `queued` pointless: the same absolute value, about the same thing.
+ *
+ * **Note the `default`, which is why this one does not defend itself.** The other switches over
+ * `WriteAction` in this file and in the provider are exhaustive, so a new action breaks the build
+ * until every one of them has been considered. This arm silently answers "no" instead, so a new
+ * absolute-valued write coalesces only if someone remembers to add it here.
+ */
 function supersedes(op: WriteAction, queued: WriteAction): boolean {
   switch (op.type) {
     case 'item/setDone':
       return queued.type === 'item/setDone' && queued.itemId === op.itemId;
 
+    case 'item/setDeleted':
+      return queued.type === 'item/setDeleted' && queued.itemId === op.itemId;
+
     case 'list/renamed':
       return queued.type === 'list/renamed' && queued.id === op.id;
+
+    case 'list/setDeleted':
+      return queued.type === 'list/setDeleted' && queued.id === op.id;
 
     default:
       return false;
@@ -75,20 +101,33 @@ export function dropDependents(ops: WriteAction[], failed: WriteAction): WriteAc
   switch (failed.type) {
     case 'list/created':
       return ops.filter((op) => {
-        // Every other list insert stands; a rename names the list by `id`, everything else by
-        // `listId`. All of them are about a list the database says does not exist.
+        // Every other list insert stands; a rename and a delete both name the list by `id`,
+        // everything else by `listId`. All of them are about a list the database says does not
+        // exist. The two `id` cases have to be spelled out — leaving either to the final line is a
+        // type error, which is the union earning its keep.
         if (op.type === 'list/created') return true;
         if (op.type === 'list/renamed') return op.id !== failed.id;
+        if (op.type === 'list/setDeleted') return op.id !== failed.id;
         return op.listId !== failed.id;
       });
 
     case 'item/added':
-      return ops.filter((op) => op.type !== 'item/setDone' || op.itemId !== failed.id);
+      // Both of the item's own writes are stranded by a refused insert. Note that this arm is a
+      // filter predicate rather than a `switch`, so nothing here breaks the build when a new item
+      // action appears — it just silently keeps it.
+      return ops.filter(
+        (op) =>
+          (op.type !== 'item/setDone' || op.itemId !== failed.id) &&
+          (op.type !== 'item/setDeleted' || op.itemId !== failed.id)
+      );
 
-    // Neither strands anything: the list and the item both still exist, and the write that was
-    // refused was only ever about their contents.
+    // None of these strand anything: the list and the item both still exist, and the write that was
+    // refused was only ever about their contents. A refused *delete* leaves the row exactly as it
+    // was, so anything queued behind it is still perfectly sendable.
     case 'list/renamed':
+    case 'list/setDeleted':
     case 'item/setDone':
+    case 'item/setDeleted':
       return ops;
   }
 }

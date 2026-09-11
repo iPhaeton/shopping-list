@@ -4,10 +4,10 @@ title: Realtime is a nudge fanned out to each member's per-user inbox topic, ans
 type: decision
 status: current
 tags: [supabase, realtime, rls, security, state, architecture]
-sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx]
+sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx]
 last_verified: 2026-09-10
 verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }, () => onChange()" src/lib/listsChannel.ts && grep -q 'return subscribeToChanges(userId, refreshSoon, refreshSoon);' src/state/ListsContext.tsx
-related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, supabase-local-stack, scope-boundaries]
+related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, deletion-is-a-tombstone, supabase-local-stack, scope-boundaries]
 ---
 
 Step 8 made a change by one member reach every other member in about a second, with neither app
@@ -79,8 +79,19 @@ feature's braces, and it closes gaps this cannot.
   the `(user_id, created_at)` index the read path was built around. It is the one read in the system
   that does.
 
-**What it does not solve.** Deletion still does not exist, so a nudge can never mean "gone", and
-`set_item_done`'s "zero rows can only mean refused" reasoning is untouched. Last-write-wins is
+**Deletion arrived at step 9 and this design needed *nothing* — which is the strongest thing anyone
+has said about it, and this entry used to claim a nudge could never mean "gone".** A soft delete is an
+`UPDATE` ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), `notify_on_item_change` is already
+`after insert or update`, `notify_on_list_rename` is already `after update`, and `list_members` rows
+survive, so the fan-out finds everyone normally: **one nudge per member, for both an item and a list,
+with no migration, no trigger change and no client change** — measured. The `departed` special case
+stays what it was built for, un-sharing. One consequence to recognise rather than debug: the nightly
+purge hard-deletes lists, whose cascade to `list_members` fires that same `departed` arm, so members
+are nudged at 03:30 about a row they cannot see for a list that left their fetch 30 days ago.
+Harmless — sockets are almost certainly down, delivery is at-most-once, and the 300 ms debounce
+collapses the burst into one fetch.
+
+**What it does not solve.** Last-write-wins is
 unchanged — realtime makes it *visible*, not different. One gap survives by design: socket up, a
 single message dropped in flight, nothing else changes that list, app never backgrounded — the screen
 stays stale. Everything else is closed by a resubscribe or a foreground. Echo suppression

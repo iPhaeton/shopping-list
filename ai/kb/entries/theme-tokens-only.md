@@ -5,10 +5,17 @@ type: convention
 status: current
 tags: [styling, theme]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md]
-last_verified: 2026-08-30
+last_verified: 2026-09-11
 verify: test -z "$(grep -rn '#[0-9a-fA-F]\{3,8\}' src --include='*.ts' --include='*.tsx' | grep -v src/theme.ts)"
 related: [queries-go-through-a11y-labels]
+indexed: false
 ---
+
+> **Demoted from `INDEX.md` at step 9, still true.** Nothing has needed to retrieve it since step 2,
+> and it is the rarest kind of convention: one the audit enforces by itself. The `verify:` command
+> sweeps every file under `src/` for a hex literal on every run, so breaking this rule fails
+> `npm run kb:audit` whether or not anybody read the entry first. Reached from
+> [queries-go-through-a11y-labels](queries-go-through-a11y-labels.md).
 
 [src/theme.ts](../../../src/theme.ts) exports three token objects and is the only file in `src/`
 containing a color literal:

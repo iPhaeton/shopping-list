@@ -4,10 +4,10 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
-last_verified: 2026-09-09
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qE "removed'|deleted'" src/state/types.ts
-related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries]
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
+last_verified: 2026-09-10
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -c '^  | { type:' src/state/types.ts)" = 7
+related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries]
 ---
 
 Step 4 replaced "fire once, re-fetch if it fails" with a durable queue.
@@ -47,6 +47,19 @@ lets [replay](../../../src/state/replay.ts) fold pending ops back over fetched r
 itself, and what keeps one description of a write in one place. A new kind of write is therefore a
 new action plus a case in `send()`; `setItemDone`'s boolean is derived at send time from
 `action.doneAt !== null` rather than stored ([server-stamps-done-at](server-stamps-done-at.md)).
+
+**Step 9 took it to six** — `list/setDeleted` and `item/setDeleted`
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)) — and neither is a compensating action or an
+inverse: both carry an absolute `deletedAt`, so bin/restore/bin while offline coalesces into one
+request, and neither *removes* anything, from the outbox or from `state.lists`. It also added the
+outbox's one exception to appending, `queueFirst`, which puts a restore in front of the write it is
+meant to unblock; the reason that has to exist is in
+[writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md), along with the third answer a
+write can now get, which is neither `ok` nor a refusal. Two things in `outbox.ts` do **not** defend
+themselves against a seventh action and are worth reading before adding one: `supersedes` ends in a
+`default: return false`, so a new absolute-valued write silently stops coalescing, and
+`dropDependents`'s `item/added` arm is a filter predicate rather than a `switch`, so it silently
+keeps a new item action that a refused insert should have stranded.
 
 **Step 7 added the fourth member, `list/renamed`, and it is the worked example of doing that.** A
 rename carries an absolute value, so `enqueue` coalesces it per list id exactly as it does a toggle
@@ -89,7 +102,9 @@ refusal is one error rather than a burst of foreign-key complaints.
 **What carried over unchanged** from the superseded entry: writes carry absolute values rather than
 flips, so a retry or a coalesced toggle is exactly correct
 ([update-list-identity-preserving](update-list-identity-preserving.md)); there is still no
-`list/removed` or `item/removed` action and no inverse of any write; the queries still live in
+`list/removed` or `item/removed` action and no compensating action per write — deletion arrived as an
+ordinary absolute-valued field rather than as a removal, which is why that promise survived it; the
+queries still live in
 [listsApi](../../../src/lib/listsApi.ts) so
 [src/lib/supabase.ts](../../../src/lib/supabase.ts) stays the only importer of supabase-js and every
 list suite can mock a handful of plain functions
@@ -142,14 +157,26 @@ outbox already classifies. Dropping locally would discard a write that might sti
 a list is the same shape: the list leaves the fetch, `replay`'s `updateList` silently drops those ops
 from the *view*, and the ops themselves still flush and still earn one honest refusal.
 
-**Still not solved:** deletion, and conflict resolution beyond last-write-wins — realtime makes
-last-write-wins *visible* rather than different, and both mutating writes carry absolute values, so
-repeated or reordered delivery still converges. There is no sync engine (PowerSync is the answer if
-this ever needs real convergence) and no warning when signing out with writes still pending.
+**Still not solved:** conflict resolution beyond last-write-wins — realtime makes last-write-wins
+*visible* rather than different, and every mutating write carries an absolute value, so repeated or
+reordered delivery still converges. There is no sync engine (PowerSync is the answer if this ever
+needs real convergence), no happens-before, and no warning when signing out with writes still pending.
+
+**The error text a queued write shows is rewritten now, and only for these six.** `writeResult` in
+[listsApi](../../../src/lib/listsApi.ts) maps `42501` and `23514` to sentences, because an outbox
+failure reaches the red banner minutes or days after the tap that caused it and the database's own
+words are written for a log. The membership RPCs deliberately keep the raw message: they are answered
+while the user is still looking at the field they typed into, and `share_list`'s "no account with that
+email yet" is already the right sentence there.
 
 The `verify:` command asserts the shape rather than the plumbing: `ListsContext` is still the only
 file calling `useReducer`, **every dispatched write op is also enqueued** (the counts must match, so
 a new write that skips the outbox fails the check), both verdict branches are still in the loop, the
 `P0002` code-beats-status rule is still in `verdictFor`, no attempt cap has appeared, no connectivity
-library has been added, and no compensating remove/delete action has been introduced. The attempt-cap grep is a heuristic — it catches `attempt > 5` and
-`attempts >= MAX_ATTEMPTS` and would miss a cap spelled some other way.
+library has been added, no `…/removed` action exists, the reducer never filters a list out of
+`state.lists`, and `Action` still has exactly seven members — one hydration plus the six writes — so a
+seventh write cannot be added without this entry being revisited. **That last pair replaced a grep for
+`removed'|deleted'`, which was a false green waiting to happen**: it was case-sensitive, so step 9's
+`'item/setDeleted'` slipped past it on a capital D and the check would have gone on passing while the
+claim it protected stopped being true. The attempt-cap grep is a heuristic of the same kind — it
+catches `attempt > 5` and `attempts >= MAX_ATTEMPTS` and would miss a cap spelled some other way.

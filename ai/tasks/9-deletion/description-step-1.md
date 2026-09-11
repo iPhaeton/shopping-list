@@ -1,0 +1,1 @@
+Implement deletion according to the suggestion ai/suggestions/deletion.md

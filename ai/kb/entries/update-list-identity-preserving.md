@@ -4,10 +4,10 @@ title: Every write action is idempotent by id, and updateList returns the origin
 type: convention
 status: current
 tags: [state, reducer, immutability]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-09
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, 6ef87a2]
+last_verified: 2026-09-11
 verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && grep -q 'returns the same state object when the name is unchanged' src/state/listsReducer.test.ts && grep -q 'yields one row when a write the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'yields one item when an add the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'state.lists.some((candidate) => candidate.id === action.id)' src/state/listsReducer.ts && npx jest -t 'is a no-op|returns the same state object|yields one row|yields one item' --silent
-related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox]
+related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
 
 The private `updateList` helper in
@@ -33,6 +33,13 @@ invariant went from incidental to load-bearing and the reducer was hardened inst
 **This does not license caching the replayed view** — that rule has its own reason
 ([list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)) — and the fold itself
 stays one level up in `replay.ts`, where it can be pure.
+
+**Step 9's two `setDeleted` arms are the fourth and fifth cases, and `list/setDeleted` is the one to
+look at.** It goes through `updateList` like every other change to a list rather than filtering
+`state.lists` — a binned list stays in the array, where the bin can show it and a restore can find it
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)). Both arms return the same list object when
+`deletedAt` already holds the value being set, and `item/added` now leaves `deletedAt` alone as well
+as `doneAt` when the id is already there, for the same reason: somebody may have binned it since.
 
 **That second condition is load-bearing beyond rendering.** Writes carry absolute values rather than
 flips precisely so a repeat is harmless (see

@@ -14,8 +14,14 @@ import { inOrder } from './storageQueue';
  * `2` since sharing: `List` gained a `role`, and the `v` check below is what stops a blob written
  * before that from rendering lists with `role: undefined` and a UI left to guess. `outbox.ts`'s
  * version deliberately did *not* move with it — a mismatch there discards unsent writes.
+ *
+ * **`3` since deletion, and this one is not cosmetic.** `List` and `Item` gained `deletedAt`, which
+ * a v2 blob rehydrates as `undefined` — and `undefined !== null` is `true`, so every cached row
+ * would read as deleted and the first screen after an upgrade would be empty. That is the exact
+ * failure this check exists to prevent, and it costs one fetch. `outbox.ts` stays at `1` again: the
+ * new actions are additive and a v1 blob still replays.
  */
-const VERSION = 2;
+const VERSION = 3;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 

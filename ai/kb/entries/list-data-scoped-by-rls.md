@@ -4,10 +4,10 @@ title: Row-level security scopes list data to your membership row — the client
 type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence, sharing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-09
-verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && grep -q 'alter table public.list_members enable row level security;' supabase/migrations/20260907000000_list_sharing.sql && ! grep -rEA1 'create policy .* on public\.(lists|items)' supabase/migrations | grep -qi 'for delete' && ! grep -rqE "\.eq\('(owner_id|created_by|user_id)'" src && grep -q 'create policy "writers update items"' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql
-related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
+last_verified: 2026-09-10
+verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && grep -q 'alter table public.list_members enable row level security;' supabase/migrations/20260907000000_list_sharing.sql && ! grep -rEA1 'create policy .* on public\.(lists|items)' supabase/migrations | grep -qi 'for delete' && ! grep -rqE "\.eq\('(owner_id|created_by|user_id)'" src && grep -q 'create policy "writers update items"' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql && test "$(grep -c 'create policy' supabase/migrations/20260910000000_deletion.sql)" = 0
+related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, scope-boundaries, supabase-local-stack]
 ---
 
 **Since step 7 the predicate is membership, not ownership, and this entry used to say the opposite** —
@@ -41,11 +41,12 @@ cut:
   The two must change together ([server-stamps-done-at](server-stamps-done-at.md)).
 - `lists` — new in step 7: the table grant is revoked and `update (name)` re-granted to
   `authenticated`, so "owners rename lists" means *rename* and not "rewrite `created_by`". Unlike
-  `items`, the policy stays reachable, on one column — and since step 7's UI it is actually
-  exercised: `updateListName` is the app's one direct `PATCH` of a table. Note what a *reader*'s
-  rename does with that policy: it is filtered to zero rows, not refused, so the request has to ask
-  for the row back to notice
-  ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)).
+  `items`, the policy stays reachable, on one column. **Step 9 stopped exercising it, and this entry
+  used to call `updateListName` the app's one direct `PATCH` of a table.** Renaming goes through the
+  `rename_list` RPC now, so `listsApi` sends no `.update()` or `.delete()` at all and both the policy
+  and the column grant are, like `writers update items`, a rule the function repeats rather than a
+  path anything takes ([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)). Keep
+  them: they are what a future column grant would land on, and what the RPC must stay in step with.
 
 Before assuming a client write is allowed, read the grants as well as the policies
 ([supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)).
@@ -59,9 +60,21 @@ hears about a change.
 
 **There is now one `for delete` policy in the schema, and it is not on list data.** `owners remove
 members` deletes a **membership** row — un-sharing — and removes nobody's items. `lists` and `items`
-still have no delete policy at all and nothing in the app deletes anything. The old blanket check
+still have no delete policy at all. The old blanket check
 (`! grep -rqi 'for delete' supabase/migrations`) is what changed here, not the rule; the current one
 asserts the narrower and truer thing.
+
+**Deletion arrived in step 9 and this entry used to say nothing in the app deletes anything — that
+half is now false and the rest is untouched, which is the fact worth recording.** A delete stamps
+`deleted_at` and leaves the row ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), so **the
+deletion migration creates no policy at all** — the `verify:` command asserts that literally. Members
+must be able to *see* a tombstone to restore it, so the read policies are exactly as step 7 wrote
+them, and the one hard delete in the schema is `purge_deleted`, which runs as `postgres` and is out of
+reach of `anon` and `authenticated` alike. Two writes moved *off* direct table access in the same step
+(`add_item`, `rename_list`) for reasons that have nothing to do with authorisation, so the matrix
+above is unchanged — but where `set_item_done` was once the only function on list data repeating a
+policy's predicate in its body, there are now five (`set_item_done`, `set_item_deleted`,
+`set_list_deleted`, `add_item`, `rename_list`). Every one of them must move when a policy does.
 
 **Deleting an *account* no longer deletes their lists.** `created_by` is `on delete set null`, so a
 list other people are in survives its creator. Two consequences worth knowing before touching either:
@@ -90,5 +103,6 @@ does not merely block a write — it deletes it from that device, with one error
 **What to do:** keep authorisation in the migration and out of the app, and add nothing to a policy
 without reading the two entries linked above first. The `verify:` command asserts RLS on all three
 tables, that no delete policy has appeared on `lists` or `items` (in either the two-line or one-line
-form), that no client code filters by an ownership column, and that the `writers update items` policy
-and the single-column `lists` grant — both of which read as tidy-able — are still there.
+form), that no client code filters by an ownership column, that the `writers update items` policy and
+the single-column `lists` grant — both of which read as tidy-able — are still there, and that the
+deletion migration still creates no policy of its own.

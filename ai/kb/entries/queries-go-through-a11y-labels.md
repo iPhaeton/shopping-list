@@ -4,10 +4,10 @@ title: Interactive components are queried by a11y label; static copy is queried 
 type: convention
 status: current
 tags: [testing, accessibility, components]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, 6ef87a2]
-last_verified: 2026-09-08
-verify: for f in $(grep -rl '<Pressable' src --include='*.tsx' | grep -v '\.test\.'); do grep -q accessibilityRole "$f" && grep -q accessibilityLabel "$f" || exit 1; done; grep -q 'checked: done, disabled: !editable' src/components/ItemRow.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q 'Loading who has access' src/screens/SharingScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx && grep -q 'shared with you' src/components/ListRow.tsx
-related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, screens-take-navigation-props, writes-retry-from-an-outbox]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, 6ef87a2]
+last_verified: 2026-09-11
+verify: for f in $(grep -rl '<Pressable' src --include='*.tsx' | grep -v '\.test\.'); do grep -q accessibilityRole "$f" && grep -q accessibilityLabel "$f" || exit 1; done; grep -q 'checked: done, disabled: !editable' src/components/ItemRow.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q 'Loading who has access' src/screens/SharingScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx && grep -q 'shared with you' src/components/ListRow.tsx && grep -q 'Show 1 deleted' src/components/ShowDeletedToggle.tsx && grep -q 'Restore it and keep your change?' src/components/BlockedBanner.tsx && grep -q "'Restore' : 'Delete'" src/components/ItemRow.tsx && grep -q "'Restore' : 'Delete'" src/components/ListRow.tsx
+related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, screens-take-navigation-props, writes-retry-from-an-outbox, deletion-is-a-tombstone]
 ---
 
 Every **interactive** element is reached through its accessibility props, so those props are
@@ -25,6 +25,9 @@ load-bearing, not decoration:
 | [SharingScreen](../../../src/screens/SharingScreen.tsx) | invite input `"Email address"`, buttons `"Share"` and `` `Remove ${email}` `` with `accessibilityState={{ disabled }}`, spinner `"Loading who has access"` |
 | [ListDetailScreen](../../../src/screens/ListDetailScreen.tsx) rename bar | an `AddBar` with placeholder/label `"List name"` and button `"Save"` |
 | [ListsScreen](../../../src/screens/ListsScreen.tsx) loading spinner | the `ActivityIndicator` carries `accessibilityLabel="Loading your lists"` — an element with no text needs a label to be assertable at all |
+| [ShowDeletedToggle](../../../src/components/ShowDeletedToggle.tsx) | `accessibilityRole="checkbox"` with `{ checked }`; the label **is** the visible text and counts — `"Show 1 deleted"`, `"Show 2 deleted"` |
+| [BlockedBanner](../../../src/components/BlockedBanner.tsx) | `accessibilityRole="alert"` on the view, plus two buttons labelled `"Restore and keep my change"` and `"Discard my change"` — note the second's label is not its visible text, which reads just `Discard` |
+| the delete/restore action on a row | `` `${deleted ? 'Restore' : 'Delete'} ${item.title}` `` in `ItemRow`, the same over `list.name` in `ListRow` — so `"Delete Milk"` becomes `"Restore Milk"` when it is in the bin |
 
 **Why it matters:** `ListRow`'s label is *composed* — a test looking for the "Groceries" row asks for
 `"Groceries, 1 of 3 done"`, and for a list somebody shared with you,
@@ -71,6 +74,25 @@ raises, so the disabled control and the database's own refusal read as one rule 
 read-only line and `ListsContext`'s `You have read-only access to this list.` guard are the same
 pairing. Change one half and change the other.
 
+**Step 9 added four more load-bearing sentences and one label that changes with state.** The banner
+copy is asserted verbatim — `That list is in the bin. Restore it and keep your change?` and its item
+twin, plus the binned-list screen's `This list is in the bin. Restoring it brings back everything
+except the items you deleted separately…`, which exists because restoring a list does **not** restore
+its items ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)). Two conventions are worth copying
+from that work. `ShowDeletedToggle`'s label carries the **count**, which is the opposite of the resend
+button's fixed label above and is right for the same reason: here the number is the information, so a
+test asking for `"Show 1 deleted"` is asserting that exactly one thing is in the bin. And the
+delete/restore action flips its whole label rather than its state, so `queryByLabelText('Delete
+Milk')` returning nothing is a real assertion that the row is binned.
+
+**A disabled control can carry `disabled` on the `Pressable` without saying so in
+`accessibilityState`, and RNTL's `toBeDisabled()` still passes.** `ItemRow` keeps
+`accessibilityState={{ checked: done, disabled: !editable }}` while the Pressable is
+`disabled={!editable || deleted}` — a binned item's checkbox is genuinely untappable and the matcher
+reads the prop. Worth knowing before "fixing" the apparent mismatch: the state object is what a
+*reader*'s read-only case is asserted through, and widening it there would change what those tests
+mean.
+
 **In the browser, screen-level chrome appears twice.** React Navigation keeps the `Lists` screen
 mounted underneath `ListDetail`, so a Playwright run on the detail screen finds *two* sync banners in
 the DOM — only one of them visible. That is the navigator working, not a rendering bug: filter by
@@ -91,4 +113,5 @@ step 7's `HeaderButton` is ten lines identical to `SignOutButton`, and was left 
 the old check grepped `SignOutButton.tsx` by name and only the librarian may edit an entry. **That
 constraint is gone** — merging the two is now a free refactor as far as the audit is concerned. The
 copy pins beside the sweep are separate and stay: `ErrorBanner`'s alert role, both spinner labels,
-`SyncBanner`'s sentence, and `ListRow`'s shared suffix.
+`SyncBanner`'s sentence, `ListRow`'s shared suffix, the toggle's `Show 1 deleted`, the blocked
+banner's question, and the flipping `Restore`/`Delete` label on both row components.

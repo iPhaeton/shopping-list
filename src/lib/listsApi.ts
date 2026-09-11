@@ -8,7 +8,7 @@ import { supabase } from './supabase';
  * Errors are returned rather than thrown, matching `SessionContext`: the provider turns them into
  * something the screen can render.
  */
-export type Result = { error: string | null; verdict: Verdict };
+export type Result = { error: string | null; verdict: Verdict; outcome?: WriteOutcome };
 
 /**
  * How the outbox is meant to read a failure.
@@ -19,11 +19,28 @@ export type Result = { error: string | null; verdict: Verdict };
  */
 export type Verdict = 'ok' | 'applied' | 'retryable' | 'permanent';
 
+/**
+ * What a successful write says about its target, from the database's `write_outcome` enum.
+ *
+ * `target_deleted` is **not** a failure and must not be classified as one: the request was accepted,
+ * the caller was allowed to make it, and the write simply had nothing live to land on because
+ * somebody put the list or the item in the bin. It arrives alongside `verdict: 'ok'` for exactly
+ * that reason — the outbox is right to consider the request delivered, and it is the provider that
+ * decides whether to offer a restore, from the role it already holds.
+ */
+export type WriteOutcome = 'applied' | 'target_deleted';
+
 /** Structural, so this module stays the only one importing anything from supabase-js. */
 type Failure = { message: string; code?: string | null } | null;
 
-type ItemRow = { id: string; title: string; done_at: string | null; created_at: string };
-type ListRow = { id: string; name: string; items: ItemRow[] };
+type ItemRow = {
+  id: string;
+  title: string;
+  done_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+type ListRow = { id: string; name: string; deleted_at: string | null; items: ItemRow[] };
 type MembershipRow = { role: Role; lists: ListRow };
 type MemberRow = { user_id: string; email: string; role: Role };
 
@@ -46,11 +63,20 @@ export type Member = { userId: string; email: string; role: Role };
  *
  * Items are ordered here rather than with a second `referencedTable` spec, because that would be an
  * order two embeds deep and sorting a handful of items in JS is not worth the doubt.
+ *
+ * **Deleted rows come back too, and that is the point.** There is no `deleted_at is null` filter
+ * here and none in the policies: a member has to be able to see a tombstone to restore it, so the
+ * bin ships in the same round trip and ticking "Show deleted" is instant. The screens decide what to
+ * render, through `liveItems` / `liveLists`. The signal that this trade has stopped paying is a list
+ * whose deleted rows outnumber its live ones; the answer then is a second query behind the
+ * checkbox, not a policy change.
  */
 export async function fetchLists(): Promise<{ lists: List[] | null; error: string | null }> {
   const { data, error } = await supabase
     .from('list_members')
-    .select('role, lists!inner ( id, name, items ( id, title, done_at, created_at ) )')
+    .select(
+      'role, lists!inner ( id, name, deleted_at, items ( id, title, done_at, deleted_at, created_at ) )'
+    )
     .order('created_at');
 
   if (error) return { lists: null, error: error.message };
@@ -60,36 +86,72 @@ export async function fetchLists(): Promise<{ lists: List[] | null; error: strin
 /** `created_by` is deliberately not sent: it defaults to `auth.uid()` in the database. */
 export async function insertList(id: string, name: string): Promise<Result> {
   const { error, status } = await supabase.from('lists').insert({ id, name });
-  return resultFor(error, status);
-}
-
-export async function insertItem(id: string, listId: string, title: string): Promise<Result> {
-  const { error, status } = await supabase.from('items').insert({ id, list_id: listId, title });
-  return resultFor(error, status);
+  return writeResult(error, status);
 }
 
 /**
- * `.select()` is not decoration, and asking for the row back is the whole point of this function.
+ * An RPC rather than a table insert, and the reason is soft delete.
  *
- * Row-level security filters a refused rename down to *zero rows* rather than refusing it, and
- * PostgREST answers that with `204 No Content` and no error — measured against the local stack, as
- * a reader, on 2026-09-08. `resultFor` would read that as `ok`, the outbox would drop the write as
- * delivered, the new name would sit on screen looking saved, and the old one would come back at the
- * next fetch with nothing to explain it.
+ * The `writers add items` policy checks *membership*, and membership is completely intact after a
+ * list is binned — so a plain insert would be **accepted** into a deleted list. `add_item` is the
+ * only place that can see the tombstone and say so.
  *
- * Asking for the representation is what turns a silent no into a loud one — exactly what
- * `set_item_done`'s `raise` does one table over.
+ * Retrying is still safe: the function inserts `on conflict (id) do nothing` and reports `applied`
+ * either way, which replaces the SQLSTATE `23505` this used to lean on. (`insertList` still leans on
+ * it — creating a list cannot land on a deleted target, so it stays a plain insert.)
  */
-export async function updateListName(id: string, name: string): Promise<Result> {
-  const { data, error, status } = await supabase
-    .from('lists')
-    .update({ name })
-    .eq('id', id)
-    .select('id');
+export async function addItem(id: string, listId: string, title: string): Promise<Result> {
+  const { data, error, status } = await supabase.rpc('add_item', {
+    p_id: id,
+    p_list_id: listId,
+    p_title: title,
+  });
+  return writeResult(error, status, data);
+}
 
-  if (error) return resultFor(error, status);
-  if (data?.length) return { error: null, verdict: 'ok' };
-  return { error: 'You can no longer rename this list.', verdict: 'permanent' };
+/**
+ * Also an RPC now, and this one was owed regardless of deletion.
+ *
+ * It used to be the app's one direct `PATCH` of a table, with a `.select('id')` to notice that
+ * row-level security had filtered a refused rename to *zero rows* — which PostgREST answers as
+ * `204 No Content` and no error, indistinguishable from success. That worked, but zero rows could
+ * only ever produce one sentence, and it could not tell **deleted** from **demoted**. Nor could any
+ * amount of client code: RLS hides a list you were removed from exactly as thoroughly as one that is
+ * gone, so only a `security definer` function can see which happened.
+ */
+export async function renameList(id: string, name: string): Promise<Result> {
+  const { data, error, status } = await supabase.rpc('rename_list', {
+    p_list_id: id,
+    p_name: name,
+  });
+  return writeResult(error, status, data);
+}
+
+/**
+ * Putting a list or an item in the bin, and taking it back out.
+ *
+ * A boolean rather than two verbs, exactly like `set_item_done`: the value is absolute, so a retry
+ * is harmless and the outbox can replace a queued delete with a later restore and send one request.
+ * The database stamps `deleted_at` from its own clock and no client holds the privilege to write
+ * that column, which is what makes the purge's 30-day cutoff mean anything.
+ *
+ * Neither returns an outcome. Both raise `42501` when they change nothing, because "you may not do
+ * this" is the only way they can fail — a delete cannot itself land on a deleted target.
+ */
+export async function setListDeleted(listId: string, deleted: boolean): Promise<Result> {
+  const { error, status } = await supabase.rpc('set_list_deleted', {
+    p_list_id: listId,
+    p_deleted: deleted,
+  });
+  return writeResult(error, status);
+}
+
+export async function setItemDeleted(itemId: string, deleted: boolean): Promise<Result> {
+  const { error, status } = await supabase.rpc('set_item_deleted', {
+    p_item_id: itemId,
+    p_deleted: deleted,
+  });
+  return writeResult(error, status);
 }
 
 /**
@@ -101,11 +163,11 @@ export async function updateListName(id: string, name: string): Promise<Result> 
  * found" rather than as a bad argument.
  */
 export async function setItemDone(itemId: string, done: boolean): Promise<Result> {
-  const { error, status } = await supabase.rpc('set_item_done', {
+  const { data, error, status } = await supabase.rpc('set_item_done', {
     p_item_id: itemId,
     p_done: done,
   });
-  return resultFor(error, status);
+  return writeResult(error, status, data);
 }
 
 // --- Who else has access ---------------------------------------------------------------------
@@ -169,6 +231,48 @@ function resultFor(error: Failure, status: number): Result {
 }
 
 /**
+ * `resultFor` for the six writes that go through the outbox, which differ from the rest in two ways:
+ * they can report an outcome, and their failures reach a red banner minutes or days after the tap
+ * that caused them.
+ *
+ * **Only these are rephrased.** The membership RPCs keep the database's own words and must: they are
+ * answered while the user is still looking at the screen that caused them, and `share_list`'s "no
+ * account with that email yet" is already the right sentence at the right moment. Rewriting those
+ * would replace a specific, useful message with a vague one.
+ */
+function writeResult(error: Failure, status: number, data?: unknown): Result {
+  const result = resultFor(error, status);
+  if (error) return { ...result, error: humanize(error) };
+
+  // `target_deleted` rides along with `ok`, not as a failure: the request was accepted and the
+  // caller was allowed to make it — there was just nothing live left for it to land on.
+  return data === 'target_deleted' ? { ...result, outcome: 'target_deleted' } : result;
+}
+
+/**
+ * A sentence for the failures a person can actually cause, instead of the database's own words.
+ *
+ * The raw text is written for whoever is reading a log — *"not allowed to change this item"*,
+ * lowercase and unpunctuated — and until now it went straight to the red banner. Both codes below
+ * mean the same thing to the person holding the phone: a role that moved under their feet between
+ * making a change and the queue getting it sent.
+ */
+function humanize(error: NonNullable<Failure>): string {
+  switch (error.code) {
+    // Row-level security, or a definer function repeating a policy's predicate.
+    case '42501':
+      return 'You no longer have permission to make that change.';
+
+    // The only check constraint a queued write can reach is `length(trim(...)) > 0`.
+    case '23514':
+      return 'That change is no longer valid.';
+
+    default:
+      return error.message;
+  }
+}
+
+/**
  * Classified from the status and the SQLSTATE, never from the message text — those two are the
  * stable signals, and postgrest-js retries nothing but GET/HEAD/OPTIONS, so every write here gets
  * exactly one attempt unless the outbox gives it another.
@@ -203,14 +307,32 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
   return 'retryable';
 }
 
-/** Your role travels with the membership row; the list itself hangs off it. */
+/**
+ * Your role travels with the membership row; the list itself hangs off it.
+ *
+ * `?? null` on both timestamps rather than a bare read. A column missing from the select string
+ * arrives `undefined`, and `undefined !== null` is `true` everywhere downstream — so a typo in the
+ * embed above would silently render every row as deleted, which is the one failure the cache's
+ * version check cannot save anybody from.
+ */
 function toList(row: MembershipRow): List {
   const items = [...row.lists.items].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
-  return { id: row.lists.id, name: row.lists.name, role: row.role, items: items.map(toItem) };
+  return {
+    id: row.lists.id,
+    name: row.lists.name,
+    role: row.role,
+    deletedAt: row.lists.deleted_at ?? null,
+    items: items.map(toItem),
+  };
 }
 
 function toItem(row: ItemRow): Item {
-  return { id: row.id, title: row.title, doneAt: row.done_at };
+  return {
+    id: row.id,
+    title: row.title,
+    doneAt: row.done_at ?? null,
+    deletedAt: row.deleted_at ?? null,
+  };
 }
 
 function toMember(row: MemberRow): Member {

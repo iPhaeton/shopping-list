@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { WriteAction } from '../state/types';
-import { dropDependents, enqueue, loadOutbox, saveOutbox } from './outbox';
+import { dropDependents, enqueue, loadOutbox, queueFirst, saveOutbox } from './outbox';
 
 /**
  * The real AsyncStorage mock rather than a fake of this module's own storage: what is worth
@@ -140,4 +140,87 @@ it('quarantines an outbox written by a future version', async () => {
 
   expect(await loadOutbox(USER)).toEqual([]);
   expect(await AsyncStorage.getItem(`outbox:${USER}:broken`)).toBe(stored);
+});
+
+// --- The bin ------------------------------------------------------------------------------------
+
+const BIN_MILK: WriteAction = {
+  type: 'item/setDeleted',
+  listId: 'l1',
+  itemId: 'i1',
+  deletedAt: '2026-09-10T09:00:00.000Z',
+};
+
+const BIN_GROCERIES: WriteAction = {
+  type: 'list/setDeleted',
+  id: 'l1',
+  deletedAt: '2026-09-10T09:00:00.000Z',
+};
+
+/**
+ * Deleting and restoring carry an absolute value, exactly as a toggle does — so binning something,
+ * changing your mind and binning it again on a train is one request, not three.
+ */
+it('replaces a queued item delete with a later one for the same item', () => {
+  const restore: WriteAction = { ...BIN_MILK, deletedAt: null };
+
+  expect(enqueue(enqueue([ADD_MILK, BIN_MILK], restore), BIN_MILK)).toEqual([ADD_MILK, BIN_MILK]);
+});
+
+it('does not coalesce deletes of different items', () => {
+  const binBread: WriteAction = { ...BIN_MILK, itemId: 'i2' };
+
+  expect(enqueue([BIN_MILK], binBread)).toEqual([BIN_MILK, binBread]);
+});
+
+it('replaces a queued list delete with a later one for the same list', () => {
+  const restore: WriteAction = { ...BIN_GROCERIES, deletedAt: null };
+
+  expect(enqueue([BIN_GROCERIES], restore)).toEqual([restore]);
+});
+
+/** A delete and a toggle are different writes about the same item; only like coalesces with like. */
+it('does not let a delete replace a queued toggle of the same item', () => {
+  expect(enqueue([TICK_MILK], BIN_MILK)).toEqual([TICK_MILK, BIN_MILK]);
+});
+
+/**
+ * A list delete names its list `id` where an item action names it `listId`. Getting that wrong is a
+ * compile error rather than a silent miss, which is the whole reason the arm spells both out.
+ */
+it('drops a queued delete of a list the database refused', () => {
+  const ops = dropDependents([BIN_GROCERIES, ADD_MILK], CREATE_GROCERIES);
+
+  expect(ops).toEqual([]);
+});
+
+it('drops a queued delete of an item that was never inserted', () => {
+  const binOther: WriteAction = { ...BIN_MILK, itemId: 'i2' };
+
+  expect(dropDependents([BIN_MILK, binOther], ADD_MILK)).toEqual([binOther]);
+});
+
+/** A refused delete leaves the row exactly as it was, so nothing queued behind it is stranded. */
+it('leaves the queue alone when a delete is refused', () => {
+  expect(dropDependents([ADD_MILK, TICK_MILK], BIN_MILK)).toEqual([ADD_MILK, TICK_MILK]);
+  expect(dropDependents([ADD_MILK, TICK_MILK], BIN_GROCERIES)).toEqual([ADD_MILK, TICK_MILK]);
+});
+
+/**
+ * `queueFirst` exists for one caller: the restore offered when the write at the head of the queue
+ * landed on something in the bin. Appending it would send the blocked write first and earn the same
+ * refusal a second time.
+ */
+describe('queueFirst', () => {
+  it('puts the write at the front, ahead of what is already queued', () => {
+    const restore: WriteAction = { ...BIN_GROCERIES, deletedAt: null };
+
+    expect(queueFirst([ADD_MILK, TICK_MILK], restore)).toEqual([restore, ADD_MILK, TICK_MILK]);
+  });
+
+  it('still coalesces, so a restore does not race a delete of the same thing', () => {
+    const restore: WriteAction = { ...BIN_GROCERIES, deletedAt: null };
+
+    expect(queueFirst([BIN_GROCERIES, ADD_MILK], restore)).toEqual([restore, ADD_MILK]);
+  });
 });

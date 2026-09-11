@@ -15,16 +15,19 @@ import { newId } from '../lib/ids';
 import { readCachedLists, writeCachedLists } from '../lib/listCache';
 import { subscribeToChanges } from '../lib/listsChannel';
 import {
+  addItem as addItemRequest,
   fetchLists,
-  insertItem,
   insertList,
+  renameList as renameListRequest,
+  setItemDeleted as setItemDeletedRequest,
   setItemDone,
-  updateListName,
+  setListDeleted as setListDeletedRequest,
   type Result,
 } from '../lib/listsApi';
-import { dropDependents, enqueue, loadOutbox, saveOutbox } from '../lib/outbox';
+import { dropDependents, enqueue, loadOutbox, queueFirst, saveOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
 import { replay } from './replay';
+import { listIdOf, restorePlan, type Blocked } from './restorePlan';
 import { canEditItems, canManageList } from './roles';
 import type { List, WriteAction } from './types';
 
@@ -49,14 +52,30 @@ type ListsContextValue = {
   error: string | null;
   /** Writes the database has not acknowledged yet. `0` means everything is saved. */
   pending: number;
+  /**
+   * A queued write that landed on something in the bin, waiting for the user to say what to do.
+   *
+   * Distinct from `error` because nothing went wrong and nothing has been thrown away: the write is
+   * still at the head of the outbox, still on disk, and either `restoreBlocked` or `discardBlocked`
+   * will move it. The flush loop is stopped while this is set.
+   */
+  blocked: Blocked | null;
   /** Returns the id of the new list, or null when `name` was blank. */
   createList: (name: string) => string | null;
   renameList: (listId: string, name: string) => void;
   addItem: (listId: string, title: string) => void;
   toggleItem: (listId: string, itemId: string) => void;
+  setListDeleted: (listId: string, deleted: boolean) => void;
+  setItemDeleted: (listId: string, itemId: string, deleted: boolean) => void;
+  /** Lifts every tombstone in the blocked write's way, then lets it through. */
+  restoreBlocked: () => void;
+  /** Gives up on the blocked write and drops it. */
+  discardBlocked: () => void;
   /** Server truth again, on demand. A read, so it is safe to call at any time after mount. */
   refresh: () => Promise<void>;
 };
+
+export type { Blocked } from './restorePlan';
 
 const ListsContext = createContext<ListsContextValue | null>(null);
 
@@ -80,6 +99,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   const [status, setStatus] = useState<'loading' | 'ready'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
+  const [blocked, setBlocked] = useState<Blocked | null>(null);
 
   // The outbox in memory, and the flush loop's own bookkeeping. Refs rather than state because the
   // loop reads them between awaits and has to see what was enqueued while it was waiting.
@@ -89,6 +109,11 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attempt = useRef(0);
   const live = useRef(true);
+
+  // The mirror of `blocked` that the loop can read between awaits. The loop stops while it is set —
+  // the write it is about is still the head of the queue, and re-sending it would only earn the same
+  // answer — so this is a guard beside `flushing`/`fetching` rather than a piece of screen state.
+  const stuck = useRef(false);
 
   // Realtime's two. `nudge` is the debounce timer collapsing a burst of somebody else's writes;
   // `owed` is a nudge the guards turned away, remembered so it can be honoured later.
@@ -166,14 +191,44 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
    */
   const flush = useCallback(
     async function run(): Promise<void> {
-      if (flushing.current || fetching.current) return;
+      if (flushing.current || fetching.current || stuck.current) return;
       flushing.current = true;
 
       try {
         while (live.current && queue.current.length > 0) {
           const op = queue.current[0];
-          const { error: message, verdict } = await send(op);
+          const { error: message, verdict, outcome } = await send(op);
           if (!live.current) return;
+
+          // The write was accepted and the caller was allowed to make it — there was just nothing
+          // live left for it to land on, because somebody put the list or the item in the bin.
+          //
+          // **Nothing is removed from the queue here, and that is the whole design.** Treating this
+          // like a refusal was the first attempt and it is wrong three ways over: `dropDependents`
+          // would throw away the tick queued behind an add, so "keep my change" would restore the
+          // item unticked; the op would exist only in React state, so a reload before the user
+          // answered would lose it; and the loop would carry on to the next write on the same list,
+          // overwrite this prompt, and leave a restore queued *behind* a write it was meant to
+          // unblock. So: leave it at the head, persist nothing, stop, and ask.
+          if (verdict === 'ok' && outcome === 'target_deleted') {
+            stuck.current = true;
+            attempt.current = 0;
+            setError(null);
+
+            // **The fetch comes first, and the order is load-bearing.** The tombstone is somebody
+            // else's write, so this device has never seen it; `restorePlan` reading the pre-delete
+            // view would find nothing in the bin, conclude there was nothing to offer, and *discard
+            // the write* — silently, which is exactly what happened in the browser before this was
+            // reordered. Announce the block only once state can answer the question.
+            //
+            // The op stays queued throughout, so `replay` keeps the optimistic row on screen where
+            // it belongs: the write is pending, not refused.
+            await hydrate();
+            if (!live.current) return;
+
+            setBlocked({ op, listId: listIdOf(op) });
+            return;
+          }
 
           if (verdict === 'retryable') {
             if (retry.current) return;
@@ -446,6 +501,122 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     [state.lists, enqueueOp]
   );
 
+  /**
+   * Putting a list in the bin, and taking it back out. Owners only, matching `set_list_deleted`.
+   *
+   * Like every other write here the value is absolute and the timestamp is a placeholder for the
+   * optimistic row: the database stamps the real one, and the next hydration replaces this. That
+   * matters more than it does for `doneAt`, because the stored instant is what the nightly purge
+   * measures its thirty days against.
+   */
+  const setListDeleted = useCallback(
+    (listId: string, deleted: boolean) => {
+      const list = state.lists.find((candidate) => candidate.id === listId);
+      if (!list) return;
+      if (!canManageList(list.role)) {
+        setError('Only an owner can delete or restore this list.');
+        return;
+      }
+
+      const op: WriteAction = {
+        type: 'list/setDeleted',
+        id: listId,
+        deletedAt: deleted ? new Date().toISOString() : null,
+      };
+      dispatch(op);
+      void enqueueOp(op);
+    },
+    [state.lists, enqueueOp]
+  );
+
+  /** The same one rung down: whoever may add an item may bin one, and may bring it back. */
+  const setItemDeleted = useCallback(
+    (listId: string, itemId: string, deleted: boolean) => {
+      const list = state.lists.find((candidate) => candidate.id === listId);
+      const item = list?.items.find((candidate) => candidate.id === itemId);
+      if (!list || !item) return;
+
+      if (!canEditItems(list.role)) {
+        setError('You have read-only access to this list.');
+        return;
+      }
+
+      const op: WriteAction = {
+        type: 'item/setDeleted',
+        listId,
+        itemId,
+        deletedAt: deleted ? new Date().toISOString() : null,
+      };
+      dispatch(op);
+      void enqueueOp(op);
+    },
+    [state.lists, enqueueOp]
+  );
+
+  /**
+   * "Restore it and keep my change."
+   *
+   * Every tombstone between the user and their write is lifted, not just the first one: an item
+   * binned inside a binned list needs both, or the write is blocked again by the item the moment the
+   * list comes back — and the user, having already said yes once, would be asked again.
+   *
+   * The restores go to the **front** of the queue. The blocked write is still queued and still
+   * first, so appending them would send it before the thing meant to unblock it and earn the same
+   * answer a second time.
+   */
+  const discardBlocked = useCallback(() => {
+    if (!blocked) return;
+
+    // By identity, matching the flush loop: whatever is at the head is the op this prompt is about.
+    queue.current = queue.current.filter((candidate) => candidate !== blocked.op);
+    stuck.current = false;
+    setBlocked(null);
+    void persist().then(async () => {
+      // The write is never happening, so the screen has to stop showing it. **Awaited**, not fired
+      // off: `hydrate` holds `fetching` for its duration and `flush` refuses to run alongside a
+      // fetch, so an un-awaited read here would make the flush below a no-op and strand whatever
+      // was queued behind the write just discarded.
+      await hydrate();
+      return flush();
+    });
+  }, [blocked, persist, hydrate, flush]);
+
+  const restoreBlocked = useCallback(() => {
+    if (!blocked) return;
+
+    const restores = restorePlan(state.lists, blocked);
+    if (restores.length === 0) {
+      discardBlocked();
+      return;
+    }
+
+    for (const restore of restores) {
+      dispatch(restore);
+      queue.current = queueFirst(queue.current, restore);
+    }
+
+    stuck.current = false;
+    setBlocked(null);
+    void persist().then(() => flush());
+  }, [blocked, state.lists, persist, flush, discardBlocked]);
+
+  /**
+   * A blocked write nobody on this account may unblock is dropped rather than left to sit.
+   *
+   * It has to happen here rather than in the banner, which could only decline to render: the write
+   * is still the head of the outbox and the flush loop is stopped while it is, so a prompt that is
+   * merely invisible would stall every write behind it. This is the writer's half of the brief —
+   * their write to a list an owner binned just drops — and it is also what stops the prompt looping
+   * when a restore is itself refused, because the fetch that follows the refusal carries the role
+   * that refused it.
+   */
+  useEffect(() => {
+    if (!blocked) return;
+    if (restorePlan(state.lists, blocked).length > 0) return;
+
+    discardBlocked();
+  }, [blocked, state.lists, discardBlocked]);
+
   const value = useMemo(
     () => ({
       lists: state.lists,
@@ -453,10 +624,15 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       status,
       error,
       pending,
+      blocked,
       createList,
       renameList,
       addItem,
       toggleItem,
+      setListDeleted,
+      setItemDeleted,
+      restoreBlocked,
+      discardBlocked,
       refresh,
     }),
     [
@@ -465,10 +641,15 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       status,
       error,
       pending,
+      blocked,
       createList,
       renameList,
       addItem,
       toggleItem,
+      setListDeleted,
+      setItemDeleted,
+      restoreBlocked,
+      discardBlocked,
       refresh,
     ]
   );
@@ -487,13 +668,21 @@ function send(op: WriteAction): Promise<Result> {
       return insertList(op.id, op.name);
 
     case 'list/renamed':
-      return updateListName(op.id, op.name);
+      return renameListRequest(op.id, op.name);
+
+    case 'list/setDeleted':
+      return setListDeletedRequest(op.id, op.deletedAt !== null);
 
     case 'item/added':
-      return insertItem(op.id, op.listId, op.title);
+      return addItemRequest(op.id, op.listId, op.title);
 
     case 'item/setDone':
       return setItemDone(op.itemId, op.doneAt !== null);
+
+    // The boolean is derived at send time, exactly as `doneAt` is: what is queued is the value the
+    // row should have, so a coalesced delete-then-restore sends one request saying "not deleted".
+    case 'item/setDeleted':
+      return setItemDeletedRequest(op.itemId, op.deletedAt !== null);
   }
 }
 

@@ -4,10 +4,10 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-09
-verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 2;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
-related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, update-list-identity-preserving, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack]
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-10
+verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 3;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
+related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, update-list-identity-preserving, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack]
 ---
 
 [src/lib/listCache.ts](../../../src/lib/listCache.ts) keeps the last known rows under
@@ -60,6 +60,16 @@ migration instead if it ever comes to that. Step 7's sharing UI is the worked ex
 bumping either: it added a fourth `WriteAction` (`list/renamed`) and no field on `List`, so a cached
 v2 blob is still exactly right and a queued v1 op is still replayable.
 
+**The cache version is `3` since step 9, and it is the worked example of a bump that was not
+optional.** `List` and `Item` both gained `deletedAt`
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), which a v2 blob rehydrates as `undefined` —
+and `undefined !== null` is **`true`**, so every cached row would read as deleted and the first screen
+after the upgrade would be empty. Silent, total, and repaired only by a fetch nobody knew to make.
+Note where else that same comparison bites, since the version check cannot help there: `toList` /
+`toItem` in [listsApi](../../../src/lib/listsApi.ts) coalesce both timestamps with `?? null`, because
+a column left out of the `select` string arrives `undefined` too. `outbox.ts` stayed at `1` again —
+two more actions are additive and a v1 blob still replays.
+
 The `verify:` command asserts all of it: the acknowledged-rows effect still exists, `refresh` still
-caches the fetched array, nothing caches a `replay(...)` result, and the two versions are still `2`
+caches the fetched array, nothing caches a `replay(...)` result, and the two versions are still `3`
 and `1` — a "tidy-up" that syncs them fails the check.

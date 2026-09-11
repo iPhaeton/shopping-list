@@ -4,10 +4,10 @@ title: Row-level security refuses a client UPDATE or DELETE with zero rows, whic
 type: gotcha
 status: current
 tags: [supabase, postgrest, rls, persistence, offline, security]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts]
-last_verified: 2026-09-08
-verify: test "$(grep -c '\.update(\|\.delete(' src/lib/listsApi.ts)" = "$(grep -A4 '\.update(\|\.delete(' src/lib/listsApi.ts | grep -c '\.select(')" && grep -A12 'export async function updateListName' src/lib/listsApi.ts | grep -q "verdict: 'permanent'" && grep -q "if (!error) return { error: null, verdict: 'ok' };" src/lib/listsApi.ts
-related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-local-stack]
+sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts]
+last_verified: 2026-09-10
+verify: test "$(grep -c '\.update(\|\.delete(' src/lib/listsApi.ts)" = "$(grep -A4 '\.update(\|\.delete(' src/lib/listsApi.ts | grep -c '\.select(')" && grep -q "if (!error) return { error: null, verdict: 'ok' };" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts
+related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, writes-can-land-on-a-tombstone, supabase-local-stack]
 ---
 
 A policy does not *reject* a client `UPDATE` or `DELETE` — it **filters it to zero rows**. Over
@@ -30,10 +30,20 @@ the next fetch with nothing to explain it. This is the same failure
 table over by a different route — that entry's rule ("a new write path must fail loudly or not at
 all") has a second instance, and this one fails *quietly by default*.
 
-**The fix is to ask for a representation and treat zero rows as a refusal.** `updateListName` does
-`.update({ name }).eq('id', id).select('id')` and returns `verdict: 'permanent'` with its own message
-when `data` comes back empty. The `.select()` is not decoration and is not a projection nicety; it is
-the only thing that turns a silent no into a loud one.
+**The fix is to ask for a representation and treat zero rows as a refusal.** The worked example was
+`updateListName`: `.update({ name }).eq('id', id).select('id')`, returning `verdict: 'permanent'` with
+its own message when `data` came back empty. The `.select()` is not decoration and is not a projection
+nicety; it is the only thing that turns a silent no into a loud one.
+
+**Step 9 removed the last thing this rule applied to, and the rule is why.** `updateListName` became
+the `rename_list` RPC, so `listsApi` now holds **no direct `.update()` or `.delete()` at all** —
+every write is an RPC that raises. The `.select()` trick worked, but it could only ever produce one
+sentence: zero rows cannot tell **deleted** from **demoted**, and no amount of client code can, because
+RLS hides a list you were removed from exactly as thoroughly as one that is gone. Only a
+`security definer` function sees the difference
+([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)). So read this entry as a rule
+with nothing currently under it rather than as history: the next `.update()` or `.delete()` anyone adds
+falls straight into the `204` trap, and the `verify:` command's pairing sweep is what catches it.
 
 **`select=` in the query string alone does not do it — `Prefer: return=representation` is what
 returns rows.** This cost a cycle in step 2: a hand-rolled `curl` PATCH carrying `select=id` and no
@@ -54,6 +64,6 @@ looks like from the client.
 **What to do:** any `.update()` or `.delete()` the client sends asks for the row back and checks what
 came back; any new database *function* raises rather than returning void. The `verify:` command
 asserts the invariant across the whole module — every `.update(`/`.delete(` in `listsApi` is followed
-within four lines by a `.select(`, so a new one that skips it fails the check — plus that
-`updateListName` still calls an empty result `permanent`, and that `resultFor` still reads a missing
-error as `ok`, which is what makes all of this necessary.
+within four lines by a `.select(`, which currently holds vacuously at zero of each and stops holding
+the moment one is added — plus that `rename_list` is still an RPC rather than back to a `PATCH`, and
+that `resultFor` still reads a missing error as `ok`, which is what makes all of this necessary.

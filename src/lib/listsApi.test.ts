@@ -1,10 +1,14 @@
 import {
+  addItem,
   fetchLists,
   fetchMembers,
   removeMember,
+  renameList,
+  setItemDeleted,
+  setItemDone,
+  setListDeleted,
   setMemberRole,
   shareList,
-  updateListName,
 } from './listsApi';
 import { supabase } from './supabase';
 
@@ -30,16 +34,11 @@ function respondWith(response: Response) {
   return { from, select, order };
 }
 
-/** The other builder this module uses: `.from(...).update(...).eq(...).select(...)`. */
-function respondToUpdateWith(response: Response) {
-  const select = jest.fn().mockResolvedValue(response);
-  const eq = jest.fn(() => ({ select }));
-  const update = jest.fn(() => ({ eq }));
-  const from = jest.fn(() => ({ update }));
-  jest.mocked(supabase.from).mockImplementation(from as unknown as typeof supabase.from);
-  return { from, update, eq, select };
-}
-
+/**
+ * There is no `.from(...).update(...)` stub any more, and its absence is the fact: `updateListName`
+ * was the app's last direct write to a table, and it became the `rename_list` RPC. Everything that
+ * changes a row now goes through the one stub below.
+ */
 function respondToRpcWith(response: Response) {
   const rpc = jest.fn().mockResolvedValue(response);
   jest.mocked(supabase.rpc).mockImplementation(rpc as unknown as typeof supabase.rpc);
@@ -77,8 +76,8 @@ it('carries the role from the membership row onto the list', async () => {
   const { lists } = await fetchLists();
 
   expect(lists).toEqual([
-    { id: 'l1', name: 'Groceries', role: 'owner', items: [] },
-    { id: 'l2', name: 'Hardware', role: 'reader', items: [] },
+    { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] },
+    { id: 'l2', name: 'Hardware', role: 'reader', deletedAt: null, items: [] },
   ]);
 });
 
@@ -91,8 +90,8 @@ it('sorts items by when they were created, whatever order the embed returned the
   const { lists } = await fetchLists();
 
   expect(lists?.[0].items).toEqual([
-    { id: 'i1', title: 'Milk', doneAt: '2026-09-03T09:00:00Z' },
-    { id: 'i2', title: 'Nails', doneAt: null },
+    { id: 'i1', title: 'Milk', doneAt: '2026-09-03T09:00:00Z', deletedAt: null },
+    { id: 'i2', title: 'Nails', doneAt: null, deletedAt: null },
   ]);
 });
 
@@ -102,41 +101,124 @@ it('returns the error rather than throwing it', async () => {
   expect(await fetchLists()).toEqual({ lists: null, error: 'JWT expired' });
 });
 
-// --- Renaming ---------------------------------------------------------------------------------
+/**
+ * The bin travels in the same round trip as everything else — there is no `deleted_at is null`
+ * filter here or in the policies, because a member has to see a tombstone to restore it.
+ *
+ * Asserted at **both** embed levels deliberately. Drop `deleted_at` from either half of the select
+ * string and the column arrives `undefined`, which the `?? null` in `toItem`/`toList` quietly turns
+ * into "not deleted" — a mapping bug that no `toEqual` would catch, since `toEqual` ignores
+ * `undefined` in the first place.
+ */
+it('carries the tombstone on a list and on an item', async () => {
+  const { select } = respondWith({
+    data: [
+      {
+        role: 'owner',
+        lists: {
+          id: 'l1',
+          name: 'Groceries',
+          deleted_at: '2026-09-10T08:00:00Z',
+          items: [{ ...MILK, deleted_at: '2026-09-09T07:00:00Z' }],
+        },
+      },
+    ],
+    error: null,
+  });
 
-describe('updateListName', () => {
-  it('asks for the row back rather than firing and forgetting', async () => {
-    const { from, update, eq, select } = respondToUpdateWith({
-      data: [{ id: 'l1' }],
-      error: null,
-      status: 200,
+  const { lists } = await fetchLists();
+
+  expect(select).toHaveBeenCalledWith(expect.stringContaining('name, deleted_at'));
+  expect(select).toHaveBeenCalledWith(expect.stringContaining('done_at, deleted_at'));
+  expect(lists?.[0].deletedAt).toBe('2026-09-10T08:00:00Z');
+  expect(lists?.[0].items[0].deletedAt).toBe('2026-09-09T07:00:00Z');
+});
+
+// --- The writes that can land on something in the bin -----------------------------------------
+
+/**
+ * These four moved off the tables and onto `security definer` functions when deletion arrived, so
+ * what is worth asserting moved with them: the argument *names*, because PostgREST resolves an RPC
+ * by name and a typo comes back as "function not found" rather than as a bad argument.
+ *
+ * `renameList` used to be the app's one direct `PATCH`, guarded by a `.select('id')` because
+ * row-level security filters a refused rename to zero rows and PostgREST answers that with 204 and
+ * no error. That guard is gone because the write is gone: the function raises instead, and it can
+ * also say the thing zero rows never could — whether the list was **deleted** or the caller was
+ * **demoted**.
+ */
+describe('the writes that go through the outbox', () => {
+  it('renames through the RPC, by argument name', async () => {
+    const rpc = respondToRpcWith({ data: 'applied', error: null, status: 200 });
+
+    expect(await renameList('l1', 'Weekly shop')).toEqual({ error: null, verdict: 'ok' });
+    expect(rpc).toHaveBeenCalledWith('rename_list', { p_list_id: 'l1', p_name: 'Weekly shop' });
+  });
+
+  it('adds an item through the RPC, by argument name', async () => {
+    const rpc = respondToRpcWith({ data: 'applied', error: null, status: 200 });
+
+    expect(await addItem('i1', 'l1', 'Milk')).toEqual({ error: null, verdict: 'ok' });
+    expect(rpc).toHaveBeenCalledWith('add_item', {
+      p_id: 'i1',
+      p_list_id: 'l1',
+      p_title: 'Milk',
     });
+  });
 
-    expect(await updateListName('l1', 'Weekly shop')).toEqual({ error: null, verdict: 'ok' });
-    expect(from).toHaveBeenCalledWith('lists');
-    expect(update).toHaveBeenCalledWith({ name: 'Weekly shop' });
-    expect(eq).toHaveBeenCalledWith('id', 'l1');
-    expect(select).toHaveBeenCalledWith('id');
+  it('sends the boolean the delete RPCs take, not a verb', async () => {
+    const rpc = respondToRpcWith({ data: null, error: null, status: 200 });
+
+    await setListDeleted('l1', true);
+    expect(rpc).toHaveBeenCalledWith('set_list_deleted', { p_list_id: 'l1', p_deleted: true });
+
+    await setItemDeleted('i1', false);
+    expect(rpc).toHaveBeenCalledWith('set_item_deleted', { p_item_id: 'i1', p_deleted: false });
   });
 
   /**
-   * The failure this whole function exists for. Row-level security filters a refused rename to zero
-   * rows rather than refusing it, so PostgREST answers 204 with no error — which without the
-   * `.select()` would read as success, and the outbox would drop the write as delivered.
+   * The contract the whole conflict prompt rests on. `target_deleted` rides along with `ok` on
+   * purpose: the request was accepted and the caller was allowed to make it, so the outbox is right
+   * to treat it as delivered — it is the provider that decides whether to offer a restore.
    */
-  it('treats an empty response as a refusal, not a success', async () => {
-    respondToUpdateWith({ data: [], error: null, status: 200 });
+  it('carries a target_deleted outcome without calling it a failure', async () => {
+    respondToRpcWith({ data: 'target_deleted', error: null, status: 200 });
 
-    expect(await updateListName('l1', 'Weekly shop')).toEqual({
-      error: 'You can no longer rename this list.',
+    expect(await setItemDone('i1', true)).toEqual({
+      error: null,
+      verdict: 'ok',
+      outcome: 'target_deleted',
+    });
+  });
+
+  it('leaves an applied outcome off the result entirely', async () => {
+    respondToRpcWith({ data: 'applied', error: null, status: 200 });
+
+    expect(await setItemDone('i1', true)).toEqual({ error: null, verdict: 'ok' });
+  });
+
+  /**
+   * A refusal reaches a red banner minutes or days after the tap that caused it, so these six get a
+   * sentence rather than the database's own words. The membership RPCs deliberately do not — see
+   * below, where `share_list`'s message is asserted verbatim.
+   */
+  it('rewrites a permission refusal into something a person can read', async () => {
+    respondToRpcWith({
+      data: null,
+      error: { message: 'not allowed to change this item', code: '42501' },
+      status: 403,
+    });
+
+    expect(await setItemDone('i1', true)).toEqual({
+      error: 'You no longer have permission to make that change.',
       verdict: 'permanent',
     });
   });
 
-  it('reports a real error as itself', async () => {
-    respondToUpdateWith({ data: null, error: { message: 'JWT expired' }, status: 401 });
+  it('leaves an error it has no better words for alone', async () => {
+    respondToRpcWith({ data: null, error: { message: 'JWT expired' }, status: 401 });
 
-    expect(await updateListName('l1', 'Weekly shop')).toEqual({
+    expect(await renameList('l1', 'Weekly shop')).toEqual({
       error: 'JWT expired',
       verdict: 'retryable',
     });

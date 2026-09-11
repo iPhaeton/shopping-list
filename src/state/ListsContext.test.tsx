@@ -4,16 +4,19 @@ import { Pressable, Text } from 'react-native';
 
 import { writeCachedLists } from '../lib/listCache';
 import {
+  addItem,
   fetchLists,
-  insertItem,
   insertList,
+  renameList,
+  setItemDeleted,
   setItemDone,
-  updateListName,
+  setListDeleted,
   type Result,
 } from '../lib/listsApi';
 import { subscribeToChanges } from '../lib/listsChannel';
-import { saveOutbox } from '../lib/outbox';
+import { loadOutbox, saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
+import type { List } from './types';
 
 /**
  * `src/lib/listsApi.ts` is mocked at the module boundary, the same seam the auth suites use for
@@ -31,9 +34,11 @@ import { ListsProvider, useLists } from './ListsContext';
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(),
   insertList: jest.fn(),
-  insertItem: jest.fn(),
+  addItem: jest.fn(),
   setItemDone: jest.fn(),
-  updateListName: jest.fn(),
+  renameList: jest.fn(),
+  setListDeleted: jest.fn(),
+  setItemDeleted: jest.fn(),
 }));
 
 /**
@@ -45,9 +50,11 @@ jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn() }));
 const api = {
   fetchLists: jest.mocked(fetchLists),
   insertList: jest.mocked(insertList),
-  insertItem: jest.mocked(insertItem),
+  addItem: jest.mocked(addItem),
   setItemDone: jest.mocked(setItemDone),
-  updateListName: jest.mocked(updateListName),
+  renameList: jest.mocked(renameList),
+  setListDeleted: jest.mocked(setListDeleted),
+  setItemDeleted: jest.mocked(setItemDeleted),
 };
 
 const unsubscribe = jest.fn();
@@ -58,8 +65,8 @@ let resubscribe: () => void;
 
 const USER = 'u1';
 
-const MILK = { id: 'i1', title: 'Milk', doneAt: null };
-const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, items: [MILK] };
+const MILK = { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null };
+const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, deletedAt: null, items: [MILK] };
 /** The same list as seen by somebody it was shared with, read-only. */
 const READ_ONLY = { ...GROCERIES, role: 'reader' as const };
 
@@ -67,6 +74,12 @@ const OK: Result = { error: null, verdict: 'ok' };
 /** What a write looks like with no signal: postgrest-js reports a failed fetch as status 0. */
 const OFFLINE: Result = { error: 'TypeError: Failed to fetch', verdict: 'retryable' };
 const REFUSED: Result = { error: 'permission denied', verdict: 'permanent' };
+/**
+ * The write was accepted and the caller was allowed to make it — there was just nothing live left
+ * for it to land on. Note `verdict: 'ok'`: this is not a failure, and classifying it as one is the
+ * mistake the provider is built to avoid.
+ */
+const BLOCKED: Result = { error: null, verdict: 'ok', outcome: 'target_deleted' };
 const DUPLICATE: Result = { error: 'duplicate key value violates unique constraint', verdict: 'applied' };
 /** The provider's trailing debounce on a nudge, mirrored here as the backoff tests mirror theirs. */
 const NUDGE_DEBOUNCE = 300;
@@ -77,9 +90,11 @@ beforeEach(async () => {
 
   api.fetchLists.mockResolvedValue({ lists: [], error: null });
   api.insertList.mockResolvedValue(OK);
-  api.insertItem.mockResolvedValue(OK);
+  api.addItem.mockResolvedValue(OK);
   api.setItemDone.mockResolvedValue(OK);
-  api.updateListName.mockResolvedValue(OK);
+  api.renameList.mockResolvedValue(OK);
+  api.setListDeleted.mockResolvedValue(OK);
+  api.setItemDeleted.mockResolvedValue(OK);
 
   jest.mocked(subscribeToChanges).mockImplementation((_userId, onChange, onResubscribe) => {
     nudge = onChange;
@@ -94,17 +109,37 @@ afterEach(() => {
 
 /** Renders the provider's whole surface as text, so assertions read what a screen would see. */
 function Probe() {
-  const { lists, status, error, pending, createList, renameList, addItem, toggleItem } = useLists();
+  const {
+    lists,
+    status,
+    error,
+    pending,
+    blocked,
+    createList,
+    renameList,
+    addItem,
+    toggleItem,
+    setListDeleted,
+    setItemDeleted,
+    restoreBlocked,
+    discardBlocked,
+  } = useLists();
 
   return (
     <>
       <Text>{`status: ${status}`}</Text>
       <Text>{`error: ${error ?? 'none'}`}</Text>
       <Text>{`pending: ${pending}`}</Text>
+      <Text>{`blocked: ${blocked ? blocked.op.type : 'none'}`}</Text>
       {lists.map((list) => (
         <Text key={list.id}>
-          {`${list.id} ${list.name}: ${list.items
-            .map((item) => `${item.title}${item.doneAt === null ? '' : ' done'}`)
+          {`${list.id} ${list.name}${list.deletedAt === null ? '' : ' [binned]'}: ${list.items
+            .map(
+              (item) =>
+                `${item.title}${item.doneAt === null ? '' : ' done'}${
+                  item.deletedAt === null ? '' : ' [binned]'
+                }`
+            )
             .join(', ')}`}
         </Text>
       ))}
@@ -116,6 +151,12 @@ function Probe() {
       <Button label="toggle" onPress={() => toggleItem('l1', 'i1')} />
       <Button label="rename" onPress={() => renameList('l1', 'Weekly shop')} />
       <Button label="rename blank" onPress={() => renameList('l1', '   ')} />
+      <Button label="bin list" onPress={() => setListDeleted('l1', true)} />
+      <Button label="restore list" onPress={() => setListDeleted('l1', false)} />
+      <Button label="bin item" onPress={() => setItemDeleted('l1', 'i1', true)} />
+      <Button label="restore item" onPress={() => setItemDeleted('l1', 'i1', false)} />
+      <Button label="restore blocked" onPress={restoreBlocked} />
+      <Button label="discard blocked" onPress={discardBlocked} />
     </>
   );
 }
@@ -194,7 +235,7 @@ it('adds an item optimistically and inserts it against its list', async () => {
 
   expect(screen.getByText('l1 Groceries: Bread')).toBeOnTheScreen();
   await waitFor(() =>
-    expect(api.insertItem).toHaveBeenCalledWith(expect.any(String), 'l1', 'Bread')
+    expect(api.addItem).toHaveBeenCalledWith(expect.any(String), 'l1', 'Bread')
   );
 });
 
@@ -225,7 +266,7 @@ it('renames a list optimistically and sends the new name', async () => {
   await fireEvent.press(screen.getByLabelText('rename'));
 
   expect(screen.getByText('l1 Weekly shop: Milk')).toBeOnTheScreen();
-  await waitFor(() => expect(api.updateListName).toHaveBeenCalledWith('l1', 'Weekly shop'));
+  await waitFor(() => expect(api.renameList).toHaveBeenCalledWith('l1', 'Weekly shop'));
 });
 
 it('does not rename a list to nothing', async () => {
@@ -234,7 +275,7 @@ it('does not rename a list to nothing', async () => {
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('rename blank'));
 
-  expect(api.updateListName).not.toHaveBeenCalled();
+  expect(api.renameList).not.toHaveBeenCalled();
 });
 
 /**
@@ -252,7 +293,7 @@ describe('a list you only have read access to', () => {
     await fireEvent.press(screen.getByLabelText('add'));
 
     expect(screen.getByText('error: You have read-only access to this list.')).toBeOnTheScreen();
-    expect(api.insertItem).not.toHaveBeenCalled();
+    expect(api.addItem).not.toHaveBeenCalled();
     expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
   });
 
@@ -270,7 +311,7 @@ describe('a list you only have read access to', () => {
     await fireEvent.press(screen.getByLabelText('rename'));
 
     expect(screen.getByText('error: Only an owner can rename this list.')).toBeOnTheScreen();
-    expect(api.updateListName).not.toHaveBeenCalled();
+    expect(api.renameList).not.toHaveBeenCalled();
     expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
   });
 });
@@ -285,7 +326,7 @@ it('lets a writer change items but not the name', async () => {
   expect(screen.getByText('l1 Groceries: Milk, Bread')).toBeOnTheScreen();
 
   await fireEvent.press(screen.getByLabelText('rename'));
-  expect(api.updateListName).not.toHaveBeenCalled();
+  expect(api.renameList).not.toHaveBeenCalled();
 });
 
 /**
@@ -390,7 +431,7 @@ it('drops the items of a list the database refused', async () => {
   await act(async () => settleInsert(REFUSED));
 
   expect(await screen.findByText('error: permission denied')).toBeOnTheScreen();
-  expect(api.insertItem).not.toHaveBeenCalled();
+  expect(api.addItem).not.toHaveBeenCalled();
   expect(screen.getByText('pending: 0')).toBeOnTheScreen();
   expect(screen.queryByText(/Groceries/)).not.toBeOnTheScreen();
 });
@@ -439,7 +480,7 @@ it('never reads another account cached lists', async () => {
  */
 it('does not duplicate a pending write across a restart', async () => {
   api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
-  api.insertItem.mockReturnValue(new Promise<Result>(() => {}));
+  api.addItem.mockReturnValue(new Promise<Result>(() => {}));
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('add'));
@@ -547,4 +588,256 @@ it('closes the channel when the provider goes away', async () => {
   await screen.unmount();
 
   expect(unsubscribe).toHaveBeenCalledTimes(1);
+});
+
+// --- Writing to something somebody else put in the bin ------------------------------------------
+
+/** The list as another owner left it after binning it, which is what the next fetch returns. */
+const BINNED_LIST = { ...GROCERIES, deletedAt: '2026-09-10T09:00:00.000Z' };
+const BINNED_ITEM = {
+  ...GROCERIES,
+  items: [{ ...MILK, deletedAt: '2026-09-10T09:00:00.000Z' }],
+};
+
+describe('a write that lands on a tombstone', () => {
+  it('asks rather than erroring, and keeps the write', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+
+    expect(await screen.findByText('blocked: item/setDone')).toBeOnTheScreen();
+    // Not an error: nothing failed and nothing was refused.
+    expect(screen.getByText('error: none')).toBeOnTheScreen();
+    // And not delivered either — it is still queued, and still on disk.
+    expect(screen.getByText('pending: 1')).toBeOnTheScreen();
+  });
+
+  /**
+   * The whole reason the op is left at the head of the queue rather than pulled out and held in
+   * React state: a reload before the user answers must not lose it.
+   */
+  it('leaves the blocked write in the outbox on disk', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+    await screen.findByText('blocked: item/setDone');
+
+    expect(await loadOutbox(USER)).toEqual([
+      { type: 'item/setDone', listId: 'l1', itemId: 'i1', doneAt: expect.any(String) },
+    ]);
+  });
+
+  it('stops sending while it waits for an answer', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+    await screen.findByText('blocked: item/setDone');
+
+    api.setItemDone.mockClear();
+    await fireEvent.press(screen.getByLabelText('add'));
+
+    // The queue is stopped, so neither the blocked write nor the one behind it goes out.
+    expect(api.setItemDone).not.toHaveBeenCalled();
+    expect(api.addItem).not.toHaveBeenCalled();
+  });
+
+  /** Two writes: the restore first, then the write that was waiting on it. */
+  it('restores and then lets the original write through, in that order', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+    await screen.findByText('blocked: item/setDone');
+
+    api.setItemDone.mockResolvedValue(OK);
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await fireEvent.press(screen.getByLabelText('restore blocked'));
+
+    await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+    expect(api.setListDeleted).toHaveBeenCalledWith('l1', false);
+    expect(api.setItemDone).toHaveBeenCalledWith('i1', true);
+    expect(api.setListDeleted.mock.invocationCallOrder[0]).toBeLessThan(
+      api.setItemDone.mock.invocationCallOrder[1]
+    );
+    expect(screen.getByText('blocked: none')).toBeOnTheScreen();
+  });
+
+  it('lifts the item too when it was binned inside a binned list', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({
+      lists: [{ ...BINNED_LIST, items: BINNED_ITEM.items }],
+      error: null,
+    });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+    await screen.findByText('blocked: item/setDone');
+
+    api.setItemDone.mockResolvedValue(OK);
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await fireEvent.press(screen.getByLabelText('restore blocked'));
+
+    await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+    expect(api.setListDeleted).toHaveBeenCalledWith('l1', false);
+    expect(api.setItemDeleted).toHaveBeenCalledWith('i1', false);
+  });
+
+  it('drops the write when the user would rather not', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+    await screen.findByText('blocked: item/setDone');
+
+    await fireEvent.press(screen.getByLabelText('discard blocked'));
+
+    await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+    expect(screen.getByText('blocked: none')).toBeOnTheScreen();
+    expect(await loadOutbox(USER)).toEqual([]);
+    expect(api.setListDeleted).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The writer's half of the brief. There is nothing they may lift, so they are not asked — and the
+   * write cannot be left queued either, because the loop is stopped while it sits there. It drops,
+   * and everything behind it goes out.
+   */
+  it('drops a write nobody on this account may unblock, without asking', async () => {
+    api.fetchLists.mockResolvedValue({
+      lists: [{ ...GROCERIES, role: 'writer' as const }],
+      error: null,
+    });
+    await renderProbe();
+
+    api.setItemDone.mockResolvedValue(BLOCKED);
+    api.fetchLists.mockResolvedValue({
+      lists: [{ ...BINNED_LIST, role: 'writer' as const }],
+      error: null,
+    });
+    await fireEvent.press(screen.getByLabelText('toggle'));
+
+    await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+    expect(screen.getByText('blocked: none')).toBeOnTheScreen();
+    expect(screen.getByText('error: none')).toBeOnTheScreen();
+    expect(await loadOutbox(USER)).toEqual([]);
+  });
+});
+
+describe('binning and restoring', () => {
+  it('sends the boolean and shows the tombstone before the database answers', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('bin item'));
+
+    expect(screen.getByText('l1 Groceries: Milk [binned]')).toBeOnTheScreen();
+    expect(api.setItemDeleted).toHaveBeenCalledWith('i1', true);
+  });
+
+  /** Absolute values, so a change of mind on a train is one request rather than three. */
+  it('coalesces bin, restore and bin again into one write', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+    api.setItemDeleted.mockResolvedValue(OFFLINE);
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('bin item'));
+    await fireEvent.press(screen.getByLabelText('restore item'));
+    await fireEvent.press(screen.getByLabelText('bin item'));
+
+    expect(screen.getByText('pending: 1')).toBeOnTheScreen();
+  });
+
+  it('refuses to bin a list you do not own, before anything is sent', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [READ_ONLY], error: null });
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('bin list'));
+
+    expect(screen.getByText('error: Only an owner can delete or restore this list.')).toBeOnTheScreen();
+    expect(api.setListDeleted).not.toHaveBeenCalled();
+  });
+
+  it('refuses to bin an item on a list you can only read', async () => {
+    api.fetchLists.mockResolvedValue({ lists: [READ_ONLY], error: null });
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('bin item'));
+
+    expect(screen.getByText('error: You have read-only access to this list.')).toBeOnTheScreen();
+    expect(api.setItemDeleted).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The regression test for a bug only the browser found.
+ *
+ * `blocked` used to be announced *before* the fetch that follows it. The tombstone is somebody
+ * else's write, so this device had never seen it — `restorePlan` read the pre-delete view, concluded
+ * there was nothing to lift, and discarded the write. Silently: no banner, no error, and a tick that
+ * simply never happened. Jest batched the two updates together and did not notice; the browser did.
+ *
+ * So the assertion is about *order*, not about the outcome: while the fetch is still in flight there
+ * must be no prompt, because a prompt at that moment is a prompt made on stale information.
+ */
+it('does not announce a blocked write until the fetch behind it has landed', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+  await renderProbe();
+
+  let settleFetch = (_result: { lists: List[] | null; error: string | null }) => {};
+  api.setItemDone.mockResolvedValue(BLOCKED);
+  api.fetchLists.mockReturnValue(
+    new Promise((resolve) => {
+      settleFetch = resolve;
+    })
+  );
+
+  await fireEvent.press(screen.getByLabelText('toggle'));
+
+  // The write has been answered, but the tombstone has not arrived yet.
+  await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
+  expect(screen.getByText('blocked: none')).toBeOnTheScreen();
+
+  await act(async () => settleFetch({ lists: [BINNED_LIST], error: null }));
+
+  expect(await screen.findByText('blocked: item/setDone')).toBeOnTheScreen();
+  expect(screen.getByText('pending: 1')).toBeOnTheScreen();
+});
+
+/**
+ * The flush loop is stopped while a write is blocked, so everything queued behind it is stopped too.
+ * Resolving the prompt has to start it again — and `hydrate` has to be *awaited* first, since it
+ * holds `fetching` and `flush` refuses to run alongside a fetch. Un-awaited, the flush is a no-op and
+ * the writes behind the discarded one never go out.
+ */
+it('sends the writes queued behind a blocked one once it is resolved', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null });
+  await renderProbe();
+
+  api.setItemDone.mockResolvedValue(BLOCKED);
+  api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null });
+  await fireEvent.press(screen.getByLabelText('toggle'));
+  await screen.findByText('blocked: item/setDone');
+
+  // Queued behind it, and going nowhere while the prompt is up.
+  await fireEvent.press(screen.getByLabelText('add'));
+  expect(api.addItem).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByLabelText('discard blocked'));
+
+  await waitFor(() => expect(api.addItem).toHaveBeenCalled());
+  await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
 });

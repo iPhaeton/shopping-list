@@ -1,28 +1,55 @@
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { AddBar } from '../components/AddBar';
+import { BlockedBanner } from '../components/BlockedBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { HeaderButton } from '../components/HeaderButton';
 import { ItemRow } from '../components/ItemRow';
+import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { SyncBanner } from '../components/SyncBanner';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
+import { liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
 import { colors, spacing } from '../theme';
 
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const { listId } = route.params;
-  const { lists, error, pending, addItem, toggleItem, renameList } = useLists();
+  const {
+    lists,
+    error,
+    pending,
+    blocked,
+    addItem,
+    toggleItem,
+    renameList,
+    setListDeleted,
+    setItemDeleted,
+    restoreBlocked,
+    discardBlocked,
+  } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
 
   const [renaming, setRenaming] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  // A list reached from the bin. It is a real list still — restorable, and shared with the same
+  // people — so it opens and reads normally; what it does not get is anything that would write to
+  // it, because every one of those would come straight back as `target_deleted`.
+  const binned = list !== undefined && list.deletedAt !== null;
 
   // Which controls exist, never whether the write is allowed — the database decides that. A reader
   // handed an Add bar that fails is a worse experience than one that was never there.
-  const editable = list ? canEditItems(list.role) : false;
-  const manageable = list ? canManageList(list.role) : false;
+  const editable = list ? canEditItems(list.role) && !binned : false;
+  const manageable = list ? canManageList(list.role) && !binned : false;
+
+  // Before the not-found return below, because hooks cannot be called conditionally. Memoised so the
+  // `FlatList` is not handed a new `data` array on every render.
+  const live = useMemo(() => (list ? liveItems(list) : []), [list]);
+  const visible = showDeleted && list ? list.items : live;
+  const inBin = (list?.items.length ?? 0) - live.length;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -59,8 +86,32 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {error ? <ErrorBanner message={error} /> : null}
+      {blocked ? (
+        <BlockedBanner
+          blocked={blocked}
+          lists={lists}
+          onRestore={restoreBlocked}
+          onDiscard={discardBlocked}
+        />
+      ) : null}
       {pending > 0 ? <SyncBanner pending={pending} /> : null}
-      {editable ? null : (
+      {binned ? (
+        <View style={styles.binned}>
+          {/*
+            Spelled out because the two tombstones are independent and the surprise is otherwise
+            silent: restore a list you binned six items inside, and you get the list back missing
+            six items with nothing on screen to say where they went.
+          */}
+          <Text style={styles.binnedText}>
+            This list is in the bin. Restoring it brings back everything except the items you
+            deleted separately — those are one tick of Show deleted away.
+          </Text>
+          {canManageList(list.role) ? (
+            <HeaderButton label={`Restore ${list.name}`} onPress={() => setListDeleted(listId, false)} />
+          ) : null}
+        </View>
+      ) : null}
+      {editable || binned ? null : (
         <Text style={styles.readOnly}>Read only — you can see this list but not change it.</Text>
       )}
       {renaming ? (
@@ -81,8 +132,11 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           onSubmit={(title) => addItem(list.id, title)}
         />
       ) : null}
+      {inBin > 0 ? (
+        <ShowDeletedToggle checked={showDeleted} count={inBin} onChange={setShowDeleted} />
+      ) : null}
       <FlatList
-        data={list.items}
+        data={visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -91,6 +145,9 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
             item={item}
             editable={editable}
             onToggle={() => toggleItem(list.id, item.id)}
+            onSetDeleted={
+              editable ? (deleted) => setItemDeleted(list.id, item.id, deleted) : undefined
+            }
           />
         )}
         ListEmptyComponent={
@@ -116,6 +173,17 @@ const styles = StyleSheet.create({
   readOnly: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
+    fontSize: 15,
+    color: colors.textMuted,
+  },
+  binned: {
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  binnedText: {
     fontSize: 15,
     color: colors.textMuted,
   },

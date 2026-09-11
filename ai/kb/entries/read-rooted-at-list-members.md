@@ -4,10 +4,10 @@ title: The read starts at list_members, and every policy predicate is an uncorre
 type: decision
 status: current
 tags: [supabase, postgres, rls, performance, persistence]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
-last_verified: 2026-09-09
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
+last_verified: 2026-09-11
 verify: grep -q "from('list_members')" src/lib/listsApi.ts && grep -q 'lists!inner' src/lib/listsApi.ts && grep -q 'create index on public.list_members (user_id, created_at);' supabase/migrations/20260907000000_list_sharing.sql && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security invoker' && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q "set search_path = ''"
-related: [list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack]
+related: [list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack]
 ---
 
 Sharing had a hard performance requirement — 1,000,000 rows in `lists` and "the lists I can see" must
@@ -74,6 +74,15 @@ where list_id = ?` — a prefix scan of the `(list_id, user_id)` PK, not of the 
 index this entry is built around
 ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). Two readers,
 two access orders, both load-bearing; measured at ≈0.08 ms per member per change.
+
+**Step 9 left all three rules alone and changed what the read *carries*, which is the pressure this
+entry should be read against now.** Deleted rows are tombstones that stay in the table and ship in
+the same fetch, with no `deleted_at` filter in the policies or the query
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)). Nothing about the *plan* moves — the scan is
+still over your ~20 membership rows — but the rows returned per list now grow with everything anyone
+has ever deleted on it, which is why the nightly purge is part of that feature rather than a
+follow-up. The read path's cost model is "how many lists am I in"; deletion added a second term,
+"how much is in their bins", and only the purge keeps it bounded.
 
 **Rule 1 is also why your role costs nothing to read.** `fetchLists` already selects `role` off the
 membership row it roots at, so step 7's role-gated UI needed no extra round trip, no extra state, and

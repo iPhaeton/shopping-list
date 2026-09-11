@@ -1,15 +1,15 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes, sharing and realtime in; invites, leaving a list and deletion out
+title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime and deletion in; invites and leaving a list out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md]
-last_verified: 2026-09-10
-related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md]
+last_verified: 2026-09-11
+related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
-Scope is set one task step at a time. What is in, as of step 8:
+Scope is set one task step at a time. What is in, as of step 9:
 
 | | |
 |---|---|
@@ -22,10 +22,34 @@ Scope is set one task step at a time. What is in, as of step 8:
 | step 7 step 1 | sharing at reader/writer/owner, enforced entirely in the database — no UI |
 | step 7 step 2 | the UI for it: role-gated screens, list rename, a sharing screen (invite / change role / remove), a re-fetch when the app comes to the front |
 | step 8 | realtime: a change by one member reaches every other member in about a second, both apps in the foreground |
+| step 9 | deleting lists and items — as tombstones behind a "Show deleted" checkbox, restorable by whoever may delete, purged after 30 days |
 
 **Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
-you do not own, showing an owner how widely a list is shared without opening it, deletion,
-passwords, and conflict resolution beyond last-write-wins.**
+you do not own, showing an owner how widely a list is shared without opening it, passwords, and
+conflict resolution beyond last-write-wins.**
+
+**Deletion moved in at step 9, and this entry listed it as out twice over — once in the line above
+and once in a paragraph explaining that the answer, when the question was put, had been "no item
+deletion so far".** Both are now out of date.
+[ai/tasks/9-deletion/description-step-1.md](../../tasks/9-deletion/description-step-1.md) promoted
+`ai/suggestions/deletion.md`, and scope inside it was settled with the user before any code: **all six
+of that document's staging steps in one step** — schema, state, API, error messages, UI, purge — with
+the `pg_cron` schedule shipping alongside the purge function rather than following it. The approach
+was not open either: an earlier draft proposed a hard delete plus a clear error message, and the user
+chose tombstones, with deleted things staying visible behind a checkbox, owners restoring them, and an
+owner who writes to something another owner deleted being offered a restore while a writer's write
+just drops. It absorbed two backlog items on the way past: 7 (human-readable errors) and 11 (the
+rename endpoint returning errors). See [deletion-is-a-tombstone](deletion-is-a-tombstone.md) for the
+design and [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md) for the conflict rule.
+
+Three things step 9 deliberately did **not** do, which are easy to assume it did: it changed **no
+policy** — a tombstone is still a row and members must see it to restore it; it needed **no realtime
+migration** at all, because a soft delete is an `UPDATE` the existing triggers already cover; and it
+left `my_memberships()`, `listsChannel`, `replay`, `storageQueue`, `supabase.ts` and the navigator
+untouched. It also does not solve happens-before (the rule is who you are, not whose change came
+first), does not restore a list's items when the list is restored, and has not been verified against
+cloud at all — neither of its two migrations has been pushed
+([supabase-local-stack](supabase-local-stack.md)).
 
 **Realtime moved in at step 8, and this entry used to list it as out.**
 [ai/tasks/8-realtime/description-step-1.md](../../tasks/8-realtime/description-step-1.md) promoted
@@ -92,14 +116,17 @@ many. That reading is why there are two list screens (`Lists` → `ListDetail`) 
 depends on React Navigation at all. Treat it as settled: do not "simplify" the product back to one
 list, and do not re-litigate the ambiguity from the description alone.
 
-**Deleting lists and items was deliberately not built, and since step 7 that is a decision rather
-than a silence.** It was absent from every description up to step 6, so it was left out on purpose;
-then the `writer` brief said "add and delete items" and the answer, when the question was put, was
-**no item deletion so far**. It still goes as far as the database: no delete policy on `lists` or
-`items`. The one `for delete` policy in the schema is on `list_members` — un-sharing — and removes
-nobody's data. Note the load this carries: `set_item_done` reads zero updated rows as "refused"
-*because* nothing deletes items ([server-stamps-done-at](server-stamps-done-at.md)), so item
-deletion is a bigger change than one policy plus one action.
+**Deleting lists and items was deliberately not built until step 9, and the shape of that absence is
+worth keeping, because step 9 did not simply reverse it.** Deletion was absent from every description
+up to step 6, so it was left out on purpose; then the `writer` brief said "add and delete items" and
+the answer, when the question was put, was **no item deletion so far**. This entry then predicted the
+cost of changing that: `set_item_done` read zero updated rows as "refused" *because* nothing deleted
+items, so deletion would be a bigger change than one policy plus one action. That prediction was
+right and the fix was not the expected one — there is **still** no delete policy on `lists` or
+`items`, and the one `for delete` policy in the schema is still on `list_members`. What changed is
+that `set_item_done`'s zero-row branch now splits three ways and the function returns an outcome
+instead of void ([server-stamps-done-at](server-stamps-done-at.md),
+[writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
 
 **Offline moved in at step 4, and this entry used to forbid it** — "do not build a queue, a retry
 loop or a local cache speculatively" was right until
@@ -148,13 +175,27 @@ implemented the auth half of `otp-biometric-auth.md` *only* because a task descr
 step 3 the first staging step of `supabase-persistence.md`, step 5 the project/schema/config sections
 of `production-supabase.md`, step 6 phase 1 of that document's custom-SMTP section (§4), step 7
 step 1 the SQL of `list-sharing.md`, step 7 step 2 the whole of `list-sharing-ui.md`, which
-covers that document's staging steps 2 and 3, and step 8 `realtime-sync.md`'s staging steps 1 and 2
-plus one piece of its optional step 3 — each because a task description asked for it. The
+covers that document's staging steps 2 and 3, step 8 `realtime-sync.md`'s staging steps 1 and 2
+plus one piece of its optional step 3, and step 9 the whole of `deletion.md` — all six of its staging
+steps at once, which is the only time a suggestion has landed complete in one step — each because a
+task description asked for it. The
 biometric half of `otp-biometric-auth.md` is still just a proposal, and it needs a native dev build
 besides. §4's phase 2 (a verified sending domain) is also still just a
 proposal — phase 1 is the only part of it that has landed.
 
-**A suggestion can be wrong as well as un-promoted — four errors across three documents so far.**
+**Step 9 corrected three more things in `deletion.md`, and the first is the one to learn from:** its
+`set_item_done` tested "is the target in the bin" *before* the permission check, which would tell a
+stranger holding an item id that a row they cannot see exists and is deleted — the shipped function
+raises `42501` first; its `purge_deleted` used `deleted_at < cutoff`, which collects nothing at a
+zero-second interval because `now()` is frozen per transaction, making the one call that proves the
+function works a silent no-op; and its conflict prompt would have been announced before the fetch that
+tells it what to offer. None of the three is a typo — each is a design that reads correctly and fails
+only when run. The document also got something exactly right that nothing else would have caught: it
+predicted this KB's own audit would go green over a claim that had stopped being true, and it did
+([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) has the case-sensitive grep that let
+`'item/setDeleted'` through).
+
+**A suggestion can be wrong as well as un-promoted — four errors across three documents before that.**
 `list-sharing.md`'s "owners remove members" policy cannot remove anyone
 ([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md)), its last-owner
 trigger would have aborted account deletion, and its claim that `set search_path = ''` defeats the

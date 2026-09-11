@@ -4,10 +4,10 @@ title: Revoking a privilege under Supabase's default grants — column-level rev
 type: gotcha
 status: current
 tags: [supabase, postgres, migrations, security, grants]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-07
-verify: ! grep -rn 'revoke execute' supabase/migrations | grep -qv 'from public, anon;' && ! grep -rqE 'revoke +(update|select|insert) *\(' supabase/migrations && grep -q '^revoke update on public.lists from anon, authenticated;' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql
-related: [server-stamps-done-at, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-local-stack]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql, supabase/migrations/20260910000000_deletion.sql]
+last_verified: 2026-09-10
+verify: ! grep -rn 'revoke execute' supabase/migrations | grep -qv 'from public, anon' && ! grep -rqE 'revoke +(update|select|insert) *\(' supabase/migrations && grep -q '^revoke update on public.lists from anon, authenticated;' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^revoke execute on function public.purge_deleted(interval) from public, anon, authenticated;' supabase/migrations/20260910000000_deletion.sql
+related: [server-stamps-done-at, list-data-scoped-by-rls, select-policy-gates-update-and-delete, deletion-is-a-tombstone, supabase-local-stack]
 ---
 
 Both of these `revoke` statements succeed, print no warning, and change nothing. Each cost a cycle
@@ -35,6 +35,16 @@ function arrives with `anon` on its ACL **by name**. Revoking the implicit grant
 one standing, and `anon` can still call it. It has to be `from public, anon`, followed by an explicit
 grant to whoever should have it.
 
+**Step 9 added the one function that revokes from `authenticated` as well, and it is the exception
+that names the rule.** `purge_deleted` is `revoke execute … from public, anon, authenticated` because
+nothing in the app calls it: every other function in this schema exists to be reached by a signed-in
+client, and the nightly job runs as `postgres`, which owns the function, so taking every client grant
+away costs the schedule nothing ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)). The check
+below therefore requires `from public, anon` as a *prefix* rather than the whole tail — and note the
+trap it leaves, which cost the previous phrasing: `grep -rn 'revoke execute'` sweeps **comments as
+well as statements**, so writing the words "revoke execute" in a migration's prose is enough to fail
+the audit for a rule that was never broken.
+
 **But do not revoke a function a *policy* calls.** `my_memberships()` deliberately keeps the default
 grants: it is `security invoker`, returns only the caller's own rows, and is evaluated inside the
 `lists` and `items` select policies. Revoke `anon` and an anonymous `GET /rest/v1/lists` stops
@@ -57,5 +67,5 @@ it again the next time a column is taken away from clients.
 
 The `verify:` command asserts this repo's migrations still obey all of it: **every** `revoke execute`
 names `anon` alongside `public` (a new function revoked `from public` alone fails it), no
-column-level revoke has been added anywhere, and the `lists` pair — table revoke plus single-column
-grant — is intact.
+column-level revoke has been added anywhere, the `lists` pair — table revoke plus single-column
+grant — is intact, and `purge_deleted` is still out of `authenticated`'s reach.

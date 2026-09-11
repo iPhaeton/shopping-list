@@ -1,4 +1,4 @@
-import { countDone, initialState, listsReducer } from './listsReducer';
+import { countDone, initialState, listsReducer, liveItems, liveLists } from './listsReducer';
 import type { State } from './types';
 
 /** Stands in for a timestamp minted by the provider; the reducer never makes one itself. */
@@ -16,7 +16,7 @@ function stateWithItems(...titles: string[]): State {
 describe('lists/loaded', () => {
   it('replaces the lists with what the database returned', () => {
     const lists = [
-      { id: 'l9', name: 'Hardware', role: 'reader' as const, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT }] },
+      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null }] },
     ];
 
     const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists });
@@ -39,7 +39,7 @@ describe('list/created', () => {
       name: 'Groceries',
     });
 
-    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', items: [] }]);
+    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] }]);
   });
 
   it('trims the name', () => {
@@ -117,7 +117,7 @@ describe('item/added', () => {
   it('appends an item that starts out not done', () => {
     const state = stateWithItems('Milk');
 
-    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', doneAt: null }]);
+    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null }]);
   });
 
   it('preserves insertion order', () => {
@@ -252,5 +252,168 @@ describe('countDone', () => {
     });
 
     expect(countDone(state.lists[0])).toBe(1);
+  });
+});
+
+// --- The bin ------------------------------------------------------------------------------------
+
+/** Stands in for a tombstone the database stamped; the reducer never makes one itself. */
+const DELETED_AT = '2026-09-10T09:00:00.000Z';
+
+describe('item/setDeleted', () => {
+  it('tombstones an item in place rather than removing it', () => {
+    const state = listsReducer(stateWithItems('Milk', 'Bread'), {
+      type: 'item/setDeleted',
+      listId: 'l1',
+      itemId: 'i1',
+      deletedAt: DELETED_AT,
+    });
+
+    expect(state.lists[0].items).toHaveLength(2);
+    expect(state.lists[0].items[0].deletedAt).toBe(DELETED_AT);
+  });
+
+  it('restores it by carrying null, the same way a toggle carries a value', () => {
+    const binned = listsReducer(stateWithItems('Milk'), {
+      type: 'item/setDeleted',
+      listId: 'l1',
+      itemId: 'i1',
+      deletedAt: DELETED_AT,
+    });
+
+    const state = listsReducer(binned, {
+      type: 'item/setDeleted',
+      listId: 'l1',
+      itemId: 'i1',
+      deletedAt: null,
+    });
+
+    expect(state.lists[0].items[0].deletedAt).toBeNull();
+  });
+
+  it('leaves whether the item is done alone', () => {
+    const done = listsReducer(stateWithItems('Milk'), {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i1',
+      doneAt: DONE_AT,
+    });
+
+    const state = listsReducer(done, {
+      type: 'item/setDeleted',
+      listId: 'l1',
+      itemId: 'i1',
+      deletedAt: DELETED_AT,
+    });
+
+    expect(state.lists[0].items[0].doneAt).toBe(DONE_AT);
+  });
+
+  it('is a no-op for an item that is not there', () => {
+    const before = stateWithItems('Milk');
+
+    expect(
+      listsReducer(before, {
+        type: 'item/setDeleted',
+        listId: 'l1',
+        itemId: 'nope',
+        deletedAt: DELETED_AT,
+      })
+    ).toBe(before);
+  });
+
+  it('returns the same state object when the item is already in that state', () => {
+    const before = stateWithItems('Milk');
+
+    expect(
+      listsReducer(before, {
+        type: 'item/setDeleted',
+        listId: 'l1',
+        itemId: 'i1',
+        deletedAt: null,
+      })
+    ).toBe(before);
+  });
+});
+
+describe('list/setDeleted', () => {
+  /**
+   * The property the whole feature rests on: a binned list is still in the array, so the bin can
+   * show it, a restore can find it, and `list_members` never had to cascade away.
+   */
+  it('keeps the list in the array and marks it instead', () => {
+    const state = listsReducer(stateWithItems('Milk'), {
+      type: 'list/setDeleted',
+      id: 'l1',
+      deletedAt: DELETED_AT,
+    });
+
+    expect(state.lists).toHaveLength(1);
+    expect(state.lists[0].deletedAt).toBe(DELETED_AT);
+    expect(state.lists[0].items).toHaveLength(1);
+  });
+
+  it('restores it by carrying null', () => {
+    const binned = listsReducer(stateWithItems('Milk'), {
+      type: 'list/setDeleted',
+      id: 'l1',
+      deletedAt: DELETED_AT,
+    });
+
+    expect(listsReducer(binned, { type: 'list/setDeleted', id: 'l1', deletedAt: null }).lists[0].deletedAt).toBeNull();
+  });
+
+  it('is a no-op for a list that is not there', () => {
+    const before = stateWithItems('Milk');
+
+    expect(listsReducer(before, { type: 'list/setDeleted', id: 'nope', deletedAt: DELETED_AT })).toBe(
+      before
+    );
+  });
+
+  it('returns the same state object when the list is already in that state', () => {
+    const before = stateWithItems('Milk');
+
+    expect(listsReducer(before, { type: 'list/setDeleted', id: 'l1', deletedAt: null })).toBe(before);
+  });
+});
+
+/**
+ * These three are what stop a tombstone reading exactly like a live row. The mistake they prevent is
+ * invisible in any test that never deletes anything, which is why each one deletes first.
+ */
+describe('liveItems, liveLists and countDone', () => {
+  function withBinnedItem() {
+    return listsReducer(stateWithItems('Milk', 'Bread', 'Eggs'), {
+      type: 'item/setDeleted',
+      listId: 'l1',
+      itemId: 'i2',
+      deletedAt: DELETED_AT,
+    });
+  }
+
+  it('leaves a tombstoned item out of the live set', () => {
+    expect(liveItems(withBinnedItem().lists[0]).map((item) => item.title)).toEqual(['Milk', 'Eggs']);
+  });
+
+  it('leaves a tombstoned list out of the live set', () => {
+    const state = listsReducer(
+      listsReducer(stateWithItems('Milk'), { type: 'list/created', id: 'l2', name: 'Hardware' }),
+      { type: 'list/setDeleted', id: 'l1', deletedAt: DELETED_AT }
+    );
+
+    expect(liveLists(state.lists).map((list) => list.name)).toEqual(['Hardware']);
+  });
+
+  /** Without this a list reads "2 of 47 done" with 42 of them in the bin. */
+  it('does not count a done item that has since been binned', () => {
+    const done = listsReducer(withBinnedItem(), {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i2',
+      doneAt: DONE_AT,
+    });
+
+    expect(countDone(done.lists[0])).toBe(0);
   });
 });
