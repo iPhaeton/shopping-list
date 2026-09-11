@@ -18,7 +18,9 @@ import { ListsScreen } from './ListsScreen';
  * be awaited, otherwise the assertions run before anything has been mounted.
  */
 jest.mock('../lib/listsApi', () => ({
-  fetchLists: jest.fn(async () => ({ lists: [], error: null })),
+  fetchLists: jest.fn(async () => ({ lists: [], error: null, truncated: false })),
+  fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
+  fetchItem: jest.fn(async () => ({ item: null, error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   renameItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -100,7 +102,7 @@ it('keeps several lists', async () => {
 
 /** The empty state must not appear before the fetch that would contradict it has come back. */
 it('shows a spinner instead of the empty state while loading', async () => {
-  let settle = (_result: { lists: List[] | null; error: string | null }) => {};
+  let settle = (_result: { lists: List[] | null; error: string | null; truncated: boolean }) => {};
   jest.mocked(fetchLists).mockReturnValueOnce(
     new Promise((resolve) => {
       settle = resolve;
@@ -116,7 +118,7 @@ it('shows a spinner instead of the empty state while loading', async () => {
   expect(screen.getByLabelText('Loading your lists')).toBeOnTheScreen();
   expect(screen.queryByText('No lists yet')).not.toBeOnTheScreen();
 
-  await act(async () => settle({ lists: [], error: null }));
+  await act(async () => settle({ lists: [], error: null, truncated: false }));
 
   expect(screen.getByText('No lists yet')).toBeOnTheScreen();
 });
@@ -155,10 +157,11 @@ it('says a write is waiting to sync instead of raising an error', async () => {
 it('marks a list somebody else shared, in the label as well as on screen', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [
-      { id: 'l1', name: 'Groceries', role: 'reader', deletedAt: null, items: [] },
-      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: null, items: [] },
+      { id: 'l1', name: 'Groceries', role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null },
+      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null },
     ],
     error: null,
+    truncated: false,
   });
 
   await renderScreen();
@@ -166,6 +169,51 @@ it('marks a list somebody else shared, in the label as well as on screen', async
   expect(screen.getByText('Shared with you')).toBeOnTheScreen();
   expect(screen.getByLabelText('Groceries, No items yet, shared with you')).toBeOnTheScreen();
   expect(screen.getByLabelText('Hardware, No items yet')).toBeOnTheScreen();
+});
+
+/**
+ * "2 of 5 done" is a claim about every live row, and a fetch carries only a first page of them. A
+ * list with more beyond that page says what it knows — and how many it knows — until it has been
+ * scrolled to its end, at which point the cursor clears and the row reverts to the exact copy.
+ */
+it('says how many items a long list has loaded rather than pretending to know the count', async () => {
+  const item = (n: number) => ({
+    id: `i${n}`,
+    title: `Item ${n}`,
+    doneAt: n % 2 === 0 ? '2026-09-02T09:00:00.000Z' : null,
+    deletedAt: null,
+    createdAt: `2026-09-01T00:00:${String(n).padStart(2, '0')}.000Z`,
+  });
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [
+      {
+        id: 'l1',
+        name: 'Groceries',
+        role: 'owner',
+        deletedAt: null,
+        items: [item(1), item(2), item(3)],
+        nextLive: { createdAt: item(3).createdAt, id: 'i3' },
+        nextBin: null,
+      },
+      {
+        id: 'l2',
+        name: 'Hardware',
+        role: 'owner',
+        deletedAt: null,
+        items: [item(1), item(2), item(3)],
+        nextLive: null,
+        nextBin: null,
+      },
+    ],
+    error: null,
+    truncated: false,
+  });
+
+  await renderScreen();
+
+  expect(screen.getByText('3+ items')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Groceries, 3+ items')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Hardware, 1 of 3 done')).toBeOnTheScreen();
 });
 
 it('navigates to the list when a row is pressed', async () => {
@@ -187,10 +235,11 @@ const BINNED_AT = '2026-09-10T09:00:00.000Z';
 function withBin() {
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [
-      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] },
-      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [] },
+      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null },
+      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [], nextLive: null, nextBin: null },
     ],
     error: null,
+    truncated: false,
   });
 }
 
@@ -227,8 +276,9 @@ it('reveals them behind the checkbox, with no second request', async () => {
 /** A control that reveals nothing is noise, and there is nothing else in the app like it. */
 it('does not offer the checkbox when the bin is empty', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] }],
+    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null }],
     error: null,
+    truncated: false,
   });
 
   await renderScreen();
@@ -252,8 +302,9 @@ it('sends a list to the bin and brings it back', async () => {
 /** Roles decide which controls exist; the database still decides whether a write is allowed. */
 it('gives a non-owner no way to delete a list', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'writer', deletedAt: null, items: [] }],
+    lists: [{ id: 'l1', name: 'Groceries', role: 'writer', deletedAt: null, items: [], nextLive: null, nextBin: null }],
     error: null,
+    truncated: false,
   });
 
   await renderScreen();
@@ -264,8 +315,9 @@ it('gives a non-owner no way to delete a list', async () => {
 /** The empty state is a claim about the account, and a binned list must not silence it. */
 it('still says the account has no lists when the only one is in the bin', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [] }],
+    lists: [{ id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [], nextLive: null, nextBin: null }],
     error: null,
+    truncated: false,
   });
 
   await renderScreen();

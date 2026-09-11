@@ -20,7 +20,13 @@ export function ListRow({
   // read "2 of 47 done" with 42 of them in the bin — right in every test that never deletes
   // anything, and wrong in the app the moment somebody does.
   const total = liveItems(list).length;
-  const summary = total === 0 ? 'No items yet' : `${done} of ${total} done`;
+
+  // "2 of 5 done" is exact only when every live row is loaded. Until the list has been scrolled to
+  // its end, `total` is a page, so the row says what it knows — "400+ items" — and becomes exact
+  // the moment `nextLive` clears. No count is asked of the server: it would be a second request
+  // per fetch for a number that is only displayed.
+  const summary =
+    total === 0 ? 'No items yet' : list.nextLive !== null ? `${total}+ items` : `${done} of ${total} done`;
 
   const deleted = list.deletedAt !== null;
 

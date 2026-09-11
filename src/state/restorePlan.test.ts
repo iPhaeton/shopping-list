@@ -26,8 +26,10 @@ function listWith({
       role,
       deletedAt: listDeleted ? DELETED_AT : null,
       items: [
-        { id: 'i1', title: 'Milk', doneAt: null, deletedAt: itemDeleted ? DELETED_AT : null },
+        { id: 'i1', title: 'Milk', doneAt: null, deletedAt: itemDeleted ? DELETED_AT : null, createdAt: null },
       ],
+      nextLive: null,
+      nextBin: null,
     },
   ];
 }

@@ -21,7 +21,9 @@ import { SharingScreen } from './SharingScreen';
  * function was called with what — and what the screen does with the answer.
  */
 jest.mock('../lib/listsApi', () => ({
-  fetchLists: jest.fn(async () => ({ lists: [], error: null })),
+  fetchLists: jest.fn(async () => ({ lists: [], error: null, truncated: false })),
+  fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
+  fetchItem: jest.fn(async () => ({ item: null, error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDone: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -60,8 +62,9 @@ beforeEach(async () => {
 /** Renders the screen for a list the signed-in account holds `role` on. */
 async function renderScreen(role: Role = 'owner') {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role, deletedAt: null, items: [] }],
+    lists: [{ id: 'l1', name: 'Groceries', role, deletedAt: null, items: [], nextLive: null, nextBin: null }],
     error: null,
+    truncated: false,
   });
 
   await render(
@@ -85,8 +88,9 @@ it('shows everyone with access, and which one is you', async () => {
 it('says the roster is on its way before it arrives', async () => {
   jest.mocked(fetchMembers).mockReturnValue(new Promise(() => {}));
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] }],
+    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null }],
     error: null,
+    truncated: false,
   });
 
   await render(

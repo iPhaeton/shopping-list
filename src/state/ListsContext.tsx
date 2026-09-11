@@ -16,8 +16,11 @@ import { readCachedLists, writeCachedLists } from '../lib/listCache';
 import { subscribeToChanges } from '../lib/listsChannel';
 import {
   addItem as addItemRequest,
+  fetchItem,
+  fetchItems,
   fetchLists,
   insertList,
+  MAX_ROWS,
   renameItem as renameItemRequest,
   renameList as renameListRequest,
   setItemDeleted as setItemDeletedRequest,
@@ -27,10 +30,11 @@ import {
 } from '../lib/listsApi';
 import { dropDependents, enqueue, loadOutbox, queueFirst, saveOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
+import { reloadPages } from './reloadPages';
 import { replay } from './replay';
-import { listIdOf, restorePlan, type Blocked } from './restorePlan';
+import { itemIdOf, listIdOf, restorePlan, type Blocked } from './restorePlan';
 import { canEditItems, canManageList } from './roles';
-import type { List, WriteAction } from './types';
+import type { Action, Cursor, List, Stream, WriteAction } from './types';
 
 /** Backoff floor and ceiling. Doubling from one second gets to the cap in six attempts. */
 const FIRST_RETRY_MS = 1_000;
@@ -75,6 +79,12 @@ type ListsContextValue = {
   discardBlocked: () => void;
   /** Server truth again, on demand. A read, so it is safe to call at any time after mount. */
   refresh: () => Promise<void>;
+  /**
+   * The next page of a list's live rows — and of its bin too, when the screen is showing it.
+   * Resolves once the page is in state, or at once when there is nothing to load: no cursor, or a
+   * page for that list already in flight. A read, so it is safe to call at any time after mount.
+   */
+  loadMore: (listId: string, includeBin: boolean) => Promise<void>;
 };
 
 export type { Blocked } from './restorePlan';
@@ -122,6 +132,16 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   const nudge = useRef<ReturnType<typeof setTimeout> | null>(null);
   const owed = useRef(false);
 
+  // Paging's two. `listsRef` mirrors `state.lists` for the callbacks that must not depend on it
+  // (`hydrate` reads how much of each list was loaded; `loadMore` reads the cursors); `paging` is
+  // the set of lists with a page in flight, so a scroll that fires twice sends one request.
+  const listsRef = useRef(state.lists);
+  const paging = useRef(new Set<string>());
+
+  useEffect(() => {
+    listsRef.current = state.lists;
+  }, [state.lists]);
+
   useEffect(() => {
     live.current = true;
 
@@ -151,22 +171,78 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
    *
    * Unguarded on purpose — the flush loop calls it to roll a refused write back, and that happens
    * with `flushing` set. `refresh` below is the guarded door everyone else comes through.
+   *
+   * A fetch carries a first page of each list's rows, and `lists/loaded` replaces state wholesale,
+   * so this re-reads as many pages as were loaded before — see `reloadPages` — inside the same
+   * `fetching` guard, one page per request. "Loaded before" is read from `listsRef`, a mirror of
+   * state, rather than from a dependency: `hydrate` is a dependency of `flush`, which is a
+   * dependency of everything, and re-creating that chain on every render is how the effects above
+   * it start re-subscribing.
+   *
+   * Returns the array it dispatched, so a caller that needs to know what state holds *now* — the
+   * blocked-write path — does not have to wait for React to commit it.
    */
-  const hydrate = useCallback(async () => {
+  const hydrate = useCallback(async (): Promise<{ error: string | null; lists: List[] | null }> => {
     fetching.current = true;
 
     try {
-      const { lists, error: failure } = await fetchLists();
-      if (!live.current || !lists) return failure;
+      const { lists: fetched, error: failure, truncated } = await fetchLists();
+      if (!live.current || !fetched) return { error: failure, lists: null };
 
-      dispatch({ type: 'lists/loaded', lists: replay(lists, queue.current) });
+      // Lists are capped, not paged: the read stops at `MAX_ROWS` memberships and PostgREST would
+      // stop there silently anyway. A warning is all this earns until somebody is in a thousand
+      // lists — see the `(user_id, created_at)` index if that day comes.
+      if (truncated && __DEV__) {
+        console.warn(`fetchLists hit MAX_ROWS (${MAX_ROWS}); lists beyond the cap are not shown.`);
+      }
+
+      const lists = await reloadPages(fetched, listsRef.current, fetchItems);
+      if (!live.current) return { error: failure, lists: null };
+
+      const loaded = replay(lists, queue.current);
+      dispatch({ type: 'lists/loaded', lists: loaded });
       // The fetched rows, never the replayed view — see `writeCachedLists`.
       void writeCachedLists(userId, lists);
-      return failure;
+      return { error: failure, lists: loaded };
     } finally {
       fetching.current = false;
     }
   }, [userId]);
+
+  /**
+   * A page is server truth, and what the screen shows is server truth with the outbox on top — so
+   * the queue goes back over it, exactly as `replay` puts it over a fetch. Through `dispatch`
+   * rather than `replay` because a page lands on whatever state holds *now*, and every write
+   * action is idempotent by id: re-applying one to a row that already carries it changes nothing,
+   * and applying it to a row the page just brought is the point.
+   */
+  const foldPage = useCallback((action: Extract<Action, { type: 'items/pageLoaded' }>) => {
+    dispatch(action);
+    for (const queued of queue.current) dispatch(queued);
+  }, []);
+
+  /**
+   * The row a blocked write landed on, when the fetch did not bring it.
+   *
+   * `restorePlan` reads the tombstone out of state, and an empty plan means *discard the write*.
+   * With a bin longer than a page, the item somebody else binned may be beyond page 1 — the fetch
+   * arrives without it, the plan comes back empty, and the user's write is dropped with no banner.
+   * So when the op names an item that `loaded` does not hold, read that one row by key and fold it
+   * in with no `stream`, leaving the cursors where they are. A row the caller cannot see comes
+   * back `null`, and the plan is empty for the same reason it always was: purged, or removed.
+   */
+  const fetchMissingTarget = useCallback(async (op: WriteAction, loaded: List[] | null) => {
+    const itemId = itemIdOf(op);
+    if (!itemId || !loaded) return;
+
+    const listId = listIdOf(op);
+    const list = loaded.find((candidate) => candidate.id === listId);
+    if (!list || list.items.some((item) => item.id === itemId)) return;
+
+    const { item } = await fetchItem(itemId);
+    if (!live.current || !item) return;
+    foldPage({ type: 'items/pageLoaded', listId, items: [item] });
+  }, [foldPage]);
 
   /**
    * The nudge that arrived while a write of ours was in the air, honoured now that it has landed.
@@ -225,7 +301,12 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
             //
             // The op stays queued throughout, so `replay` keeps the optimistic row on screen where
             // it belongs: the write is pending, not refused.
-            await hydrate();
+            //
+            // Two fetches now, both before the announcement: the tombstone may be beyond the
+            // first page of the bin, where the wholesale read does not reach.
+            const { lists: loaded } = await hydrate();
+            if (!live.current) return;
+            await fetchMissingTarget(op, loaded);
             if (!live.current) return;
 
             setBlocked({ op, listId: listIdOf(op) });
@@ -265,8 +346,45 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
         drainOwed();
       }
     },
-    [persist, hydrate, drainOwed]
+    [persist, hydrate, fetchMissingTarget, drainOwed]
   );
+
+  /**
+   * The next page of one list, on scroll.
+   *
+   * A read, so it carries none of `refresh`'s guards and may overlap a `hydrate`: a page that lands
+   * during one is either included in the re-read `hydrate` does anyway, or dropped by the replace
+   * and reloaded on the next scroll — both correct, neither worth a guard. What must not overlap is
+   * still a flush and a fetch, and nothing here touches that.
+   *
+   * The bin only when asked, because the screen only shows it when asked, and one list at a time:
+   * a scroll fires `onEndReached` more than once, and the second call finds the first in `paging`.
+   * A page that fails is silent — the cursor is untouched, so the next scroll simply asks again —
+   * since `error` is for a write the database refused, and a read hiccup is not that.
+   */
+  const loadMore = useCallback(async (listId: string, includeBin: boolean) => {
+    if (paging.current.has(listId)) return;
+    const list = listsRef.current.find((candidate) => candidate.id === listId);
+    if (!list) return;
+
+    const pages: [Stream, Cursor | null][] = [['live', list.nextLive]];
+    if (includeBin) pages.push(['bin', list.nextBin]);
+
+    paging.current.add(listId);
+    try {
+      for (const [stream, after] of pages) {
+        if (after === null) continue;
+
+        const { items, next } = await fetchItems(listId, stream, after);
+        if (!live.current) return;
+        if (!items) continue;
+
+        foldPage({ type: 'items/pageLoaded', listId, items, stream: { name: stream, next } });
+      }
+    } finally {
+      paging.current.delete(listId);
+    }
+  }, [foldPage]);
 
   /**
    * A re-read on demand, for the sharing screen and for coming back to the app.
@@ -325,7 +443,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
         setStatus('ready');
       }
 
-      const failure = await hydrate();
+      const { error: failure } = await hydrate();
       if (cancelled) return;
 
       // A failed read is only worth a banner when there is nothing to show instead of an answer.
@@ -662,6 +780,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       restoreBlocked,
       discardBlocked,
       refresh,
+      loadMore,
     }),
     [
       state.lists,
@@ -680,6 +799,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       restoreBlocked,
       discardBlocked,
       refresh,
+      loadMore,
     ]
   );
 

@@ -1,4 +1,4 @@
-import type { Item, List, Role } from '../state/types';
+import type { Cursor, Item, List, Role, Stream } from '../state/types';
 import { supabase } from './supabase';
 
 /**
@@ -30,8 +30,28 @@ export type Verdict = 'ok' | 'applied' | 'retryable' | 'permanent';
  */
 export type WriteOutcome = 'applied' | 'target_deleted';
 
+/**
+ * PostgREST's `max_rows`, mirrored from `supabase/config.toml` (`[api] max_rows`) so the cap is
+ * visible in the code that hits it. Keep the two equal by hand: the config value is a **silent**
+ * ceiling — a request for more rows, top-level or embedded, comes back with exactly this many, no
+ * error, no header — so nothing here can discover it at runtime. Every explicit limit below is
+ * `<= MAX_ROWS` by construction, and `fetchLists` reports `truncated` when it lands on it.
+ */
+export const MAX_ROWS = 1000;
+
+/**
+ * Rows per page, from a budget of 100 kB per request: 100,000 B ÷ 239 B for the worst realistic
+ * row (uuid, three timestamps, a 40-character title, as PostgREST serialises them) is 418, rounded
+ * down. Typical rows are ~183 B, so a full page is ~73 kB. The budget assumes titles of ~40
+ * characters or fewer — the column has no length check, so this is a promise about how the app is
+ * used, not a guarantee the schema enforces. Bounded above by `MAX_ROWS` by construction.
+ */
+export const PAGE_SIZE = 400;
+
 /** Structural, so this module stays the only one importing anything from supabase-js. */
 type Failure = { message: string; code?: string | null } | null;
+
+const ITEM_COLUMNS = 'id, title, done_at, deleted_at, created_at';
 
 type ItemRow = {
   id: string;
@@ -40,7 +60,14 @@ type ItemRow = {
   deleted_at: string | null;
   created_at: string;
 };
-type ListRow = { id: string; name: string; deleted_at: string | null; items: ItemRow[] };
+/** The two streams arrive as two aliased embeds of the same table, each already filtered. */
+type ListRow = {
+  id: string;
+  name: string;
+  deleted_at: string | null;
+  live: ItemRow[];
+  bin: ItemRow[];
+};
 type MembershipRow = { role: Role; lists: ListRow };
 type MemberRow = { user_id: string; email: string; role: Role };
 
@@ -61,26 +88,113 @@ export type Member = { userId: string; email: string; role: Role };
  * supplies `user_id = auth.uid()`, which is an index qual on `(user_id, created_at)` — so the client
  * still filters nothing, and none of this is a rule a bug here could get wrong.
  *
- * Items are ordered here rather than with a second `referencedTable` spec, because that would be an
- * order two embeds deep and sorting a handful of items in JS is not worth the doubt.
+ * **Items arrive as two streams, a first page of each.** `live` and `bin` are the same table
+ * embedded twice under aliases, each filtered on `deleted_at`, ordered `(created_at, id)` and
+ * capped at `PAGE_SIZE` — all of it server-side, addressed two embeds deep (`lists.live.…`), which
+ * PostgREST accepts. Two streams rather than one chronological page because a weekly-cleared list's
+ * first page would be all tombstones: page 1 of `live` is exactly what the screen shows with the
+ * checkbox off, page 1 of `bin` exactly what it adds with the checkbox on. `fetchItems` reads the
+ * rest of either, from the cursor `toList` leaves on a full page.
  *
- * **Deleted rows come back too, and that is the point.** There is no `deleted_at is null` filter
- * here and none in the policies: a member has to be able to see a tombstone to restore it, so the
- * bin ships in the same round trip and ticking "Show deleted" is instant. The screens decide what to
- * render, through `liveItems` / `liveLists`. The signal that this trade has stopped paying is a list
- * whose deleted rows outnumber its live ones; the answer then is a second query behind the
- * checkbox, not a policy change.
+ * **The bin still rides along, and that is deliberate.** There is no `deleted_at` filter in the
+ * policies: a member has to be able to see a tombstone to restore it, and shipping the first page
+ * of the bin here keeps "Show deleted" instant and the offline restore working for any bin that
+ * fits in a page. What changed is the bound — 2 × `PAGE_SIZE` rows per list rather than every row
+ * anyone has ever deleted on it. Dropping the `bin` embed and reading it on the first tick of the
+ * checkbox is the follow-up if fetch size ever matters.
  */
-export async function fetchLists(): Promise<{ lists: List[] | null; error: string | null }> {
+export async function fetchLists(): Promise<{
+  lists: List[] | null;
+  error: string | null;
+  /**
+   * The membership scan hit `MAX_ROWS`, so lists beyond the cap are missing and nothing else says
+   * so. Lists are capped rather than paged — nobody is in a thousand of them — and the provider
+   * turns this into a development-time warning, which is the whole point of reporting it.
+   */
+  truncated: boolean;
+}> {
   const { data, error } = await supabase
     .from('list_members')
     .select(
-      'role, lists!inner ( id, name, deleted_at, items ( id, title, done_at, deleted_at, created_at ) )'
+      `role, lists!inner ( id, name, deleted_at, live:items ( ${ITEM_COLUMNS} ), bin:items ( ${ITEM_COLUMNS} ) )`
     )
-    .order('created_at');
+    .is('lists.live.deleted_at', null)
+    .not('lists.bin.deleted_at', 'is', null)
+    .order('created_at', { referencedTable: 'lists.live' })
+    .order('id', { referencedTable: 'lists.live' })
+    .order('created_at', { referencedTable: 'lists.bin' })
+    .order('id', { referencedTable: 'lists.bin' })
+    .limit(PAGE_SIZE, { referencedTable: 'lists.live' })
+    .limit(PAGE_SIZE, { referencedTable: 'lists.bin' })
+    .order('created_at')
+    .limit(MAX_ROWS);
 
-  if (error) return { lists: null, error: error.message };
-  return { lists: (data as unknown as MembershipRow[]).map(toList), error: null };
+  if (error) return { lists: null, error: error.message, truncated: false };
+  const rows = data as unknown as MembershipRow[];
+  return { lists: rows.map(toList), error: null, truncated: rows.length === MAX_ROWS };
+}
+
+/**
+ * The next page of one stream of one list — the one read rooted at `items` rather than at
+ * `list_members`, and measured for it: as `authenticated` at 1M rows the plan is an index scan on
+ * `(list_id, created_at)` whose cost tracks *this page*, never the table. The `.eq('list_id')` is
+ * not the client filtering for authorization — row-level security still decides what is visible —
+ * it picks the list.
+ *
+ * **Keyset, not offset, and the tie-break is not optional.** An offset drifts: the live stream
+ * loses rows while you scroll — somebody bins one — and page 3 skips a row. `(created_at, id)`
+ * skips nothing. The `or` is the keyset itself; the `gte` beside it is redundant in meaning and
+ * decisive in the plan, since it is what turns the index condition into a range starting at the
+ * cursor rather than at the first row of the list (measured: 23 buffers against 121).
+ *
+ * `next` is the last row when the page came back **full**, and `null` otherwise: a short page is
+ * the last page. That rule is why a page must never be silently shortened by the cap, so `limit`
+ * is asserted against `MAX_ROWS` rather than trusted.
+ */
+export async function fetchItems(
+  listId: string,
+  stream: Stream,
+  after: Cursor | null,
+  limit = PAGE_SIZE
+): Promise<{ items: Item[] | null; next: Cursor | null; error: string | null }> {
+  if (limit > MAX_ROWS) {
+    throw new Error(`fetchItems: a page of ${limit} rows would be silently capped at ${MAX_ROWS}`);
+  }
+
+  let query = supabase.from('items').select(ITEM_COLUMNS).eq('list_id', listId);
+  query = stream === 'live' ? query.is('deleted_at', null) : query.not('deleted_at', 'is', null);
+  if (after) {
+    // Quoted, because a timestamp carries `:` and `+`, both reserved inside a logic tree.
+    query = query
+      .gte('created_at', after.createdAt)
+      .or(
+        `created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",id.gt."${after.id}")`
+      );
+  }
+  const { data, error } = await query.order('created_at').order('id').limit(limit);
+
+  if (error) return { items: null, next: null, error: error.message };
+  const rows = data as unknown as ItemRow[];
+  return { items: rows.map(toItem), next: cursorAfter(rows, limit), error: null };
+}
+
+/**
+ * One row by primary key, for the provider's blocked-write path: the tombstone a queued write
+ * landed on may be beyond the first page of the bin, and `restorePlan` can only offer what is in
+ * state. A row the caller may not see comes back `null` — purged, or the account was removed —
+ * which is the right answer there, since the plan is empty for the same reason either way.
+ */
+export async function fetchItem(
+  itemId: string
+): Promise<{ item: Item | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('items')
+    .select(ITEM_COLUMNS)
+    .eq('id', itemId)
+    .maybeSingle();
+
+  if (error) return { item: null, error: error.message };
+  return { item: data ? toItem(data as unknown as ItemRow) : null, error: null };
 }
 
 /** `created_by` is deliberately not sent: it defaults to `auth.uid()` in the database. */
@@ -330,15 +444,19 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
  * arrives `undefined`, and `undefined !== null` is `true` everywhere downstream — so a typo in the
  * embed above would silently render every row as deleted, which is the one failure the cache's
  * version check cannot save anybody from.
+ *
+ * Rows arrive in server order and are kept that way, live first and then the bin; the screen sorts
+ * the two together when it shows both. Nothing is sorted here any more.
  */
 function toList(row: MembershipRow): List {
-  const items = [...row.lists.items].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
   return {
     id: row.lists.id,
     name: row.lists.name,
     role: row.role,
     deletedAt: row.lists.deleted_at ?? null,
-    items: items.map(toItem),
+    items: [...row.lists.live.map(toItem), ...row.lists.bin.map(toItem)],
+    nextLive: cursorAfter(row.lists.live),
+    nextBin: cursorAfter(row.lists.bin),
   };
 }
 
@@ -348,7 +466,15 @@ function toItem(row: ItemRow): Item {
     title: row.title,
     doneAt: row.done_at ?? null,
     deletedAt: row.deleted_at ?? null,
+    createdAt: row.created_at,
   };
+}
+
+/** Where the page after `rows` starts — or `null` when a short page says the stream has ended. */
+function cursorAfter(rows: ItemRow[], limit = PAGE_SIZE): Cursor | null {
+  if (rows.length < limit) return null;
+  const last = rows[rows.length - 1];
+  return { createdAt: last.created_at, id: last.id };
 }
 
 function toMember(row: MemberRow): Member {

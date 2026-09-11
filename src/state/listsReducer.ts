@@ -1,4 +1,4 @@
-import type { Action, Item, List, State } from './types';
+import type { Action, Cursor, Item, List, State } from './types';
 
 export const initialState: State = { lists: [] };
 
@@ -8,6 +8,38 @@ export function listsReducer(state: State, action: Action): State {
     // holds replaces whatever the screen was showing.
     case 'lists/loaded': {
       return { ...state, lists: action.lists };
+    }
+
+    // A page of one list, read from the database. Rows already here are left alone — a page can
+    // overlap what a re-read or a restore already brought in, and the row here may carry a tick or
+    // a tombstone newer than the page's copy. New rows go in *before* the first optimistic row: a
+    // list with page 1 loaded, an item added offline, then page 2 loaded must show page 2 above
+    // the new item, which is where the next hydration will put it anyway.
+    case 'items/pageLoaded': {
+      return updateList(state, action.listId, (list) => {
+        const known = new Set(list.items.map((item) => item.id));
+        const fresh = action.items.filter((item) => !known.has(item.id));
+
+        const cursors = action.stream
+          ? action.stream.name === 'live'
+            ? { nextLive: action.stream.next }
+            : { nextBin: action.stream.next }
+          : {};
+        const moved =
+          action.stream !== undefined &&
+          !sameCursor(
+            action.stream.name === 'live' ? list.nextLive : list.nextBin,
+            action.stream.next
+          );
+        if (fresh.length === 0 && !moved) return list;
+
+        const at = list.items.findIndex((item) => item.createdAt === null);
+        const items =
+          at === -1
+            ? [...list.items, ...fresh]
+            : [...list.items.slice(0, at), ...fresh, ...list.items.slice(at)];
+        return { ...list, items, ...cursors };
+      });
     }
 
     case 'list/created': {
@@ -23,7 +55,15 @@ export function listsReducer(state: State, action: Action): State {
         return updateList(state, action.id, (list) => (list.name === name ? list : { ...list, name }));
       }
 
-      const list: List = { id: action.id, name, role: 'owner', deletedAt: null, items: [] };
+      const list: List = {
+        id: action.id,
+        name,
+        role: 'owner',
+        deletedAt: null,
+        items: [],
+        nextLive: null,
+        nextBin: null,
+      };
       return { ...state, lists: [...state.lists, list] };
     }
 
@@ -41,9 +81,14 @@ export function listsReducer(state: State, action: Action): State {
       return updateList(state, action.listId, (list) => {
         const item = list.items.find((candidate) => candidate.id === action.id);
         if (!item) {
+          // `createdAt: null` — the database stamps the real one, and `null` is what keeps this
+          // row after every fetched page in `inCreationOrder`.
           return {
             ...list,
-            items: [...list.items, { id: action.id, title, doneAt: null, deletedAt: null }],
+            items: [
+              ...list.items,
+              { id: action.id, title, doneAt: null, deletedAt: null, createdAt: null },
+            ],
           };
         }
 
@@ -166,4 +211,28 @@ export function liveLists(lists: List[]): List[] {
 
 export function countDone(list: List): number {
   return liveItems(list).filter((item) => item.doneAt !== null).length;
+}
+
+/**
+ * The order the server sends rows in — `(created_at, id)` — with rows the database has not
+ * stamped yet last, in the order they were added.
+ *
+ * Needed because `items` is two streams end to end plus whatever was added since, and a row that
+ * moves between them keeps its place in the array: restore something from the bin and, unsorted,
+ * it would sit between page 1 and page 2 of the live rows. Returns a new array, so memoise it
+ * before handing it to a `FlatList`.
+ */
+export function inCreationOrder(items: Item[]): Item[] {
+  return [...items].sort((a, b) => {
+    if (a.createdAt === null || b.createdAt === null) {
+      return a.createdAt === b.createdAt ? 0 : a.createdAt === null ? 1 : -1;
+    }
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+function sameCursor(a: Cursor | null, b: Cursor | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.createdAt === b.createdAt && a.id === b.id;
 }

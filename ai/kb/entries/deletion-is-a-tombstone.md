@@ -1,12 +1,12 @@
 ---
 id: deletion-is-a-tombstone
-title: Deleting stamps `deleted_at` and leaves the row — the bin ships with every fetch and a nightly purge is what actually removes anything
+title: Deleting stamps `deleted_at` and leaves the row — the first page of the bin ships with every fetch and a nightly purge is what actually removes anything
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts]
-last_verified: 2026-09-10
-verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveItems' src/components/ListRow.tsx && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && ! grep -qE "\.(is|eq|not)\('deleted_at'" src/lib/listsApi.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts]
+last_verified: 2026-09-11
+verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveItems' src/components/ListRow.tsx && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'bin:items' src/lib/listsApi.ts && grep -q "not('lists.bin.deleted_at', 'is', null)" src/lib/listsApi.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
 related: [writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack]
 ---
 
@@ -46,10 +46,14 @@ outbox coalesces delete/restore/delete into one request, exactly as it does a to
 ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). Both `raise 42501` when they change
 nothing; neither returns an outcome, because a delete cannot itself land on a deleted target.
 
-**The bin arrives in the same fetch as everything else, and the client is what hides it.**
-`fetchLists` sends no `deleted_at` filter and the policies add none, so ticking "Show deleted" is
-instant — no spinner, no round trip, which is most of why this reads better than a separate trash
-screen. The consequence is the trap:
+**The bin arrives in the same fetch as everything else — a first page of it, since step 11 — and the
+client is what hides it.** `fetchLists` embeds `items` twice under the aliases `live` and `bin`, each
+filtered on `deleted_at` *server-side* and capped at `PAGE_SIZE`; the policies add no filter, and
+`fetchItems(listId, 'bin', cursor)` reads the rest of the bin on scroll
+([read-rooted-at-list-members](read-rooted-at-list-members.md)). The `deleted_at` filters in
+`listsApi` split the two streams; they hide nothing — every row of either stream is visible to every
+member. So ticking "Show deleted" is instant for any bin that fits in a page, which is most of why
+this reads better than a separate trash screen. The consequence is the trap:
 
 > **Every count and every render must go through `liveItems(list)` or `liveLists(lists)`**
 > ([src/state/listsReducer.ts](../../../src/state/listsReducer.ts)). A tombstone reads exactly like a
@@ -89,15 +93,16 @@ and worth recognising rather than debugging.
 
 **What it does not solve.** Restoring a list does **not** restore its items — the two tombstones are
 independent, which is correct and confusing enough to have earned a line of copy on the binned-list
-screen. The bin is fetched even when hidden; the signal to change that is a list whose deleted rows
-outnumber its live ones, and the answer then is a second query behind the checkbox, never a policy
-change. **The purge has never run on cloud, and neither migration has been pushed there** —
+screen. The first page of the bin is fetched even when hidden — **bounded** at `PAGE_SIZE` rows per
+list per fetch since step 11, not minimised; the follow-up, if fetch size ever matters, is to drop
+the `bin` embed and read the bin on the first tick of the checkbox, never to filter it in a policy.
+**The purge has never run on cloud, and neither migration has been pushed there** —
 `create extension pg_cron` is the one statement that may be refused
 ([supabase-local-stack](supabase-local-stack.md)). Nothing has yet read `cron.job_run_details` after a
 real 03:30 run; that failure mode is silent and slow, so check it once after deploying and again a
 week later.
 
 The `verify:` command asserts the parts a refactor would quietly undo: `countDone` and both screens
-still filter through the live helpers, `listsApi` still sends no `deleted_at` filter of its own,
-`my_memberships()` is still defined once and still free of any tombstone test, the purge still uses
-`<=` on both tables, and the schedule is still in its own file.
+still filter through the live helpers, `fetchLists` still embeds the `bin` stream (dropping it is
+the named follow-up, not a tidy-up), `my_memberships()` is still defined once and still free of any
+tombstone test, the purge still uses `<=` on both tables, and the schedule is still in its own file.

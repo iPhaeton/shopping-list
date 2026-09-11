@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import {
   addItem as addItemRequest,
+  fetchItems,
   fetchLists,
   renameItem,
   renameList,
@@ -20,7 +21,9 @@ import { ListDetailScreen } from './ListDetailScreen';
  * this suite is about the screen, not about what the database returns.
  */
 jest.mock('../lib/listsApi', () => ({
-  fetchLists: jest.fn(async () => ({ lists: [], error: null })),
+  fetchLists: jest.fn(async () => ({ lists: [], error: null, truncated: false })),
+  fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
+  fetchItem: jest.fn(async () => ({ item: null, error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   addItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   renameItem: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -82,7 +85,9 @@ const SHARED: List = {
   name: 'Groceries',
   role: 'reader',
   deletedAt: null,
-  items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null }],
+  items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null }],
+  nextLive: null,
+  nextBin: null,
 };
 
 /**
@@ -119,7 +124,7 @@ function Chrome({ listId }: { listId: string }) {
 }
 
 async function renderAs(role: Role) {
-  jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...SHARED, role }], error: null });
+  jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...SHARED, role }], error: null, truncated: false });
 
   await render(
     <ListsProvider userId="u1">
@@ -132,7 +137,7 @@ async function renderAs(role: Role) {
 }
 
 beforeEach(async () => {
-  jest.mocked(fetchLists).mockResolvedValue({ lists: [], error: null });
+  jest.mocked(fetchLists).mockResolvedValue({ lists: [], error: null, truncated: false });
   navigation.setOptions.mockClear();
   navigation.navigate.mockClear();
   jest.mocked(renameList).mockClear();
@@ -257,8 +262,9 @@ describe('a reader', () => {
 
   it('gets an empty state that does not ask them to add anything', async () => {
     jest.mocked(fetchLists).mockResolvedValue({
-      lists: [{ ...SHARED, role: 'reader', deletedAt: null, items: [] }],
+      lists: [{ ...SHARED, role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null }],
       error: null,
+      truncated: false,
     });
 
     await render(
@@ -427,12 +433,13 @@ async function renderWithBin(role: Role = 'owner') {
         ...SHARED,
         role,
         items: [
-          { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null },
-          { id: 'i2', title: 'Bread', doneAt: null, deletedAt: BINNED_AT },
+          { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null },
+          { id: 'i2', title: 'Bread', doneAt: null, deletedAt: BINNED_AT, createdAt: null },
         ],
       },
     ],
     error: null,
+    truncated: false,
   });
 
   await render(
@@ -513,10 +520,11 @@ it('says the list is empty when every live item has been deleted', async () => {
       {
         ...SHARED,
         role: 'owner',
-        items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: BINNED_AT }],
+        items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: BINNED_AT, createdAt: null }],
       },
     ],
     error: null,
+    truncated: false,
   });
 
   await render(
@@ -533,6 +541,7 @@ describe('a list opened from the bin', () => {
     jest.mocked(fetchLists).mockResolvedValue({
       lists: [{ ...SHARED, role, deletedAt: BINNED_AT }],
       error: null,
+      truncated: false,
     });
 
     await render(
@@ -579,4 +588,146 @@ describe('a list opened from the bin', () => {
 
     expect(screen.queryByLabelText('Restore Groceries')).not.toBeOnTheScreen();
   });
+});
+
+// --- Long lists ---------------------------------------------------------------------------------
+
+/**
+ * A fetch carries a first page of each stream; the rest arrives as the user scrolls. The `FlatList`
+ * gets an `onEndReached` handler only while there is a cursor to follow, so a list that fits in a
+ * page has nothing wired at all — and a scroll on one never sends a request.
+ */
+const T = (n: number) => `2026-09-01T00:00:${String(n).padStart(2, '0')}.000Z`;
+const row = (id: string, title: string, n: number, deletedAt: string | null = null) => ({
+  id,
+  title,
+  doneAt: null,
+  deletedAt,
+  createdAt: T(n),
+});
+const AFTER_BREAD = { createdAt: T(2), id: 'i2' };
+const AFTER_JAM = { createdAt: T(12), id: 'b2' };
+
+/** Page 1 of both streams loaded, each with more to come. */
+async function renderPaged() {
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [
+      {
+        ...SHARED,
+        role: 'writer',
+        items: [
+          row('i1', 'Milk', 1),
+          row('i2', 'Bread', 2),
+          row('b1', 'Old jam', 11, BINNED_AT),
+          row('b2', 'Jam', 12, BINNED_AT),
+        ],
+        nextLive: AFTER_BREAD,
+        nextBin: AFTER_JAM,
+      },
+    ],
+    error: null,
+    truncated: false,
+  });
+
+  await render(
+    <ListsProvider userId="u1">
+      <Chrome listId="l1" />
+    </ListsProvider>
+  );
+
+  await screen.findByLabelText('Milk');
+}
+
+/** Reaching the end is an event on the `FlatList`; a row inside it is where the event walks up from. */
+async function scrollToEnd() {
+  await fireEvent(screen.getByLabelText('Milk'), 'endReached');
+}
+
+/** The item rows in order — the "Show deleted" toggle is a checkbox too, so it is left out. */
+function itemLabels(): string[] {
+  return screen
+    .getAllByRole('checkbox')
+    .map((row) => String(row.props.accessibilityLabel))
+    .filter((label) => !label.startsWith('Show '));
+}
+
+describe('a list longer than a page', () => {
+  beforeEach(() => {
+    jest.mocked(fetchItems).mockClear();
+  });
+
+  it('loads the next page of live rows when scrolled to the end', async () => {
+    jest
+      .mocked(fetchItems)
+      .mockResolvedValueOnce({ items: [row('i3', 'Eggs', 3)], next: null, error: null });
+    await renderPaged();
+
+    await scrollToEnd();
+
+    expect(await screen.findByLabelText('Eggs')).toBeOnTheScreen();
+    expect(fetchItems).toHaveBeenCalledTimes(1);
+    expect(fetchItems).toHaveBeenCalledWith('l1', 'live', AFTER_BREAD);
+    expect(itemLabels()).toEqual(['Milk', 'Bread', 'Eggs']);
+  });
+
+  it('loads the bin as well once it is showing', async () => {
+    jest
+      .mocked(fetchItems)
+      .mockResolvedValueOnce({ items: [row('i3', 'Eggs', 3)], next: null, error: null })
+      .mockResolvedValueOnce({ items: [row('b3', 'Rye', 13, BINNED_AT)], next: null, error: null });
+    await renderPaged();
+
+    await fireEvent.press(screen.getByLabelText('Show 2+ deleted'));
+    await scrollToEnd();
+
+    expect(await screen.findByLabelText('Rye')).toBeOnTheScreen();
+    expect(fetchItems).toHaveBeenCalledWith('l1', 'live', AFTER_BREAD);
+    expect(fetchItems).toHaveBeenCalledWith('l1', 'bin', AFTER_JAM);
+    // Every row is loaded now, so the count is exact and the `+` is gone.
+    expect(screen.getByLabelText('Show 3 deleted')).toBeOnTheScreen();
+  });
+
+  it('shows a spinner at the foot of the list while the page is on its way', async () => {
+    let settle = (_page: { items: never[]; next: null; error: null }) => {};
+    jest.mocked(fetchItems).mockReturnValueOnce(
+      new Promise((resolve) => {
+        settle = resolve;
+      })
+    );
+    await renderPaged();
+
+    await scrollToEnd();
+    expect(screen.getByLabelText('Loading more items')).toBeOnTheScreen();
+
+    await act(async () => settle({ items: [], next: null, error: null }));
+    expect(screen.queryByLabelText('Loading more items')).not.toBeOnTheScreen();
+  });
+
+  /**
+   * The two streams load unevenly — page 2 of the live rows lands after page 1 of the bin — so the
+   * combined view sorts by when each row was created rather than showing them in arrival order.
+   */
+  it('interleaves live and deleted rows by date when both are showing', async () => {
+    jest
+      .mocked(fetchItems)
+      .mockResolvedValueOnce({ items: [row('i3', 'Eggs', 3)], next: null, error: null })
+      .mockResolvedValueOnce({ items: [row('b3', 'Rye', 13, BINNED_AT)], next: null, error: null });
+    await renderPaged();
+
+    await fireEvent.press(screen.getByLabelText('Show 2+ deleted'));
+    await scrollToEnd();
+    await screen.findByLabelText('Rye');
+
+    expect(itemLabels()).toEqual(['Milk', 'Bread', 'Eggs', 'Old jam', 'Jam', 'Rye']);
+  });
+});
+
+it('asks for nothing at the end of a list that fits in a page', async () => {
+  jest.mocked(fetchItems).mockClear();
+  await renderWithBin('writer');
+
+  await scrollToEnd();
+
+  expect(fetchItems).not.toHaveBeenCalled();
+  expect(screen.queryByLabelText('Loading more items')).not.toBeOnTheScreen();
 });

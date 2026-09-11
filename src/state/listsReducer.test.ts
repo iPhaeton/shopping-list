@@ -1,4 +1,4 @@
-import { countDone, initialState, listsReducer, liveItems, liveLists } from './listsReducer';
+import { countDone, inCreationOrder, initialState, listsReducer, liveItems, liveLists } from './listsReducer';
 import type { State } from './types';
 
 /** Stands in for a timestamp minted by the provider; the reducer never makes one itself. */
@@ -16,7 +16,7 @@ function stateWithItems(...titles: string[]): State {
 describe('lists/loaded', () => {
   it('replaces the lists with what the database returned', () => {
     const lists = [
-      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null }] },
+      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null, createdAt: null }], nextLive: null, nextBin: null },
     ];
 
     const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists });
@@ -39,7 +39,7 @@ describe('list/created', () => {
       name: 'Groceries',
     });
 
-    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] }]);
+    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null }]);
   });
 
   it('trims the name', () => {
@@ -117,7 +117,7 @@ describe('item/added', () => {
   it('appends an item that starts out not done', () => {
     const state = stateWithItems('Milk');
 
-    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null }]);
+    expect(state.lists[0].items).toEqual([{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null }]);
   });
 
   it('preserves insertion order', () => {
@@ -197,6 +197,7 @@ describe('item/renamed', () => {
       title: 'Oat milk',
       doneAt: DONE_AT,
       deletedAt: DONE_AT,
+      createdAt: null,
     });
   });
 
@@ -506,5 +507,188 @@ describe('liveItems, liveLists and countDone', () => {
     });
 
     expect(countDone(done.lists[0])).toBe(0);
+  });
+});
+
+// --- Pages --------------------------------------------------------------------------------------
+
+/** A fetched row: the database stamped it, so it carries `createdAt`. */
+function fetched(id: string, title: string, createdAt: string, deletedAt: string | null = null) {
+  return { id, title, doneAt: null, deletedAt, createdAt };
+}
+
+const T1 = '2026-09-01T10:00:00.000Z';
+const T2 = '2026-09-01T10:00:01.000Z';
+const T3 = '2026-09-01T10:00:02.000Z';
+const CURSOR = { createdAt: T2, id: 'i2' };
+
+describe('items/pageLoaded', () => {
+  it('appends the page and moves the cursor of the stream it belongs to', () => {
+    const state = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1), fetched('i2', 'Bread', T2)],
+      stream: { name: 'live', next: CURSOR },
+    });
+
+    expect(state.lists[0].items.map((item) => item.id)).toEqual(['i1', 'i2']);
+    expect(state.lists[0].nextLive).toEqual(CURSOR);
+    expect(state.lists[0].nextBin).toBeNull();
+  });
+
+  it('moves the bin cursor for a page of the bin', () => {
+    const state = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1, DELETED_AT)],
+      stream: { name: 'bin', next: null },
+    });
+
+    expect(state.lists[0].nextLive).toBeNull();
+    expect(state.lists[0].nextBin).toBeNull();
+    expect(state.lists[0].items[0].deletedAt).toBe(DELETED_AT);
+  });
+
+  /**
+   * A page can overlap what is already here — a re-read, or the one row fetched for a blocked
+   * write — and the copy in state may carry a tick or a tombstone newer than the page's. So a
+   * known id is left exactly as it is, never replaced.
+   */
+  it('leaves a row it already has alone, tick and tombstone included', () => {
+    const page1 = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1)],
+      stream: { name: 'live', next: { createdAt: T1, id: 'i1' } },
+    });
+    const ticked = listsReducer(page1, {
+      type: 'item/setDone',
+      listId: 'l1',
+      itemId: 'i1',
+      doneAt: DONE_AT,
+    });
+
+    // The page carries a stale, unticked copy of `i1`.
+    const state = listsReducer(ticked, {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1), fetched('i2', 'Bread', T2)],
+      stream: { name: 'live', next: null },
+    });
+
+    expect(state.lists[0].items).toEqual([
+      { ...fetched('i1', 'Milk', T1), doneAt: DONE_AT },
+      fetched('i2', 'Bread', T2),
+    ]);
+  });
+
+  /**
+   * Page 1 loaded, an item added offline, then page 2: page 2 belongs *above* the new item, which
+   * is where the next hydration will put it. Appending would render a minute-old item in the
+   * middle of rows created months ago.
+   */
+  it('inserts a page before the first optimistic row', () => {
+    const withPage1 = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1)],
+      stream: { name: 'live', next: { createdAt: T1, id: 'i1' } },
+    });
+    const withOffline = listsReducer(withPage1, {
+      type: 'item/added',
+      listId: 'l1',
+      id: 'new',
+      title: 'Eggs',
+    });
+
+    const state = listsReducer(withOffline, {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i2', 'Bread', T2)],
+      stream: { name: 'live', next: null },
+    });
+
+    expect(state.lists[0].items.map((item) => item.id)).toEqual(['i1', 'i2', 'new']);
+  });
+
+  /** The blocked-write path reads one row and must not disturb where either stream continues. */
+  it('leaves both cursors alone when no stream is named', () => {
+    const paged = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1)],
+      stream: { name: 'live', next: CURSOR },
+    });
+
+    const state = listsReducer(paged, {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i9', 'Jam', T3, DELETED_AT)],
+    });
+
+    expect(state.lists[0].nextLive).toEqual(CURSOR);
+    expect(state.lists[0].items.map((item) => item.id)).toEqual(['i1', 'i9']);
+  });
+
+  it('returns the same state object when it has every row and the cursor is unchanged', () => {
+    const before = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1)],
+      stream: { name: 'live', next: CURSOR },
+    });
+
+    expect(
+      listsReducer(before, {
+        type: 'items/pageLoaded',
+        listId: 'l1',
+        items: [fetched('i1', 'Milk', T1)],
+        stream: { name: 'live', next: { ...CURSOR } },
+      })
+    ).toBe(before);
+    expect(
+      listsReducer(before, { type: 'items/pageLoaded', listId: 'l1', items: [] })
+    ).toBe(before);
+  });
+
+  it('is a no-op for an unknown list', () => {
+    const before = stateWithItems('Milk');
+
+    expect(
+      listsReducer(before, {
+        type: 'items/pageLoaded',
+        listId: 'nope',
+        items: [fetched('i2', 'Bread', T2)],
+        stream: { name: 'live', next: null },
+      })
+    ).toBe(before);
+  });
+});
+
+/**
+ * Two streams end to end plus whatever was added since is not a display order: a row restored
+ * from the bin keeps its place in the array, and page 2 of the live rows lands after page 1 of
+ * the bin. This is what the screen sorts through.
+ */
+describe('inCreationOrder', () => {
+  it('sorts by created_at, then id, with rows the database has not stamped yet last', () => {
+    const items = [
+      fetched('b', 'Second', T2),
+      { id: 'y', title: 'Added later', doneAt: null, deletedAt: null, createdAt: null },
+      fetched('c', 'Third', T3, DELETED_AT),
+      { id: 'x', title: 'Added first', doneAt: null, deletedAt: null, createdAt: null },
+      fetched('a2', 'Tie, second by id', T1),
+      fetched('a1', 'Tie, first by id', T1),
+    ];
+
+    expect(inCreationOrder(items).map((item) => item.id)).toEqual(['a1', 'a2', 'b', 'c', 'y', 'x']);
+  });
+
+  it('returns a new array and leaves the input alone', () => {
+    const items = [fetched('b', 'Second', T2), fetched('a', 'First', T1)];
+    const sorted = inCreationOrder(items);
+
+    expect(sorted).not.toBe(items);
+    expect(items.map((item) => item.id)).toEqual(['b', 'a']);
   });
 });

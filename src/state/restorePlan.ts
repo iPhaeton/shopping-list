@@ -74,8 +74,12 @@ export function listIdOf(op: WriteAction): string {
   }
 }
 
-/** Which item an action is about, or `null` for the ones that are about a whole list. */
-function itemIdOf(op: WriteAction): string | null {
+/**
+ * Which item an action is about, or `null` for the ones that are about a whole list. Exported for
+ * the provider, which uses it to notice that a blocked write's target is not in state — a
+ * tombstone beyond the first page of the bin — and to read that one row before asking here.
+ */
+export function itemIdOf(op: WriteAction): string | null {
   switch (op.type) {
     case 'item/added':
       return op.id;

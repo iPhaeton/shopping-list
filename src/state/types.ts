@@ -12,7 +12,24 @@ export type Item = {
    * older cached blob, and `undefined !== null` is `true`, so every item would render as deleted.
    */
   deletedAt: string | null;
+  /**
+   * When the database created the row, stamped by its clock. `null` only for an optimistic row the
+   * database has not acknowledged — the reducer mints no timestamps, and carrying one on
+   * `item/added` would change the outbox's stored shape for nothing. Rows are ordered by this, and
+   * `null` sorts last, which is where an appended row lands anyway.
+   */
+  createdAt: string | null;
 };
+
+/**
+ * Where the next page of a stream starts: the `(created_at, id)` of the last row loaded. Keyset
+ * rather than an offset, because the live stream loses rows while you scroll — somebody bins one —
+ * and an offset would then skip a row. The `id` tie-break is what makes it exact.
+ */
+export type Cursor = { createdAt: string; id: string };
+
+/** A list's items arrive as two streams, paged independently: the live rows and the bin. */
+export type Stream = 'live' | 'bin';
 
 /**
  * What you may do with a list you can see. `reader` reads it, `writer` also adds items, renames
@@ -30,7 +47,23 @@ export type List = {
   role: Role;
   /** As on `Item`, and independent of it: restoring a list does not restore the items in its bin. */
   deletedAt: string | null;
+  /**
+   * Every row loaded so far, both streams, plus any optimistic rows. Fetched rows carry
+   * `createdAt`; a page is inserted before the first row that does not, so the live view stays in
+   * creation order with an item added offline still last.
+   */
   items: Item[];
+  /**
+   * Where the next page of live rows starts. `null` means every live row is in `items`, which is
+   * also what makes the "N of M done" summary exact.
+   *
+   * Required, like `deletedAt`: an older cached blob would rehydrate it as `undefined`, and
+   * `undefined !== null` reads as "there is more", so the first scroll would ask for a page after
+   * a cursor that does not exist.
+   */
+  nextLive: Cursor | null;
+  /** The same for the bin. */
+  nextBin: Cursor | null;
 };
 
 export type State = {
@@ -53,6 +86,19 @@ export type State = {
  */
 export type Action =
   | { type: 'lists/loaded'; lists: List[] }
+  /**
+   * A page of one list's rows, read from the database. Idempotent by id — a row already here is
+   * left alone, since its `doneAt` or `deletedAt` may have moved since — and the new ones go in
+   * before the first optimistic row. `stream` moves that stream's cursor; omitted, the cursors
+   * stay where they are, which is what a single-row read (the target of a blocked write) wants.
+   * Not a write: nothing is owed to the database, so it never enters the outbox.
+   */
+  | {
+      type: 'items/pageLoaded';
+      listId: string;
+      items: Item[];
+      stream?: { name: Stream; next: Cursor | null };
+    }
   | { type: 'list/created'; id: string; name: string }
   | { type: 'list/renamed'; id: string; name: string }
   | { type: 'list/setDeleted'; id: string; deletedAt: string | null }
@@ -64,6 +110,7 @@ export type Action =
 /**
  * The seven actions that owe the database a write. They are the outbox's entries as well as the
  * reducer's actions — `src/lib/outbox.ts` stores exactly these — which is what lets a pending write
- * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`).
+ * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`). The two reads
+ * are excluded: neither owes anything, so neither is queued and neither is folded.
  */
-export type WriteAction = Exclude<Action, { type: 'lists/loaded' }>;
+export type WriteAction = Exclude<Action, { type: 'lists/loaded' } | { type: 'items/pageLoaded' }>;

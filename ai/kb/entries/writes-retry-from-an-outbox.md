@@ -4,9 +4,9 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts]
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
 last_verified: 2026-09-11
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -c '^  | { type:' src/state/types.ts)" = 8
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 9 && grep -q "export type WriteAction = Exclude<Action, { type: 'lists/loaded' } | { type: 'items/pageLoaded' }>;" src/state/types.ts
 related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries]
 ---
 
@@ -14,7 +14,7 @@ Every reducer-owned write dispatches first — the row is on screen before any r
 written to an outbox on disk (`outbox:<userId>`, [src/lib/outbox.ts](../../../src/lib/outbox.ts))
 *before* the request goes out. A serial flush loop in [ListsContext](../../../src/state/ListsContext.tsx)
 keeps sending it until the database takes it: across backgrounding, a restart, days with no signal
-([optimistic-list-writes](optimistic-list-writes.md) is the "fire once, re-fetch on failure" this replaced).
+([optimistic-list-writes](optimistic-list-writes.md) is the fire-once design this replaced).
 
 **Decision: only a refusal removes a write.** [listsApi](../../../src/lib/listsApi.ts) classifies
 every response into a `verdict` — `ok`; `applied` (`23505`, this client's own insert catching up with
@@ -33,9 +33,10 @@ fire in exactly the case the feature exists for. Backoff is 1s doubling to a 30s
 by the web `online` event or `AppState` going `active`.
 
 **The queue holds reducer actions, not a second vocabulary for "a write".** `WriteAction` in
-[src/state/types.ts](../../../src/state/types.ts) is `Action` minus `lists/loaded` — seven writes,
-two of them renames since step 10 — which is what lets [replay](../../../src/state/replay.ts) fold
-pending ops back over fetched rows with the reducer itself. Every one carries an **absolute value**,
+[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the two *reads* (`lists/loaded`,
+and `items/pageLoaded` since step 11) — seven writes, two of them renames — which is what lets
+[replay](../../../src/state/replay.ts) fold pending ops back over fetched rows with the reducer
+itself; a page gets the same treatment by re-dispatch (`foldPage`). Every one carries an **absolute value**,
 never a flip or an inverse, so a retry or a coalesced duplicate is exactly correct
 ([update-list-identity-preserving](update-list-identity-preserving.md)): `enqueue` replaces a queued
 write with a newer one for the same target, so bin/restore/bin, or three renames, while offline is
@@ -53,18 +54,15 @@ it silently keeps a new item action that a refused insert should have stranded. 
 `VERSION` stays `1`**: a bump throws away unsent writes and buys nothing, because a v1 blob can only
 hold actions that are still valid ([list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)
 has the asymmetry with the cache's version). `queueFirst`, the one exception to appending, puts a
-restore in front of the write it unblocks ([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)
-holds that, and the third answer a write can get, neither `ok` nor a refusal).
+restore in front of the write it unblocks ([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
 
 **Membership writes deliberately do *not* go through any of this.** `shareList`, `setMemberRole` and
-`removeMember` are called straight from `SharingScreen`, which holds its roster in `useState`. Four
-reasons, the first sufficient alone: `share_list` resolves the email **server-side**, so "no account
-with that email yet" must be answered while the user is looking at the field — queued, it arrives an
-hour later as an error about a stranger; the reducer models no members, so there is nothing to show
-optimistically and nothing for `replay` to preserve; the roster is an uncached RPC, so that screen is
-the app's one online-only screen regardless; and a `member/removed` action would trip this entry's
-own `verify:`, correctly. The boundary is "a write the reducer describes", not "any request" — do
-not widen the outbox to a screen whose state it cannot replay.
+`removeMember` are called straight from `SharingScreen`, which holds its roster in `useState`. The
+sufficient reason: `share_list` resolves the email **server-side**, so "no account with that email
+yet" must be answered while the user is looking at the field — queued, it arrives an hour later as an
+error about a stranger. Also: the reducer models no members, so `replay` has nothing to preserve, and
+the roster is an uncached RPC, so that screen is online-only regardless. The boundary is "a write the
+reducer describes", not "any request" — do not widen the outbox to a screen it cannot replay.
 
 **Serial, and never overlapping a fetch.** `items.list_id` is a foreign key, so an item insert must
 not overtake the list insert it depends on: one request in flight, and a retryable failure stops the
@@ -77,10 +75,9 @@ permanent failure drops its dependents (`dropDependents`) so one refusal is one 
 burst of foreign-key complaints.
 
 **Per account, on a shared disk.** The provider is mounted only while signed in and takes `userId`
-as a **prop** — outbox and cache keys are per account, and one device holds an `outbox:<uid>` for
-every account that ever signed in on it, so a probe that reads "the" outbox has to name the account.
-Do not reach for `useSession()` inside `ListsContext` for the id: that drags a `SessionProvider` and
-an auth mock into every list suite.
+as a **prop** — outbox and cache keys are per account, so a probe that reads "the" outbox has to name
+the account. Do not reach for `useSession()` inside `ListsContext` for the id: that drags a
+`SessionProvider` and an auth mock into every list suite.
 
 **What to do, and what not to.**
 
@@ -104,17 +101,20 @@ an auth mock into every list suite.
 **Any new write path must fail loudly or not at all.** Since sharing, a refusal is a normal thing
 that happens to an honest user, and the loop rests on it coming back as one. An RPC that reported a
 refusal as success would have the outbox drop a write it never delivered, which is why
-`set_item_done` raises ([server-stamps-done-at](server-stamps-done-at.md)); a plain `PATCH` or
-`DELETE` filtered to zero rows answers `204` with no error and reads as success unless it asked for
-the row back ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)). `writeResult`
-rewrites `42501` and `23514` into sentences for these seven writes only, because their failure
-reaches the banner minutes or days after the tap; the membership RPCs keep the raw message.
+`set_item_done` raises ([server-stamps-done-at](server-stamps-done-at.md)); a `PATCH` or `DELETE`
+filtered to zero rows answers `204` and reads as success unless it asked for the row back
+([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)). `writeResult` rewrites
+`42501` and `23514` into sentences for these seven writes only, because their failure reaches the
+banner minutes or days after the tap; the membership RPCs keep the raw message.
 
 **Still not solved:** conflict resolution beyond last-write-wins, no happens-before, no sync engine
 (PowerSync if this ever needs real convergence), no warning when signing out with writes pending.
 
 The `verify:` command asserts shape, not plumbing: one `useReducer` caller; dispatch and enqueue
-counts equal (**a write that skips the outbox fails**); both verdict branches; the `P0002` rule; no
-attempt cap (a heuristic); no connectivity library; no `…/removed` action (case-insensitive — a
-case-sensitive grep once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer; and
-exactly **eight** `Action` members, so the next write cannot be added without revisiting this entry.
+counts equal (**a write that skips the outbox fails** — it counts the literal `dispatch(op);`, so a
+loop over already-queued ops must name its variable differently, as `foldPage` does); both verdict
+branches; the `P0002` rule; no attempt cap (a heuristic); no connectivity library; no `…/removed`
+action (case-insensitive — a case-sensitive grep once let `'item/setDeleted'` past); no
+`state.lists.filter` in the reducer; exactly **nine** `Action` members (counted by `type:` line, since
+`items/pageLoaded` spans several) and `WriteAction` excluding exactly the two reads — so the next
+write cannot be added without revisiting this entry.

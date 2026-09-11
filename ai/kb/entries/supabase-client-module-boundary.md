@@ -4,7 +4,7 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts]
 last_verified: 2026-09-11
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl 'ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes]
@@ -54,12 +54,13 @@ the provider; state that only one screen has goes in that screen's `useState`, c
 module directly.
 
 **One suite is the exception, and it has to be: `listsApi`'s own.**
-[src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) (step 7) mocks `./supabase` — the seam
-*below* the module under test — and stubs each builder chain in about five lines, because the chains
-are short and `fetchLists` is where a query shape can now be got wrong. It carries three such
-helpers, one per chain shape the module uses: `.from().select().order()`,
-`.from().update().eq().select()`, and `rpc()`. A module cannot be tested through the mock of itself;
-every suite *above* `listsApi` still mocks `listsApi`.
+[src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) mocks `./supabase` — the seam *below*
+the module under test — because `fetchLists` and `fetchItems` are where a query shape can be got
+wrong. Since step 11 it carries two helpers: `respondWith`, a **recording** builder whose every
+method returns itself and logs `[method, args]`, so a test asserts the shape of a read (`argsOf(calls,
+'limit')`) without the stub knowing which methods the read chains or in what order; and
+`respondToRpcWith` for every write, since nothing writes a table directly any more. A module cannot
+be tested through the mock of itself; every suite *above* `listsApi` still mocks `listsApi`.
 
 **Not every module beside it is a seam to mock, though.** Step 4's `src/lib/outbox.ts` and
 `src/lib/listCache.ts` are also plain modules under `lib/`, but the list suites deliberately let

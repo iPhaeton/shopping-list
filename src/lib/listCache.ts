@@ -20,8 +20,14 @@ import { inOrder } from './storageQueue';
  * would read as deleted and the first screen after an upgrade would be empty. That is the exact
  * failure this check exists to prevent, and it costs one fetch. `outbox.ts` stays at `1` again: the
  * new actions are additive and a v1 blob still replays.
+ *
+ * **`4` since pagination, for the same reason in the other direction.** `List` gained `nextLive`
+ * and `nextBin`, which a v3 blob rehydrates as `undefined` — and `undefined !== null` reads as
+ * "there is more", so the first scroll would ask for a page after a cursor that does not exist.
+ * `Item` gained `createdAt` too. `outbox.ts` stays at `1` a third time: `item/added` deliberately
+ * carries no timestamp, so a queued v1 op is still exactly what the reducer expects.
  */
-const VERSION = 3;
+const VERSION = 4;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 

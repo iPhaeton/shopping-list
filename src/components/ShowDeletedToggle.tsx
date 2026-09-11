@@ -14,20 +14,29 @@ import { colors, radius, spacing } from '../theme';
  * right default, since the bin is somewhere you go deliberately. The cost is re-ticking it on each
  * screen, and that is accepted.
  *
- * Deleted rows ship in the same fetch as live ones, so ticking this is instant: no spinner and no
- * round trip. That is a large part of why this reads better than a separate "trash" screen would.
+ * The first page of deleted rows ships in the same fetch as the live ones, so ticking this is
+ * instant: no spinner and no round trip. That is a large part of why this reads better than a
+ * separate "trash" screen would. A bin longer than a page loads the rest on scroll, like the live
+ * rows, and says so with a `+` — the count is what is loaded, not what exists, until the end.
  */
 export function ShowDeletedToggle({
   checked,
   count,
+  more = false,
   onChange,
 }: {
   checked: boolean;
-  /** How many deleted rows are hiding behind it. */
+  /** How many deleted rows are hiding behind it — loaded so far, when `more` is set. */
   count: number;
+  /** Whether there are deleted rows beyond the ones loaded. */
+  more?: boolean;
   onChange: (checked: boolean) => void;
 }) {
-  const label = count === 1 ? 'Show 1 deleted' : `Show ${count} deleted`;
+  const label = more
+    ? `Show ${count}+ deleted`
+    : count === 1
+      ? 'Show 1 deleted'
+      : `Show ${count} deleted`;
 
   return (
     <Pressable

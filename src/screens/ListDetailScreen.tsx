@@ -1,5 +1,13 @@
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { AddBar } from '../components/AddBar';
 import { BlockedBanner } from '../components/BlockedBanner';
@@ -11,7 +19,7 @@ import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { SyncBanner } from '../components/SyncBanner';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
-import { liveItems } from '../state/listsReducer';
+import { inCreationOrder, liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
 import { colors, spacing } from '../theme';
 
@@ -30,11 +38,15 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     setItemDeleted,
     restoreBlocked,
     discardBlocked,
+    loadMore,
   } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
 
   const [renaming, setRenaming] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
+  // Screen-local like `showDeleted`: it drives the footer spinner and nothing else. The provider
+  // keeps its own guard against a second request for the same list.
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // A list reached from the bin. It is a real list still — restorable, and shared with the same
   // people — so it opens and reads normally; what it does not get is anything that would write to
@@ -48,9 +60,30 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
 
   // Before the not-found return below, because hooks cannot be called conditionally. Memoised so the
   // `FlatList` is not handed a new `data` array on every render.
+  //
+  // Sorted, both views: `items` is two streams end to end plus whatever was added since, and a row
+  // that moved between them — restored from the bin — keeps its place in the array. With the bin
+  // shown, the sort is what interleaves page 2 of the live rows with page 1 of the bin by date.
   const live = useMemo(() => (list ? liveItems(list) : []), [list]);
-  const visible = showDeleted && list ? list.items : live;
+  const visible = useMemo(
+    () => inCreationOrder(showDeleted && list ? list.items : live),
+    [showDeleted, list, live]
+  );
   const inBin = (list?.items.length ?? 0) - live.length;
+
+  // Whether a scroll to the end has anything to fetch: the bin's cursor only counts while the bin
+  // is on screen. With no cursor the `FlatList` gets no handler at all, so nothing fires.
+  const more =
+    list !== undefined && (list.nextLive !== null || (showDeleted && list.nextBin !== null));
+
+  const loadNextPage = async () => {
+    setLoadingMore(true);
+    try {
+      await loadMore(listId, showDeleted);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -134,13 +167,29 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         />
       ) : null}
       {inBin > 0 ? (
-        <ShowDeletedToggle checked={showDeleted} count={inBin} onChange={setShowDeleted} />
+        <ShowDeletedToggle
+          checked={showDeleted}
+          count={inBin}
+          more={list.nextBin !== null}
+          onChange={setShowDeleted}
+        />
       ) : null}
       <FlatList
         data={visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        onEndReached={more && !loadingMore ? () => void loadNextPage() : undefined}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator
+              accessibilityLabel="Loading more items"
+              color={colors.accent}
+              style={styles.footer}
+            />
+          ) : null
+        }
         renderItem={({ item }) => (
           <ItemRow
             item={item}
@@ -192,5 +241,8 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  footer: {
+    paddingVertical: spacing.md,
   },
 });

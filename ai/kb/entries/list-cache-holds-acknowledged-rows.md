@@ -4,9 +4,9 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-10
-verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 3;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-11
+verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 4;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
 related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, update-list-identity-preserving, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack]
 ---
 
@@ -60,16 +60,26 @@ migration instead if it ever comes to that. Step 7's sharing UI is the worked ex
 bumping either: it added a fourth `WriteAction` (`list/renamed`) and no field on `List`, so a cached
 v2 blob is still exactly right and a queued v1 op is still replayable.
 
-**The cache version is `3` since step 9, and it is the worked example of a bump that was not
-optional.** `List` and `Item` both gained `deletedAt`
-([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), which a v2 blob rehydrates as `undefined` —
-and `undefined !== null` is **`true`**, so every cached row would read as deleted and the first screen
-after the upgrade would be empty. Silent, total, and repaired only by a fetch nobody knew to make.
-Note where else that same comparison bites, since the version check cannot help there: `toList` /
-`toItem` in [listsApi](../../../src/lib/listsApi.ts) coalesce both timestamps with `?? null`, because
-a column left out of the `select` string arrives `undefined` too. `outbox.ts` stayed at `1` again —
-two more actions are additive and a v1 blob still replays.
+**The cache version is `4` since step 11, and steps 9 and 11 are the worked examples of a bump that
+was not optional — the same comparison bites in both directions.** Step 9: `List` and `Item` gained
+`deletedAt` ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), which a v2 blob rehydrates as
+`undefined` — and `undefined !== null` is **`true`**, so every cached row would read as deleted and
+the first screen after the upgrade would be empty. Step 11: `List` gained the cursors `nextLive` /
+`nextBin`, which a v3 blob rehydrates as `undefined` too — read as "there is more", so the first
+scroll would ask for a page after a cursor that does not exist. Silent both times, and repaired only
+by a fetch nobody knew to make. Note where else that comparison bites, since the version check cannot
+help there: `toList` / `toItem` in [listsApi](../../../src/lib/listsApi.ts) coalesce the timestamps
+with `?? null`, because a column left out of the `select` string arrives `undefined` too. `outbox.ts`
+stayed at `1` a third time — the new actions are additive, and `item/added` deliberately carries no
+timestamp (`createdAt: null` until the database stamps it), so a queued v1 op is still exactly what
+the reducer expects.
+
+**Since step 11 the cache also holds every page a list had loaded, cursors included.** The
+acknowledged-rows effect writes `state.lists`, so a list scrolled three pages deep is cached three
+pages deep, and the first `hydrate` after a cold start re-reads that many pages to match — see
+[first-fetch-replaces-list-state](first-fetch-replaces-list-state.md). Nothing about the rule moved:
+a page is server truth, so it is acknowledged by definition.
 
 The `verify:` command asserts all of it: the acknowledged-rows effect still exists, `refresh` still
-caches the fetched array, nothing caches a `replay(...)` result, and the two versions are still `3`
+caches the fetched array, nothing caches a `replay(...)` result, and the two versions are still `4`
 and `1` — a "tidy-up" that syncs them fails the check.

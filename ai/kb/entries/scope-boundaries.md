@@ -1,17 +1,17 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime and deletion in; invites and leaving a list out
+title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion and paged items in; invites and leaving a list out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md]
 last_verified: 2026-09-11
-related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 10:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 11:
 
 | | |
 |---|---|
@@ -26,6 +26,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 8 | realtime: a change by one member reaches every other member in about a second, both apps in the foreground |
 | step 9 | deleting lists and items — as tombstones behind a "Show deleted" checkbox, restorable by whoever may delete, purged after 30 days |
 | step 10 | renaming an item, by an owner or writer — an inline editor on the row, sent through a `rename_item` RPC like every other item write |
+| step 11 | a list's items paged: a first page of live rows and of the bin ship with the fetch, the rest read on scroll by keyset; lists themselves capped, not paged |
 
 (The `-step-N` suffix counts steps *within* a task, not tasks: task 3's files are `-step-1`, and task
 2 is the only one whose suffix happens to match its directory.)
@@ -91,6 +92,13 @@ Each of these is easy to assume and wrong:
   `security definer` RPC because the client still holds no UPDATE on `items` at all
   ([server-stamps-done-at](server-stamps-done-at.md)). No realtime migration either, and no
   happens-before between a rename and a delete of the same item from two devices.
+- **step 11, pagination** — no migration at all: no new index (measured unnecessary), no policy
+  change, nothing to push. The sharing roster and the lists themselves are **not** paged — lists
+  stop at `MAX_ROWS` with a dev-time warning. The bin's first page still ships with every fetch
+  (bounded, not minimised), `items.title` has no length check, and an item added to a list longer
+  than a page lands beyond the loaded pages after the next hydration — one scroll away, by design
+  ([read-rooted-at-list-members](read-rooted-at-list-members.md),
+  [max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md)).
 
 **Cloud is three migrations behind local.** The four migrations up to realtime are pushed and read
 back from the production project; step 9's two (`20260910000000_deletion.sql`,

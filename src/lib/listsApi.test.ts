@@ -1,7 +1,11 @@
 import {
   addItem,
+  fetchItem,
+  fetchItems,
   fetchLists,
   fetchMembers,
+  MAX_ROWS,
+  PAGE_SIZE,
   removeMember,
   renameItem,
   renameList,
@@ -17,22 +21,46 @@ import { supabase } from './supabase';
  * `src/lib/supabase.ts` is mocked at the module boundary, the same seam the auth suites use — so
  * `@supabase/supabase-js` is never loaded here.
  *
- * What is worth asserting is the shape change sharing brought: the query is rooted at
- * `list_members` now, each row carries the caller's `role`, and the list hangs off it as an embed.
- * Item ordering moved out of PostgREST and into `toList` at the same time, which makes it the one
- * piece of real logic in this module.
+ * What is worth asserting is the *shape* of each read: the query is rooted at `list_members`,
+ * each row carries the caller's `role`, the list hangs off it as an embed, and the items come as
+ * two aliased embeds — a first page of each stream, filtered and ordered on the server. The one
+ * piece of real logic left in `toList` is the cursor it leaves on a full page.
  */
 jest.mock('./supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 
 type Response = { data: unknown; error: { message: string; code?: string } | null; status?: number };
 
-/** Stands in for the postgrest builder: `.from(...).select(...).order(...)` and then a promise. */
+/** One builder method as it was called: `['limit', [400, { referencedTable: 'lists.live' }]]`. */
+type Call = [method: string, args: unknown[]];
+
+/**
+ * Stands in for the postgrest builder. Every method returns the builder and records itself, and
+ * awaiting the builder resolves to `response` — so a test can assert the *shape* of a read
+ * (`calls`) without the stub having to know which methods the read chains, or in what order.
+ * `from` is recorded too, as the first call.
+ */
 function respondWith(response: Response) {
-  const order = jest.fn().mockResolvedValue(response);
-  const select = jest.fn(() => ({ order }));
-  const from = jest.fn(() => ({ select }));
+  const calls: Call[] = [];
+  const builder: Record<string, unknown> = {
+    then: (resolve: (value: Response) => unknown) => Promise.resolve(response).then(resolve),
+  };
+  for (const method of ['select', 'eq', 'is', 'not', 'or', 'gte', 'order', 'limit', 'maybeSingle']) {
+    builder[method] = (...args: unknown[]) => {
+      calls.push([method, args]);
+      return builder;
+    };
+  }
+  const from = jest.fn((table: string) => {
+    calls.push(['from', [table]]);
+    return builder;
+  });
   jest.mocked(supabase.from).mockImplementation(from as unknown as typeof supabase.from);
-  return { from, select, order };
+  return { calls };
+}
+
+/** The recorded arguments of every call to `method`, in order. */
+function argsOf(calls: Call[], method: string): unknown[][] {
+  return calls.filter(([name]) => name === method).map(([, args]) => args);
 }
 
 /**
@@ -46,65 +74,151 @@ function respondToRpcWith(response: Response) {
   return rpc;
 }
 
-const NAILS = { id: 'i2', title: 'Nails', done_at: null, created_at: '2026-09-02T10:00:00Z' };
-const MILK = { id: 'i1', title: 'Milk', done_at: '2026-09-03T09:00:00Z', created_at: '2026-09-01T10:00:00Z' };
+const NAILS = { id: 'i2', title: 'Nails', done_at: null, deleted_at: null, created_at: '2026-09-02T10:00:00Z' };
+const MILK = { id: 'i1', title: 'Milk', done_at: '2026-09-03T09:00:00Z', deleted_at: null, created_at: '2026-09-01T10:00:00Z' };
+const BREAD = { id: 'i3', title: 'Bread', done_at: null, deleted_at: '2026-09-09T07:00:00Z', created_at: '2026-09-01T11:00:00Z' };
+
+/** A membership row as PostgREST returns it, with the two aliased item embeds. */
+function membership(
+  n: number,
+  { live = [], bin = [] }: { live?: object[]; bin?: object[] } = {},
+  role = 'owner'
+) {
+  return { role, lists: { id: `l${n}`, name: `List ${n}`, deleted_at: null, live, bin } };
+}
+
+/** A full page of `n` rows with distinct, ascending `created_at`. */
+function page(n: number, prefix = 'p') {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `${prefix}${String(i).padStart(4, '0')}`,
+    title: `Row ${i}`,
+    done_at: null,
+    deleted_at: null,
+    created_at: `2026-09-01T00:00:${String(i % 60).padStart(2, '0')}.${String(i).padStart(6, '0')}Z`,
+  }));
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
 it('reads from list_members, ordered by when each list entered the account', async () => {
-  const { from, select, order } = respondWith({ data: [], error: null });
+  const { calls } = respondWith({ data: [], error: null });
 
   await fetchLists();
 
-  expect(from).toHaveBeenCalledWith('list_members');
+  expect(argsOf(calls, 'from')).toEqual([['list_members']]);
   // The embed is inner-joined, so a membership can never arrive without its list.
-  expect(select).toHaveBeenCalledWith(expect.stringContaining('lists!inner'));
+  expect(argsOf(calls, 'select')[0][0]).toContain('lists!inner');
   // No user filter: row-level security supplies it, and an `.eq()` here could only disagree.
-  expect(order).toHaveBeenCalledWith('created_at');
+  expect(argsOf(calls, 'eq')).toEqual([]);
+  expect(argsOf(calls, 'order')).toContainEqual(['created_at']);
+});
+
+/**
+ * PostgREST's `max_rows` is a silent ceiling: ask for more and exactly that many come back, with
+ * no error and no header. Sending the limit ourselves is what makes the cap visible in code, and
+ * landing on it exactly is the only signal that lists were cut off.
+ */
+it('caps the membership scan at MAX_ROWS and says when it hit the cap', async () => {
+  const { calls } = respondWith({
+    data: Array.from({ length: MAX_ROWS }, (_, n) => membership(n)),
+    error: null,
+  });
+  const full = await fetchLists();
+  expect(argsOf(calls, 'limit')).toContainEqual([MAX_ROWS]);
+  expect(full.truncated).toBe(true);
+  expect(full.lists).toHaveLength(MAX_ROWS);
+
+  respondWith({ data: [membership(1)], error: null });
+  expect((await fetchLists()).truncated).toBe(false);
+});
+
+/**
+ * The two streams are the same table embedded twice under aliases, each filtered, ordered and
+ * capped on the server, two embeds deep. The spelling matters: PostgREST addresses an alias
+ * inside an embed as `lists.live.…`, and a filter on the wrong path is silently ignored.
+ */
+it('asks for a first page of each stream, filtered, ordered and capped server-side', async () => {
+  const { calls } = respondWith({ data: [], error: null });
+
+  await fetchLists();
+
+  const select = String(argsOf(calls, 'select')[0][0]);
+  expect(select).toContain('live:items (');
+  expect(select).toContain('bin:items (');
+  expect(argsOf(calls, 'is')).toEqual([['lists.live.deleted_at', null]]);
+  expect(argsOf(calls, 'not')).toEqual([['lists.bin.deleted_at', 'is', null]]);
+  for (const stream of ['lists.live', 'lists.bin']) {
+    expect(argsOf(calls, 'order')).toContainEqual(['created_at', { referencedTable: stream }]);
+    expect(argsOf(calls, 'order')).toContainEqual(['id', { referencedTable: stream }]);
+    expect(argsOf(calls, 'limit')).toContainEqual([PAGE_SIZE, { referencedTable: stream }]);
+  }
 });
 
 it('carries the role from the membership row onto the list', async () => {
   respondWith({
-    data: [
-      { role: 'owner', lists: { id: 'l1', name: 'Groceries', items: [] } },
-      { role: 'reader', lists: { id: 'l2', name: 'Hardware', items: [] } },
-    ],
+    data: [membership(1, {}, 'owner'), membership(2, {}, 'reader')],
     error: null,
   });
 
   const { lists } = await fetchLists();
 
   expect(lists).toEqual([
-    { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [] },
-    { id: 'l2', name: 'Hardware', role: 'reader', deletedAt: null, items: [] },
+    { id: 'l1', name: 'List 1', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null },
+    { id: 'l2', name: 'List 2', role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null },
   ]);
 });
 
-it('sorts items by when they were created, whatever order the embed returned them in', async () => {
+/**
+ * Nothing is sorted here any more — the server orders each stream — so what is worth asserting is
+ * that the order it sent is the order kept, live first and then the bin, and that `createdAt`
+ * travels with every row, since that is what the screen sorts on and the cursor is made of.
+ */
+it('keeps the rows in server order, live first and then the bin', async () => {
   respondWith({
-    data: [{ role: 'writer', lists: { id: 'l1', name: 'Groceries', items: [NAILS, MILK] } }],
+    data: [membership(1, { live: [MILK, NAILS], bin: [BREAD] })],
     error: null,
   });
 
   const { lists } = await fetchLists();
 
   expect(lists?.[0].items).toEqual([
-    { id: 'i1', title: 'Milk', doneAt: '2026-09-03T09:00:00Z', deletedAt: null },
-    { id: 'i2', title: 'Nails', doneAt: null, deletedAt: null },
+    { id: 'i1', title: 'Milk', doneAt: '2026-09-03T09:00:00Z', deletedAt: null, createdAt: '2026-09-01T10:00:00Z' },
+    { id: 'i2', title: 'Nails', doneAt: null, deletedAt: null, createdAt: '2026-09-02T10:00:00Z' },
+    { id: 'i3', title: 'Bread', doneAt: null, deletedAt: '2026-09-09T07:00:00Z', createdAt: '2026-09-01T11:00:00Z' },
   ]);
+});
+
+/**
+ * "A short page is the last page" is the whole termination rule: exactly `PAGE_SIZE` rows means
+ * there may be more, and the cursor is the last row's `(created_at, id)`. One row fewer means
+ * every row of that stream is here, which is also what makes the "N of M done" summary exact.
+ */
+it('leaves a cursor on a full page and none on a short one', async () => {
+  const live = page(PAGE_SIZE, 'a');
+  respondWith({
+    data: [membership(1, { live, bin: page(PAGE_SIZE - 1, 'b') })],
+    error: null,
+  });
+
+  const { lists } = await fetchLists();
+
+  const last = live[live.length - 1];
+  expect(lists?.[0].nextLive).toEqual({ createdAt: last.created_at, id: last.id });
+  expect(lists?.[0].nextBin).toBeNull();
+  expect(lists?.[0].items).toHaveLength(2 * PAGE_SIZE - 1);
 });
 
 it('returns the error rather than throwing it', async () => {
   respondWith({ data: null, error: { message: 'JWT expired' } });
 
-  expect(await fetchLists()).toEqual({ lists: null, error: 'JWT expired' });
+  expect(await fetchLists()).toEqual({ lists: null, error: 'JWT expired', truncated: false });
 });
 
 /**
- * The bin travels in the same round trip as everything else — there is no `deleted_at is null`
- * filter here or in the policies, because a member has to see a tombstone to restore it.
+ * The first page of the bin travels in the same round trip as the live rows — the policies have
+ * no `deleted_at` filter, because a member has to see a tombstone to restore it.
  *
  * Asserted at **both** embed levels deliberately. Drop `deleted_at` from either half of the select
  * string and the column arrives `undefined`, which the `?? null` in `toItem`/`toList` quietly turns
@@ -112,7 +226,7 @@ it('returns the error rather than throwing it', async () => {
  * `undefined` in the first place.
  */
 it('carries the tombstone on a list and on an item', async () => {
-  const { select } = respondWith({
+  const { calls } = respondWith({
     data: [
       {
         role: 'owner',
@@ -120,7 +234,8 @@ it('carries the tombstone on a list and on an item', async () => {
           id: 'l1',
           name: 'Groceries',
           deleted_at: '2026-09-10T08:00:00Z',
-          items: [{ ...MILK, deleted_at: '2026-09-09T07:00:00Z' }],
+          live: [],
+          bin: [BREAD],
         },
       },
     ],
@@ -129,11 +244,116 @@ it('carries the tombstone on a list and on an item', async () => {
 
   const { lists } = await fetchLists();
 
-  expect(select).toHaveBeenCalledWith(expect.stringContaining('name, deleted_at'));
-  expect(select).toHaveBeenCalledWith(expect.stringContaining('done_at, deleted_at'));
+  const select = String(argsOf(calls, 'select')[0][0]);
+  expect(select).toContain('name, deleted_at');
+  expect(select).toContain('done_at, deleted_at');
   expect(lists?.[0].deletedAt).toBe('2026-09-10T08:00:00Z');
   expect(lists?.[0].items[0].deletedAt).toBe('2026-09-09T07:00:00Z');
 });
+
+// --- The next page of a stream ----------------------------------------------------------------
+
+/**
+ * The one read rooted at `items`. What is worth pinning is the keyset: the `or` that continues
+ * from `(created_at, id)`, the redundant `gte` that gives the planner a range to start from, and
+ * the order that makes the cursor mean anything.
+ */
+describe('fetchItems', () => {
+  const AFTER = { createdAt: '2026-09-01T10:00:00+00:00', id: 'i1' };
+
+  it('reads one stream of one list from a cursor, in cursor order', async () => {
+    const { calls } = respondWith({ data: [], error: null });
+
+    await fetchItems('l1', 'live', AFTER);
+
+    expect(argsOf(calls, 'from')).toEqual([['items']]);
+    expect(argsOf(calls, 'eq')).toEqual([['list_id', 'l1']]);
+    expect(argsOf(calls, 'is')).toEqual([['deleted_at', null]]);
+    expect(argsOf(calls, 'gte')).toEqual([['created_at', AFTER.createdAt]]);
+    // Quoted: a timestamp carries `:` and `+`, both reserved inside PostgREST's logic tree.
+    expect(argsOf(calls, 'or')).toEqual([
+      [
+        'created_at.gt."2026-09-01T10:00:00+00:00",and(created_at.eq."2026-09-01T10:00:00+00:00",id.gt."i1")',
+      ],
+    ]);
+    expect(argsOf(calls, 'order')).toEqual([['created_at'], ['id']]);
+    expect(argsOf(calls, 'limit')).toEqual([[PAGE_SIZE]]);
+  });
+
+  it('reads the bin with the opposite filter', async () => {
+    const { calls } = respondWith({ data: [], error: null });
+
+    await fetchItems('l1', 'bin', AFTER);
+
+    expect(argsOf(calls, 'is')).toEqual([]);
+    expect(argsOf(calls, 'not')).toEqual([['deleted_at', 'is', null]]);
+  });
+
+  it('starts from the beginning when there is no cursor', async () => {
+    const { calls } = respondWith({ data: [], error: null });
+
+    await fetchItems('l1', 'live', null);
+
+    expect(argsOf(calls, 'or')).toEqual([]);
+    expect(argsOf(calls, 'gte')).toEqual([]);
+  });
+
+  it('hands back a cursor only when the page came back full', async () => {
+    const rows = page(3);
+    respondWith({ data: rows, error: null });
+    const full = await fetchItems('l1', 'live', null, 3);
+    expect(full.items).toHaveLength(3);
+    expect(full.next).toEqual({ createdAt: rows[2].created_at, id: rows[2].id });
+
+    respondWith({ data: rows.slice(0, 2), error: null });
+    expect((await fetchItems('l1', 'live', null, 3)).next).toBeNull();
+  });
+
+  /** A page silently shortened by the cap would read as "the last page", and the rest would vanish. */
+  it('refuses a page size the cap would silently shorten', async () => {
+    respondWith({ data: [], error: null });
+
+    await expect(fetchItems('l1', 'live', null, MAX_ROWS + 1)).rejects.toThrow(/capped/);
+    await expect(fetchItems('l1', 'live', null, MAX_ROWS)).resolves.toBeTruthy();
+  });
+
+  it('returns the error rather than throwing it', async () => {
+    respondWith({ data: null, error: { message: 'JWT expired' } });
+
+    expect(await fetchItems('l1', 'live', null)).toEqual({
+      items: null,
+      next: null,
+      error: 'JWT expired',
+    });
+  });
+});
+
+describe('fetchItem', () => {
+  it('reads one row by primary key', async () => {
+    const { calls } = respondWith({ data: BREAD, error: null });
+
+    const { item } = await fetchItem('i3');
+
+    expect(argsOf(calls, 'from')).toEqual([['items']]);
+    expect(argsOf(calls, 'eq')).toEqual([['id', 'i3']]);
+    expect(argsOf(calls, 'maybeSingle')).toEqual([[]]);
+    expect(item).toEqual({
+      id: 'i3',
+      title: 'Bread',
+      doneAt: null,
+      deletedAt: '2026-09-09T07:00:00Z',
+      createdAt: '2026-09-01T11:00:00Z',
+    });
+  });
+
+  /** A row the caller may not see — purged, or the account was removed — is `null`, not an error. */
+  it('answers null for a row that is not there', async () => {
+    respondWith({ data: null, error: null });
+
+    expect(await fetchItem('i9')).toEqual({ item: null, error: null });
+  });
+});
+
 
 // --- The writes that can land on something in the bin -----------------------------------------
 

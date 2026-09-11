@@ -8,6 +8,7 @@ sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/5-supabase-cloud/imp
 last_verified: 2026-09-03
 verify: test "$(grep -c '^content_path = "./supabase/templates/otp-code.html"' supabase/config.toml)" = 2 && grep -q '{{ .Token }}' supabase/templates/otp-code.html
 related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, scope-boundaries]
+indexed: false
 ---
 
 Supabase's stock auth emails send `{{ .ConfirmationURL }}` — a magic link. `verifyOtp` has nothing
@@ -54,3 +55,9 @@ claims, not the same one.
 is used with `verifyOtp`. After editing a template or `config.toml`, restart the stack — see
 [supabase-local-stack](supabase-local-stack.md). Retire this entry if the app ever stops using
 email OTP.
+
+**Demoted out of `INDEX.md` at step 11** (`indexed: false`), not retired: still true, still checked
+every audit, still found by `/librarian ask`, and linked from
+[supabase-local-stack](supabase-local-stack.md), where anyone touching sign-in mail starts. It left
+the shortlist because no step since 6 has touched auth while the index filled with state and read-path
+facts, and the check catches the one edit that could break it anyway.
