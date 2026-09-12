@@ -64,14 +64,13 @@ it('shows an empty state before any list exists', async () => {
   expect(screen.getByText('No lists yet')).toBeOnTheScreen();
 });
 
-it('creates a list and shows it with an item summary', async () => {
+it('creates a list and shows it on screen', async () => {
   await renderScreen();
 
   await createList('Groceries');
 
   expect(screen.queryByText('No lists yet')).not.toBeOnTheScreen();
   expect(screen.getByText('Groceries')).toBeOnTheScreen();
-  expect(screen.getByText('No items yet')).toBeOnTheScreen();
 });
 
 it('clears the input after creating a list', async () => {
@@ -157,8 +156,8 @@ it('says a write is waiting to sync instead of raising an error', async () => {
 it('marks a list somebody else shared, in the label as well as on screen', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [
-      { id: 'l1', name: 'Groceries', role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null },
-      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null },
+      { id: 'l1', name: 'Groceries', role: 'reader', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
     ],
     error: null,
     truncated: false,
@@ -167,60 +166,15 @@ it('marks a list somebody else shared, in the label as well as on screen', async
   await renderScreen();
 
   expect(screen.getByText('Shared with you')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Groceries, No items yet, shared with you')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Hardware, No items yet')).toBeOnTheScreen();
-});
-
-/**
- * "2 of 5 done" is a claim about every live row, and a fetch carries only a first page of them. A
- * list with more beyond that page says what it knows — and how many it knows — until it has been
- * scrolled to its end, at which point the cursor clears and the row reverts to the exact copy.
- */
-it('says how many items a long list has loaded rather than pretending to know the count', async () => {
-  const item = (n: number) => ({
-    id: `i${n}`,
-    title: `Item ${n}`,
-    doneAt: n % 2 === 0 ? '2026-09-02T09:00:00.000Z' : null,
-    deletedAt: null,
-    createdAt: `2026-09-01T00:00:${String(n).padStart(2, '0')}.000Z`,
-  });
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [
-      {
-        id: 'l1',
-        name: 'Groceries',
-        role: 'owner',
-        deletedAt: null,
-        items: [item(1), item(2), item(3)],
-        nextLive: { createdAt: item(3).createdAt, id: 'i3' },
-        nextBin: null,
-      },
-      {
-        id: 'l2',
-        name: 'Hardware',
-        role: 'owner',
-        deletedAt: null,
-        items: [item(1), item(2), item(3)],
-        nextLive: null,
-        nextBin: null,
-      },
-    ],
-    error: null,
-    truncated: false,
-  });
-
-  await renderScreen();
-
-  expect(screen.getByText('3+ items')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Groceries, 3+ items')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Hardware, 1 of 3 done')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Groceries, shared with you')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Hardware')).toBeOnTheScreen();
 });
 
 it('navigates to the list when a row is pressed', async () => {
   const { navigation } = await renderScreen();
 
   await createList('Groceries');
-  await fireEvent.press(screen.getByLabelText('Groceries, No items yet'));
+  await fireEvent.press(screen.getByLabelText('Groceries'));
 
   expect(navigation.navigate).toHaveBeenCalledWith('ListDetail', {
     listId: expect.any(String),
@@ -235,8 +189,8 @@ const BINNED_AT = '2026-09-10T09:00:00.000Z';
 function withBin() {
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [
-      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null },
-      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [], nextLive: null, nextBin: null },
+      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
     ],
     error: null,
     truncated: false,
@@ -276,7 +230,7 @@ it('reveals them behind the checkbox, with no second request', async () => {
 /** A control that reveals nothing is noise, and there is nothing else in the app like it. */
 it('does not offer the checkbox when the bin is empty', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null }],
+    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
     error: null,
     truncated: false,
   });
@@ -302,7 +256,7 @@ it('sends a list to the bin and brings it back', async () => {
 /** Roles decide which controls exist; the database still decides whether a write is allowed. */
 it('gives a non-owner no way to delete a list', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'writer', deletedAt: null, items: [], nextLive: null, nextBin: null }],
+    lists: [{ id: 'l1', name: 'Groceries', role: 'writer', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
     error: null,
     truncated: false,
   });
@@ -315,7 +269,7 @@ it('gives a non-owner no way to delete a list', async () => {
 /** The empty state is a claim about the account, and a binned list must not silence it. */
 it('still says the account has no lists when the only one is in the bin', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, items: [], nextLive: null, nextBin: null }],
+    lists: [{ id: 'l2', name: 'Hardware', role: 'owner', deletedAt: BINNED_AT, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
     error: null,
     truncated: false,
   });

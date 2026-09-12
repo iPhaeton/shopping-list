@@ -4,9 +4,9 @@ title: Hydration replaces list state, so nothing may write before status is 'rea
 type: gotcha
 status: current
 tags: [state, persistence, testing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
-last_verified: 2026-09-11
-verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'owed.current = false;' && grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'void refresh();' && ! grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'hydrate(' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
+last_verified: 2026-09-12
+verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'owed.current = false;' && grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'void refresh();' && ! grep -A12 'const refreshSoon' src/state/ListsContext.tsx | grep -q 'hydrate(' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && grep -q 'listsRef.current = loaded;' src/state/ListsContext.tsx
 related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone]
 ---
 
@@ -85,14 +85,34 @@ flush loop's own rollback re-fetch — the one that repairs a `permanent` refusa
 rollback a no-op and leaves a refused write on screen forever. So: the flush loop calls `hydrate`,
 everyone else calls `refresh`, and the `verify:` command pins the guard to `refresh`'s body.
 
+**Step 11-2 found the same trap on the *ref* itself, and it generalises beyond this file.**
+`listsRef.current` is kept in sync by a mirroring `useEffect`, safe for a callback like `loadMore`
+that only ever fires from a user's scroll, long after the ref has settled. It is not safe for a
+*screen's own mount effect*: React fires a child's effects before its parent's, so a screen's
+`useEffect` and the provider's ref-mirroring `useEffect` can be scheduled by the same commit — the one
+where `hydrate`'s `dispatch({ type: 'lists/loaded', ... })` first makes a list appear — and the
+screen's effect can run first, reading a ref one commit behind. Concretely: `ListDetailScreen`'s mount
+effect calls `loadListItems`, which reads `listsRef.current` to find the list; on the commit a list
+first appears, it could still read the prior, empty array and silently never fetch. Fixed the same way
+as the return-value trap above: `hydrate` now also assigns `listsRef.current` synchronously,
+immediately after dispatching, so the ref is right before React even begins the commit/effect cycle —
+independent of ordering. The generic mirroring effect stays for every other dispatch site, none of
+which races a same-commit child mount effect this way. **General lesson: a `useEffect` that mirrors
+state into a ref is one commit behind for any consumer that is itself a mount effect on a
+freshly-appeared child** — reach for a synchronous assignment at the dispatch site, not
+`useLayoutEffect`, which still runs after children's effects.
+
 **What to do:** any new harness, screen or effect that creates a list or item waits for
 `status === 'ready'` first. In a test that means awaiting something the loaded screen renders (
 `await screen.findByLabelText('New list name')`) before firing events — the mocked `fetchLists`
-resolves a microtask later, not synchronously.
+resolves a microtask later, not synchronously. A new mount effect that reads `listsRef.current` (or
+any ref mirrored the same way) needs the same synchronous-assignment treatment if it can run on the
+same commit a list first appears.
 
 The `verify:` command asserts all of it: that `lists/loaded` still assigns the action's array
 wholesale, that `ListsScreen` still gates on `status`, that the replay happens in the provider and
 **not** inside the reducer, that `refresh` still carries the flush guard *and* still clears the owed
 nudge, that `refreshSoon` still routes through `refresh` and never calls `hydrate` behind its back,
-that `hydrate` is still called bare somewhere, and that the web `visibilitychange` listener is still
-there. If hydration ever becomes a merge, this entry is what changed.
+that `hydrate` is still called bare somewhere, that the web `visibilitychange` listener is still
+there, and that `hydrate` still assigns `listsRef.current` synchronously rather than relying solely on
+the mirroring effect. If hydration ever becomes a merge, this entry is what changed.

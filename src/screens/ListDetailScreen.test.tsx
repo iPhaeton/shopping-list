@@ -80,11 +80,19 @@ async function addItem(title: string) {
   await fireEvent.press(screen.getByLabelText('Add'));
 }
 
+/**
+ * `itemsLoaded: true` is a deliberate shortcut: `fetchLists` is mocked anyway, and this suite is
+ * mostly about role-gated controls and rendering, not about the fetch-on-entry mechanism itself —
+ * that has its own dedicated tests below, under `describe('loading a list on entry', ...)`. With
+ * this set, the screen's mount effect finds nothing to fetch and renders straight through, exactly
+ * as it did before items stopped riding along with `fetchLists`.
+ */
 const SHARED: List = {
   id: 'l1',
   name: 'Groceries',
   role: 'reader',
   deletedAt: null,
+  itemsLoaded: true,
   items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null }],
   nextLive: null,
   nextBin: null,
@@ -232,6 +240,76 @@ it('falls back to a not-found state for an unknown list', async () => {
   );
 
   expect(screen.getByText('List not found')).toBeOnTheScreen();
+});
+
+/**
+ * `fetchLists` carries no items at all any more — this is the point of the step. The screen has
+ * to ask for them itself, the moment it has a list to ask about, and show something honest while
+ * it waits rather than flashing the empty state.
+ */
+describe('loading a list on entry', () => {
+  beforeEach(() => {
+    jest.mocked(fetchItems).mockClear();
+  });
+
+  const BARE: List = {
+    id: 'l1',
+    name: 'Groceries',
+    role: 'owner',
+    deletedAt: null,
+    itemsLoaded: false,
+    items: [],
+    nextLive: null,
+    nextBin: null,
+  };
+
+  it('shows a spinner, then the list, once its first page arrives', async () => {
+    jest.mocked(fetchLists).mockResolvedValue({ lists: [BARE], error: null, truncated: false });
+    let settleLive = (_page: { items: List['items'] | null; next: null; error: null }) => {};
+    jest
+      .mocked(fetchItems)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            settleLive = resolve;
+          })
+      )
+      .mockImplementationOnce(async () => ({ items: [], next: null, error: null }));
+
+    await render(
+      <ListsProvider userId="u1">
+        <Chrome listId="l1" />
+      </ListsProvider>
+    );
+
+    expect(await screen.findByLabelText('Loading list items')).toBeOnTheScreen();
+    expect(fetchItems).toHaveBeenCalledWith('l1', 'live', null);
+    expect(fetchItems).toHaveBeenCalledWith('l1', 'bin', null);
+
+    await act(async () =>
+      settleLive({
+        items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: '2026-09-01T10:00:00Z' }],
+        next: null,
+        error: null,
+      })
+    );
+
+    expect(await screen.findByLabelText('Milk')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Loading list items')).not.toBeOnTheScreen();
+  });
+
+  it('does not ask again once a list is loaded', async () => {
+    jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...BARE, itemsLoaded: true }], error: null, truncated: false });
+
+    await render(
+      <ListsProvider userId="u1">
+        <Chrome listId="l1" />
+      </ListsProvider>
+    );
+
+    await screen.findByText('Nothing on this list');
+    expect(fetchItems).not.toHaveBeenCalled();
+  });
 });
 
 // --- By role -----------------------------------------------------------------------------------

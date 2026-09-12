@@ -60,14 +60,7 @@ type ItemRow = {
   deleted_at: string | null;
   created_at: string;
 };
-/** The two streams arrive as two aliased embeds of the same table, each already filtered. */
-type ListRow = {
-  id: string;
-  name: string;
-  deleted_at: string | null;
-  live: ItemRow[];
-  bin: ItemRow[];
-};
+type ListRow = { id: string; name: string; deleted_at: string | null };
 type MembershipRow = { role: Role; lists: ListRow };
 type MemberRow = { user_id: string; email: string; role: Role };
 
@@ -79,29 +72,19 @@ type MemberRow = { user_id: string; email: string; role: Role };
 export type Member = { userId: string; email: string; role: Role };
 
 /**
- * One round trip, rooted at `list_members` rather than at `lists`.
+ * One round trip, rooted at `list_members` rather than at `lists` — list metadata only, no items.
  *
  * That rooting is the whole read path, not a stylistic choice. Asking `lists` "which of you may I
  * see" makes the top-level scan proportional to how many lists *exist*; asking `list_members`
  * "which memberships do I have, and what hangs off each" makes it proportional to how many lists
- * *you are in*, with `lists` and `items` reached by primary key from there. Row-level security
- * supplies `user_id = auth.uid()`, which is an index qual on `(user_id, created_at)` — so the client
- * still filters nothing, and none of this is a rule a bug here could get wrong.
+ * *you are in*, with `lists` reached by primary key from there. Row-level security supplies
+ * `user_id = auth.uid()`, which is an index qual on `(user_id, created_at)` — so the client still
+ * filters nothing, and none of this is a rule a bug here could get wrong.
  *
- * **Items arrive as two streams, a first page of each.** `live` and `bin` are the same table
- * embedded twice under aliases, each filtered on `deleted_at`, ordered `(created_at, id)` and
- * capped at `PAGE_SIZE` — all of it server-side, addressed two embeds deep (`lists.live.…`), which
- * PostgREST accepts. Two streams rather than one chronological page because a weekly-cleared list's
- * first page would be all tombstones: page 1 of `live` is exactly what the screen shows with the
- * checkbox off, page 1 of `bin` exactly what it adds with the checkbox on. `fetchItems` reads the
- * rest of either, from the cursor `toList` leaves on a full page.
- *
- * **The bin still rides along, and that is deliberate.** There is no `deleted_at` filter in the
- * policies: a member has to be able to see a tombstone to restore it, and shipping the first page
- * of the bin here keeps "Show deleted" instant and the offline restore working for any bin that
- * fits in a page. What changed is the bound — 2 × `PAGE_SIZE` rows per list rather than every row
- * anyone has ever deleted on it. Dropping the `bin` embed and reading it on the first tick of the
- * checkbox is the follow-up if fetch size ever matters.
+ * **Items are not part of this read.** They used to arrive as a first page of `live` and `bin`
+ * embedded here, which meant opening the Lists screen fetched items for every list you're in, not
+ * only the one you were about to look at. `fetchItems` reads a list's items — both streams, a page
+ * at a time — and is called once you actually enter that list, never for every row on this screen.
  */
 export async function fetchLists(): Promise<{
   lists: List[] | null;
@@ -115,17 +98,7 @@ export async function fetchLists(): Promise<{
 }> {
   const { data, error } = await supabase
     .from('list_members')
-    .select(
-      `role, lists!inner ( id, name, deleted_at, live:items ( ${ITEM_COLUMNS} ), bin:items ( ${ITEM_COLUMNS} ) )`
-    )
-    .is('lists.live.deleted_at', null)
-    .not('lists.bin.deleted_at', 'is', null)
-    .order('created_at', { referencedTable: 'lists.live' })
-    .order('id', { referencedTable: 'lists.live' })
-    .order('created_at', { referencedTable: 'lists.bin' })
-    .order('id', { referencedTable: 'lists.bin' })
-    .limit(PAGE_SIZE, { referencedTable: 'lists.live' })
-    .limit(PAGE_SIZE, { referencedTable: 'lists.bin' })
+    .select('role, lists!inner ( id, name, deleted_at )')
     .order('created_at')
     .limit(MAX_ROWS);
 
@@ -440,13 +413,13 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
 /**
  * Your role travels with the membership row; the list itself hangs off it.
  *
- * `?? null` on both timestamps rather than a bare read. A column missing from the select string
+ * `?? null` on the timestamp rather than a bare read. A column missing from the select string
  * arrives `undefined`, and `undefined !== null` is `true` everywhere downstream — so a typo in the
- * embed above would silently render every row as deleted, which is the one failure the cache's
+ * select above would silently render every list as deleted, which is the one failure the cache's
  * version check cannot save anybody from.
  *
- * Rows arrive in server order and are kept that way, live first and then the bin; the screen sorts
- * the two together when it shows both. Nothing is sorted here any more.
+ * `itemsLoaded: false` for every list, always: this read never carries items, so nothing here can
+ * say otherwise. `fetchItems` is what fills a list in, once it is opened.
  */
 function toList(row: MembershipRow): List {
   return {
@@ -454,9 +427,10 @@ function toList(row: MembershipRow): List {
     name: row.lists.name,
     role: row.role,
     deletedAt: row.lists.deleted_at ?? null,
-    items: [...row.lists.live.map(toItem), ...row.lists.bin.map(toItem)],
-    nextLive: cursorAfter(row.lists.live),
-    nextBin: cursorAfter(row.lists.bin),
+    itemsLoaded: false,
+    items: [],
+    nextLive: null,
+    nextBin: null,
   };
 }
 

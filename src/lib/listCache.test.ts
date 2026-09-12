@@ -15,6 +15,7 @@ const GROCERIES: List = {
   name: 'Groceries',
   role: 'owner',
   deletedAt: null,
+  itemsLoaded: true,
   items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: '2026-09-01T10:00:00Z' }],
   nextLive: { createdAt: '2026-09-01T10:00:00Z', id: 'i1' },
   nextBin: null,
@@ -33,6 +34,13 @@ it('round-trips what it was given, cursors included', async () => {
 it('drops a blob from before pagination rather than reading its missing cursors as "more"', async () => {
   const { nextLive: _live, nextBin: _bin, ...v3List } = GROCERIES;
   await AsyncStorage.setItem('lists:u1', JSON.stringify({ v: 3, lists: [v3List] }));
+
+  expect(await readCachedLists('u1')).toBeNull();
+});
+
+it('drops a blob from before items stopped riding along with fetchLists', async () => {
+  const { itemsLoaded: _itemsLoaded, ...v4List } = GROCERIES;
+  await AsyncStorage.setItem('lists:u1', JSON.stringify({ v: 4, lists: [v4List] }));
 
   expect(await readCachedLists('u1')).toBeNull();
 });

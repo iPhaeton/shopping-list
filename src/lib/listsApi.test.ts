@@ -21,10 +21,9 @@ import { supabase } from './supabase';
  * `src/lib/supabase.ts` is mocked at the module boundary, the same seam the auth suites use — so
  * `@supabase/supabase-js` is never loaded here.
  *
- * What is worth asserting is the *shape* of each read: the query is rooted at `list_members`,
- * each row carries the caller's `role`, the list hangs off it as an embed, and the items come as
- * two aliased embeds — a first page of each stream, filtered and ordered on the server. The one
- * piece of real logic left in `toList` is the cursor it leaves on a full page.
+ * What is worth asserting is the *shape* of each read: `fetchLists` is rooted at `list_members`,
+ * each row carries the caller's `role`, and the list hangs off it as an embed carrying no items at
+ * all — those come from `fetchItems`, read separately once a list is opened.
  */
 jest.mock('./supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 
@@ -74,17 +73,11 @@ function respondToRpcWith(response: Response) {
   return rpc;
 }
 
-const NAILS = { id: 'i2', title: 'Nails', done_at: null, deleted_at: null, created_at: '2026-09-02T10:00:00Z' };
-const MILK = { id: 'i1', title: 'Milk', done_at: '2026-09-03T09:00:00Z', deleted_at: null, created_at: '2026-09-01T10:00:00Z' };
 const BREAD = { id: 'i3', title: 'Bread', done_at: null, deleted_at: '2026-09-09T07:00:00Z', created_at: '2026-09-01T11:00:00Z' };
 
-/** A membership row as PostgREST returns it, with the two aliased item embeds. */
-function membership(
-  n: number,
-  { live = [], bin = [] }: { live?: object[]; bin?: object[] } = {},
-  role = 'owner'
-) {
-  return { role, lists: { id: `l${n}`, name: `List ${n}`, deleted_at: null, live, bin } };
+/** A membership row as PostgREST returns it now — no items, just list metadata. */
+function membership(n: number, role = 'owner', deletedAt: string | null = null) {
+  return { role, lists: { id: `l${n}`, name: `List ${n}`, deleted_at: deletedAt } };
 }
 
 /** A full page of `n` rows with distinct, ascending `created_at`. */
@@ -135,79 +128,35 @@ it('caps the membership scan at MAX_ROWS and says when it hit the cap', async ()
 });
 
 /**
- * The two streams are the same table embedded twice under aliases, each filtered, ordered and
- * capped on the server, two embeds deep. The spelling matters: PostgREST addresses an alias
- * inside an embed as `lists.live.…`, and a filter on the wrong path is silently ignored.
+ * The point of this step: opening the Lists screen used to fetch a first page of every list's
+ * items, which is exactly what made it laggy. `fetchLists` now sends no item embed at all —
+ * `fetchItems` is what a list's items come from, read once that list is actually opened.
  */
-it('asks for a first page of each stream, filtered, ordered and capped server-side', async () => {
+it('sends no item embed — items arrive only once a list is entered', async () => {
   const { calls } = respondWith({ data: [], error: null });
 
   await fetchLists();
 
   const select = String(argsOf(calls, 'select')[0][0]);
-  expect(select).toContain('live:items (');
-  expect(select).toContain('bin:items (');
-  expect(argsOf(calls, 'is')).toEqual([['lists.live.deleted_at', null]]);
-  expect(argsOf(calls, 'not')).toEqual([['lists.bin.deleted_at', 'is', null]]);
-  for (const stream of ['lists.live', 'lists.bin']) {
-    expect(argsOf(calls, 'order')).toContainEqual(['created_at', { referencedTable: stream }]);
-    expect(argsOf(calls, 'order')).toContainEqual(['id', { referencedTable: stream }]);
-    expect(argsOf(calls, 'limit')).toContainEqual([PAGE_SIZE, { referencedTable: stream }]);
-  }
+  expect(select).not.toContain('items');
+  expect(argsOf(calls, 'is')).toEqual([]);
+  expect(argsOf(calls, 'not')).toEqual([]);
+  expect(argsOf(calls, 'order')).toEqual([['created_at']]);
+  expect(argsOf(calls, 'limit')).toEqual([[MAX_ROWS]]);
 });
 
-it('carries the role from the membership row onto the list', async () => {
+it('carries the role from the membership row onto the list, with nothing fetched yet', async () => {
   respondWith({
-    data: [membership(1, {}, 'owner'), membership(2, {}, 'reader')],
+    data: [membership(1, 'owner'), membership(2, 'reader')],
     error: null,
   });
 
   const { lists } = await fetchLists();
 
   expect(lists).toEqual([
-    { id: 'l1', name: 'List 1', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null },
-    { id: 'l2', name: 'List 2', role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null },
+    { id: 'l1', name: 'List 1', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+    { id: 'l2', name: 'List 2', role: 'reader', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
   ]);
-});
-
-/**
- * Nothing is sorted here any more — the server orders each stream — so what is worth asserting is
- * that the order it sent is the order kept, live first and then the bin, and that `createdAt`
- * travels with every row, since that is what the screen sorts on and the cursor is made of.
- */
-it('keeps the rows in server order, live first and then the bin', async () => {
-  respondWith({
-    data: [membership(1, { live: [MILK, NAILS], bin: [BREAD] })],
-    error: null,
-  });
-
-  const { lists } = await fetchLists();
-
-  expect(lists?.[0].items).toEqual([
-    { id: 'i1', title: 'Milk', doneAt: '2026-09-03T09:00:00Z', deletedAt: null, createdAt: '2026-09-01T10:00:00Z' },
-    { id: 'i2', title: 'Nails', doneAt: null, deletedAt: null, createdAt: '2026-09-02T10:00:00Z' },
-    { id: 'i3', title: 'Bread', doneAt: null, deletedAt: '2026-09-09T07:00:00Z', createdAt: '2026-09-01T11:00:00Z' },
-  ]);
-});
-
-/**
- * "A short page is the last page" is the whole termination rule: exactly `PAGE_SIZE` rows means
- * there may be more, and the cursor is the last row's `(created_at, id)`. One row fewer means
- * every row of that stream is here, which is also what makes the "N of M done" summary exact.
- */
-it('leaves a cursor on a full page and none on a short one', async () => {
-  const live = page(PAGE_SIZE, 'a');
-  respondWith({
-    data: [membership(1, { live, bin: page(PAGE_SIZE - 1, 'b') })],
-    error: null,
-  });
-
-  const { lists } = await fetchLists();
-
-  const last = live[live.length - 1];
-  expect(lists?.[0].nextLive).toEqual({ createdAt: last.created_at, id: last.id });
-  expect(lists?.[0].nextBin).toBeNull();
-  expect(lists?.[0].items).toHaveLength(2 * PAGE_SIZE - 1);
 });
 
 it('returns the error rather than throwing it', async () => {
@@ -217,28 +166,13 @@ it('returns the error rather than throwing it', async () => {
 });
 
 /**
- * The first page of the bin travels in the same round trip as the live rows — the policies have
- * no `deleted_at` filter, because a member has to see a tombstone to restore it.
- *
- * Asserted at **both** embed levels deliberately. Drop `deleted_at` from either half of the select
- * string and the column arrives `undefined`, which the `?? null` in `toItem`/`toList` quietly turns
- * into "not deleted" — a mapping bug that no `toEqual` would catch, since `toEqual` ignores
- * `undefined` in the first place.
+ * `?? null` rather than a bare read: a column missing from the select string arrives `undefined`,
+ * and `undefined !== null` is `true` everywhere downstream, so a typo here would silently render
+ * every list as deleted — a mapping bug `toEqual` would not catch, since it ignores `undefined`.
  */
-it('carries the tombstone on a list and on an item', async () => {
+it('carries the tombstone on a list', async () => {
   const { calls } = respondWith({
-    data: [
-      {
-        role: 'owner',
-        lists: {
-          id: 'l1',
-          name: 'Groceries',
-          deleted_at: '2026-09-10T08:00:00Z',
-          live: [],
-          bin: [BREAD],
-        },
-      },
-    ],
+    data: [membership(1, 'owner', '2026-09-10T08:00:00Z')],
     error: null,
   });
 
@@ -246,9 +180,7 @@ it('carries the tombstone on a list and on an item', async () => {
 
   const select = String(argsOf(calls, 'select')[0][0]);
   expect(select).toContain('name, deleted_at');
-  expect(select).toContain('done_at, deleted_at');
   expect(lists?.[0].deletedAt).toBe('2026-09-10T08:00:00Z');
-  expect(lists?.[0].items[0].deletedAt).toBe('2026-09-09T07:00:00Z');
 });
 
 // --- The next page of a stream ----------------------------------------------------------------

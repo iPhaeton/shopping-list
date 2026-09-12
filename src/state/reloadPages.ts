@@ -5,28 +5,32 @@ import type { Cursor, Item, List, Stream } from './types';
 export type FetchPage = (
   listId: string,
   stream: Stream,
-  after: Cursor
+  after: Cursor | null
 ) => Promise<{ items: Item[] | null; next: Cursor | null }>;
 
 /**
  * Brings a fresh fetch back up to how much of each list was loaded before it.
  *
- * `lists/loaded` replaces state wholesale, and a fetch carries a first page of each stream. Left
- * alone, a nudge while the user is three pages into a list would shrink it to page 1 and jump the
- * scroll — and long lists are precisely where nudges are most frequent. So for every list whose
- * previous copy held more rows of a stream than the fetch brought, this follows that stream's
- * cursor **one page at a time** — every request stays one page — until it holds at least as many
+ * `lists/loaded` replaces state wholesale, and a fresh fetch never carries any items — `fetchLists`
+ * only reads list metadata now. Left alone, a nudge while the user has a list open (or has had one
+ * open earlier this session) would collapse it back to `itemsLoaded: false` and flash a spinner.
+ * So for every list that was `itemsLoaded` before, this re-fetches each stream **one page at a
+ * time, starting from page 1** — every request stays one page — until it holds at least as many
  * rows as before or the stream ends, and folds each page in with the reducer's own
- * `items/pageLoaded`. The result is still one array for one `lists/loaded`: the reducer never sees
- * a merge, and this lives above it for the same reason `replay` does.
+ * `items/pageLoaded`, then flips `itemsLoaded` back on. The result is still one array for one
+ * `lists/loaded`: the reducer never sees a merge, and this lives above it for the same reason
+ * `replay` does.
+ *
+ * A list that was never opened (`itemsLoaded` false, or not present before at all) is skipped
+ * entirely — there is nothing to re-expand.
  *
  * Only rows the database stamped count as "loaded before". Optimistic rows are folded back on top
  * afterwards by `replay` and must not make this ask for a page that was never read.
  *
- * **A page that fails snaps that list back to what the fetch returned.** Keeping the previous
- * copy's rows beyond page 1 is not an option: it would splice stale rows onto fresh ones with
- * nothing to say which half is which. One list loses its scroll position until the next scroll
- * reloads it; the others are untouched.
+ * **A page that fails snaps that list back to what the fetch returned** — `itemsLoaded: false`
+ * included. Keeping the previous copy's rows is not an option: it would splice stale rows onto
+ * fresh ones with nothing to say which half is which. One list loses its items until the next
+ * visit reloads it; the others are untouched.
  */
 export async function reloadPages(
   fetched: List[],
@@ -37,18 +41,25 @@ export async function reloadPages(
 
   for (const list of fetched) {
     const before = previous.find((candidate) => candidate.id === list.id);
-    if (!before) continue;
+    if (!before?.itemsLoaded) continue;
+
+    let failed = false;
 
     streams: for (const stream of ['live', 'bin'] as const) {
       const wanted = loadedRows(before, stream);
       if (wanted <= loadedRows(list, stream)) continue;
 
       let current = lists.find((candidate) => candidate.id === list.id) ?? list;
+      // Starts `null` — a fresh list carries no items at all now, so the first request is always
+      // for page 1. `exhausted`, not `next !== null`, is what ends the loop: `null` here means
+      // "haven't asked yet," not "stream ended".
       let next = cursorOf(current, stream);
-      while (next !== null && loadedRows(current, stream) < wanted) {
+      let exhausted = false;
+      while (!exhausted && loadedRows(current, stream) < wanted) {
         const page = await fetchPage(list.id, stream, next);
         if (page.items === null) {
           lists = replace(lists, list);
+          failed = true;
           break streams;
         }
 
@@ -63,7 +74,16 @@ export async function reloadPages(
         ).lists;
         current = lists.find((candidate) => candidate.id === list.id) ?? list;
         next = page.next;
+        exhausted = next === null;
       }
+    }
+
+    // Flipped even when neither stream needed a fetch — a previously-opened, genuinely empty list
+    // still counts as loaded, or a nudge would flash it into a spinner for nothing.
+    if (!failed) {
+      lists = lists.map((candidate) =>
+        candidate.id === list.id ? { ...candidate, itemsLoaded: true } : candidate
+      );
     }
   }
 

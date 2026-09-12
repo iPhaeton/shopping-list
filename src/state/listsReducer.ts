@@ -33,12 +33,29 @@ export function listsReducer(state: State, action: Action): State {
           );
         if (fresh.length === 0 && !moved) return list;
 
-        const at = list.items.findIndex((item) => item.createdAt === null);
-        const items =
-          at === -1
-            ? [...list.items, ...fresh]
-            : [...list.items.slice(0, at), ...fresh, ...list.items.slice(at)];
-        return { ...list, items, ...cursors };
+        return { ...list, items: insertFetchedItems(list.items, fresh), ...cursors };
+      });
+    }
+
+    // The first page of both streams, fetched together on entering a list. Idempotent on
+    // `itemsLoaded` rather than by id alone — a defensive no-op if this somehow fires twice for
+    // the same list, matching the file's style elsewhere.
+    case 'items/firstPageLoaded': {
+      return updateList(state, action.listId, (list) => {
+        if (list.itemsLoaded) return list;
+
+        const known = new Set(list.items.map((item) => item.id));
+        const fresh = [...action.live.items, ...action.bin.items].filter(
+          (item) => !known.has(item.id)
+        );
+
+        return {
+          ...list,
+          items: insertFetchedItems(list.items, fresh),
+          nextLive: action.live.next,
+          nextBin: action.bin.next,
+          itemsLoaded: true,
+        };
       });
     }
 
@@ -60,6 +77,9 @@ export function listsReducer(state: State, action: Action): State {
         name,
         role: 'owner',
         deletedAt: null,
+        // Nothing on the server to fetch yet, so this list starts already "loaded" — no spinner
+        // for a list you just created.
+        itemsLoaded: true,
         items: [],
         nextLive: null,
         nextBin: null,
@@ -235,4 +255,14 @@ export function inCreationOrder(items: Item[]): Item[] {
 function sameCursor(a: Cursor | null, b: Cursor | null): boolean {
   if (a === null || b === null) return a === b;
   return a.createdAt === b.createdAt && a.id === b.id;
+}
+
+/**
+ * Inserts fetched rows before the first optimistic one, not at the end: a list with a page
+ * loaded, an item added offline, then another page loaded must show the new page above that
+ * item, which is where the next hydration would put it anyway.
+ */
+function insertFetchedItems(items: Item[], fresh: Item[]): Item[] {
+  const at = items.findIndex((item) => item.createdAt === null);
+  return at === -1 ? [...items, ...fresh] : [...items.slice(0, at), ...fresh, ...items.slice(at)];
 }

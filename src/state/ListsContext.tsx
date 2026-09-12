@@ -85,6 +85,12 @@ type ListsContextValue = {
    * page for that list already in flight. A read, so it is safe to call at any time after mount.
    */
   loadMore: (listId: string, includeBin: boolean) => Promise<void>;
+  /**
+   * A list's first page of both streams — call this on entering it. A no-op once `itemsLoaded` is
+   * already true, or while a fetch for that list is already in flight. A read, so it is safe to
+   * call at any time after mount.
+   */
+  loadListItems: (listId: string) => Promise<void>;
 };
 
 export type { Blocked } from './restorePlan';
@@ -201,6 +207,11 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
 
       const loaded = replay(lists, queue.current);
       dispatch({ type: 'lists/loaded', lists: loaded });
+      // Set here too, not only by the mirroring effect below: a screen's own mount effect can run
+      // in the same commit as this dispatch, and children's effects fire before their parent's —
+      // reading the ref there would see it one commit behind, the same trap `hydrate`'s return
+      // value exists to avoid for the blocked-write path.
+      listsRef.current = loaded;
       // The fetched rows, never the replayed view — see `writeCachedLists`.
       void writeCachedLists(userId, lists);
       return { error: failure, lists: loaded };
@@ -216,19 +227,21 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
    * action is idempotent by id: re-applying one to a row that already carries it changes nothing,
    * and applying it to a row the page just brought is the point.
    */
-  const foldPage = useCallback((action: Extract<Action, { type: 'items/pageLoaded' }>) => {
-    dispatch(action);
-    for (const queued of queue.current) dispatch(queued);
-  }, []);
+  const foldPage = useCallback(
+    (action: Extract<Action, { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }>) => {
+      dispatch(action);
+      for (const queued of queue.current) dispatch(queued);
+    },
+    []
+  );
 
   /**
    * The row a blocked write landed on, when the fetch did not bring it.
    *
    * `restorePlan` reads the tombstone out of state, and an empty plan means *discard the write*.
-   * With a bin longer than a page, the item somebody else binned may be beyond page 1 — the fetch
-   * arrives without it, the plan comes back empty, and the user's write is dropped with no banner.
-   * So when the op names an item that `loaded` does not hold, read that one row by key and fold it
-   * in with no `stream`, leaving the cursors where they are. A row the caller cannot see comes
+   * `fetchLists` carries no items at all now, so this fires for essentially every blocked write on
+   * a list that is not currently (or was not previously) open — read that one row by key and fold
+   * it in with no `stream`, leaving the cursors where they are. A row the caller cannot see comes
    * back `null`, and the plan is empty for the same reason it always was: purged, or removed.
    */
   const fetchMissingTarget = useCallback(async (op: WriteAction, loaded: List[] | null) => {
@@ -381,6 +394,42 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
 
         foldPage({ type: 'items/pageLoaded', listId, items, stream: { name: stream, next } });
       }
+    } finally {
+      paging.current.delete(listId);
+    }
+  }, [foldPage]);
+
+  /**
+   * A list's first page of both streams, fetched once — when the user opens it. Live and bin
+   * together, matching what `fetchLists` used to embed and preserving the same guarantee: the
+   * bin's first page is available offline for "Show deleted" and the blocked-write restore prompt,
+   * from the moment the list is entered.
+   *
+   * `itemsLoaded` only flips once *both* requests have succeeded — a live-only or bin-only result
+   * must not tell `ListDetailScreen` or `reloadPages` the list is loaded when half of it is
+   * missing, so a partial failure dispatches nothing and leaves the flag false for the next mount
+   * effect to retry.
+   */
+  const loadListItems = useCallback(async (listId: string) => {
+    if (paging.current.has(listId)) return;
+    const list = listsRef.current.find((candidate) => candidate.id === listId);
+    if (!list || list.itemsLoaded) return;
+
+    paging.current.add(listId);
+    try {
+      const [liveResult, binResult] = await Promise.all([
+        fetchItems(listId, 'live', null),
+        fetchItems(listId, 'bin', null),
+      ]);
+      if (!live.current) return;
+      if (liveResult.items === null || binResult.items === null) return;
+
+      foldPage({
+        type: 'items/firstPageLoaded',
+        listId,
+        live: { items: liveResult.items, next: liveResult.next },
+        bin: { items: binResult.items, next: binResult.next },
+      });
     } finally {
       paging.current.delete(listId);
     }
@@ -781,6 +830,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       discardBlocked,
       refresh,
       loadMore,
+      loadListItems,
     }),
     [
       state.lists,
@@ -800,6 +850,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       discardBlocked,
       refresh,
       loadMore,
+      loadListItems,
     ]
   );
 

@@ -4,9 +4,9 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
-last_verified: 2026-09-11
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 9 && grep -q "export type WriteAction = Exclude<Action, { type: 'lists/loaded' } | { type: 'items/pageLoaded' }>;" src/state/types.ts
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
+last_verified: 2026-09-12
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts
 related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries]
 ---
 
@@ -33,16 +33,16 @@ fire in exactly the case the feature exists for. Backoff is 1s doubling to a 30s
 by the web `online` event or `AppState` going `active`.
 
 **The queue holds reducer actions, not a second vocabulary for "a write".** `WriteAction` in
-[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the two *reads* (`lists/loaded`,
-and `items/pageLoaded` since step 11) — seven writes, two of them renames — which is what lets
-[replay](../../../src/state/replay.ts) fold pending ops back over fetched rows with the reducer
-itself; a page gets the same treatment by re-dispatch (`foldPage`). Every one carries an **absolute value**,
-never a flip or an inverse, so a retry or a coalesced duplicate is exactly correct
-([update-list-identity-preserving](update-list-identity-preserving.md)): `enqueue` replaces a queued
-write with a newer one for the same target, so bin/restore/bin, or three renames, while offline is
-one request. Nothing *removes* anything from `state.lists` — deletion is an absolute `deletedAt`,
-and there is no `list/removed` or `item/removed`. The boolean `set_item_done` takes is derived at
-send time from `doneAt !== null`, not stored ([server-stamps-done-at](server-stamps-done-at.md)).
+[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the three *reads* (`lists/loaded`,
+`items/pageLoaded` since step 11, `items/firstPageLoaded` since step 11-2) — seven writes, two of them
+renames — which is what lets [replay](../../../src/state/replay.ts) fold pending ops back over fetched
+rows with the reducer itself; a page gets the same treatment by re-dispatch (`foldPage`). Every one
+carries an **absolute value**, never a flip or an inverse, so a retry or a coalesced duplicate is
+exactly correct ([update-list-identity-preserving](update-list-identity-preserving.md)): `enqueue`
+replaces a queued write with a newer one for the same target, so bin/restore/bin, or three renames,
+while offline is one request. Nothing *removes* anything from `state.lists` — deletion is an absolute
+`deletedAt`, and there is no `list/removed` or `item/removed`. The boolean `set_item_done` takes is
+derived at send time from `doneAt !== null`, not stored ([server-stamps-done-at](server-stamps-done-at.md)).
 
 **Adding a write is a new action plus a case in `send()`, and the type errors enumerate the rest.**
 `listIdOf`, `itemIdOf`, `send()` and `dropDependents`'s "strands nothing" arm are exhaustive
@@ -115,6 +115,6 @@ counts equal (**a write that skips the outbox fails** — it counts the literal 
 loop over already-queued ops must name its variable differently, as `foldPage` does); both verdict
 branches; the `P0002` rule; no attempt cap (a heuristic); no connectivity library; no `…/removed`
 action (case-insensitive — a case-sensitive grep once let `'item/setDeleted'` past); no
-`state.lists.filter` in the reducer; exactly **nine** `Action` members (counted by `type:` line, since
-`items/pageLoaded` spans several) and `WriteAction` excluding exactly the two reads — so the next
-write cannot be added without revisiting this entry.
+`state.lists.filter` in the reducer; exactly **ten** `Action` members (counted by `type:` line, since
+`items/pageLoaded` and `items/firstPageLoaded` each span several) and `WriteAction` excluding exactly
+the three reads — so the next write cannot be added without revisiting this entry.

@@ -75,7 +75,13 @@ let resubscribe: () => void;
 const USER = 'u1';
 
 const MILK = { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null };
-const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, deletedAt: null, items: [MILK], nextLive: null, nextBin: null };
+/**
+ * A list as it looks once its items are known — either because `fetchLists` is mocked as a
+ * shortcut to skip straight past "enter list" for tests that are not about that mechanism, or
+ * because the probe already pressed it. The real `fetchLists` never carries items any more; see
+ * `describe('entering a list', ...)` for the tests that exercise that boundary directly.
+ */
+const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, deletedAt: null, itemsLoaded: true, items: [MILK], nextLive: null, nextBin: null };
 /** The same list as seen by somebody it was shared with, read-only. */
 const READ_ONLY = { ...GROCERIES, role: 'reader' as const };
 
@@ -137,6 +143,7 @@ function Probe() {
     restoreBlocked,
     discardBlocked,
     loadMore,
+    loadListItems,
   } = useLists();
 
   return (
@@ -178,6 +185,7 @@ function Probe() {
       <Button label="discard blocked" onPress={discardBlocked} />
       <Button label="load more" onPress={() => void loadMore('l1', false)} />
       <Button label="load more with bin" onPress={() => void loadMore('l1', true)} />
+      <Button label="enter list" onPress={() => void loadListItems(lists[0]?.id ?? 'l1')} />
     </>
   );
 }
@@ -200,13 +208,100 @@ async function renderProbe() {
   await screen.findByText('status: ready');
 }
 
-it('hydrates from the database on mount', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+it('hydrates the list itself from the database on mount, with no items yet', async () => {
+  api.fetchLists.mockResolvedValue({
+    lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
+    error: null,
+    truncated: false,
+  });
 
   await renderProbe();
 
-  expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen();
+  expect(screen.getByText('l1 Groceries: ')).toBeOnTheScreen();
   expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(api.fetchItems).not.toHaveBeenCalled();
+});
+
+/**
+ * The point of this step: `fetchLists` no longer carries any items, for any list — opening the
+ * Lists screen used to fetch a first page of every list's rows, which is what made it laggy.
+ * `loadListItems` is what a screen calls once it actually opens a list.
+ */
+describe('entering a list', () => {
+  beforeEach(() => {
+    api.fetchLists.mockResolvedValue({
+      lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
+      error: null,
+      truncated: false,
+    });
+  });
+
+  it("loads a list's first page of both streams, together, only once it is entered", async () => {
+    api.fetchItems
+      .mockResolvedValueOnce({ items: [MILK], next: null, error: null })
+      .mockResolvedValueOnce({ items: [], next: null, error: null });
+
+    await renderProbe();
+    expect(screen.getByText('l1 Groceries: ')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('enter list'));
+
+    await waitFor(() => expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen());
+    expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', null);
+    expect(api.fetchItems).toHaveBeenCalledWith('l1', 'bin', null);
+  });
+
+  it('does not ask again once a list is loaded', async () => {
+    api.fetchItems
+      .mockResolvedValueOnce({ items: [MILK], next: null, error: null })
+      .mockResolvedValueOnce({ items: [], next: null, error: null });
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('enter list'));
+    await waitFor(() => expect(screen.getByText('l1 Groceries: Milk')).toBeOnTheScreen());
+    api.fetchItems.mockClear();
+
+    await fireEvent.press(screen.getByLabelText('enter list'));
+
+    expect(api.fetchItems).not.toHaveBeenCalled();
+  });
+
+  /** The same guard `loadMore` gets: a second tap while the first request is still in flight. */
+  it('sends one request per stream when entering fires twice before the first answers', async () => {
+    let settle = (_page: { items: List['items'] | null; next: null; error: null }) => {};
+    api.fetchItems.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      })
+    );
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('enter list'));
+    await fireEvent.press(screen.getByLabelText('enter list'));
+    // One call per stream (live, bin) — the second press must not double that.
+    expect(api.fetchItems).toHaveBeenCalledTimes(2);
+
+    await act(async () => settle({ items: [], next: null, error: null }));
+  });
+
+  /**
+   * A page is server truth with the outbox folded back on top, and that includes the very first
+   * one: an item added before the list finished loading must not be lost, and must land after the
+   * fetched rows, matching where the next hydration would put it anyway.
+   */
+  it('folds a pending write over the first page once it arrives', async () => {
+    api.fetchItems
+      .mockResolvedValueOnce({ items: [MILK], next: null, error: null })
+      .mockResolvedValueOnce({ items: [], next: null, error: null });
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('add'));
+    expect(screen.getByText('l1 Groceries: Bread')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('enter list'));
+
+    await waitFor(() => expect(screen.getByText('l1 Groceries: Milk, Bread')).toBeOnTheScreen());
+  });
 });
 
 it('reports a failed load without pretending the account has no lists', async () => {
@@ -1023,24 +1118,64 @@ describe('loading more', () => {
 });
 
 /**
- * `lists/loaded` replaces state wholesale and a fetch carries page 1, so left alone a nudge would
- * shrink a list the user had scrolled and jump the scroll — on exactly the lists where nudges are
- * most frequent. The provider re-reads as many pages as were loaded before, one at a time.
+ * `lists/loaded` replaces state wholesale, and a fresh fetch never carries any items any more —
+ * so left alone, a nudge while the user has a list open would collapse it back to nothing loaded
+ * and flash a spinner. The provider re-reads each stream from page 1, one page at a time, back up
+ * to how much was loaded before — on exactly the lists where nudges are most frequent.
  */
 describe('a re-fetch with pages loaded', () => {
+  /** Enters the list (page 1 of both streams) and scrolls the live rows once (page 2). */
   async function renderWithTwoPages() {
     jest.useFakeTimers();
-    api.fetchLists.mockResolvedValue({ lists: [PAGED], error: null, truncated: false });
-    api.fetchItems.mockResolvedValue({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null });
+    api.fetchLists.mockResolvedValueOnce({
+      lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
+      error: null,
+      truncated: false,
+    });
+    api.fetchItems
+      .mockResolvedValueOnce({
+        items: [fetched('i1', 'Milk', 1), fetched('i2', 'Bread', 2)],
+        next: AFTER_BREAD,
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        items: [fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+        next: AFTER_JAM,
+        error: null,
+      });
     await renderProbe();
 
+    await fireEvent.press(screen.getByLabelText('enter list'));
+    await waitFor(() => expect(screen.getByText(/Jam \[binned\]$/)).toBeOnTheScreen());
+
+    api.fetchItems.mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null });
     await fireEvent.press(screen.getByLabelText('load more'));
     await waitFor(() => expect(screen.getByText(/Eggs$/)).toBeOnTheScreen());
+
+    // From here on, a real `fetchLists` call carries no items at all — every re-expansion request
+    // below starts from page 1, exactly as it would against the database.
+    api.fetchLists.mockResolvedValue({
+      lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
+      error: null,
+      truncated: false,
+    });
     api.fetchItems.mockClear();
   }
 
   it('leaves two pages loaded when a nudge arrives with two pages loaded', async () => {
     await renderWithTwoPages();
+    api.fetchItems
+      .mockResolvedValueOnce({
+        items: [fetched('i1', 'Milk', 1), fetched('i2', 'Bread', 2)],
+        next: AFTER_BREAD,
+        error: null,
+      })
+      .mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null })
+      .mockResolvedValueOnce({
+        items: [fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+        next: AFTER_JAM,
+        error: null,
+      });
 
     await act(async () => nudge());
     await act(async () => {
@@ -1048,14 +1183,25 @@ describe('a re-fetch with pages loaded', () => {
     });
 
     await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', AFTER_BREAD));
-    expect(screen.getByText(/Milk, Bread, Old jam \[binned\], Jam \[binned\], Eggs$/)).toBeOnTheScreen();
-    // The bin was never scrolled, so it was never re-read.
-    expect(api.fetchItems).toHaveBeenCalledTimes(1);
+    // Live is re-expanded fully (both its pages) before the bin, so the raw order differs from how
+    // "load more" built it up originally — the screen sorts by creation order regardless; this
+    // test is about nothing being lost, not about array position.
+    await waitFor(() =>
+      expect(screen.getByText(/Milk, Bread, Eggs, Old jam \[binned\], Jam \[binned\]$/)).toBeOnTheScreen()
+    );
+    // Two pages of live (to reach Eggs again) plus one page of the bin (which was never scrolled
+    // further than page 1) — three requests to rebuild what a nudge would otherwise have erased.
+    expect(api.fetchItems).toHaveBeenCalledTimes(3);
+    expect(api.fetchItems).toHaveBeenNthCalledWith(1, 'l1', 'live', null);
+    expect(api.fetchItems).toHaveBeenNthCalledWith(2, 'l1', 'live', AFTER_BREAD);
+    expect(api.fetchItems).toHaveBeenNthCalledWith(3, 'l1', 'bin', null);
   });
 
-  /** One list loses its scroll position until the next scroll; nothing is spliced. */
-  it('falls back to the first page when the re-read fails', async () => {
+  /**
+   * Nothing is free to splice a stale page onto any more, so a failed re-expansion snaps the whole
+   * list back to bare rather than to a partial page — the next visit reloads it from scratch.
+   */
+  it('empties the list when the re-read fails, rather than showing half of it', async () => {
     await renderWithTwoPages();
     api.fetchItems.mockResolvedValue({ items: null, next: null, error: 'network down' });
 
@@ -1065,9 +1211,7 @@ describe('a re-fetch with pages loaded', () => {
     });
 
     await waitFor(() => expect(api.fetchItems).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(screen.getByText('l1 Groceries [more] [more binned]: Milk, Bread, Old jam [binned], Jam [binned]')).toBeOnTheScreen()
-    );
+    await waitFor(() => expect(screen.getByText('l1 Groceries: ')).toBeOnTheScreen());
   });
 });
 

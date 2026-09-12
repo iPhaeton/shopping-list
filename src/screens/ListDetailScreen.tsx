@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -39,6 +39,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     restoreBlocked,
     discardBlocked,
     loadMore,
+    loadListItems,
   } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
 
@@ -85,6 +86,12 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     }
   };
 
+  // Items are no longer part of the lists fetch — they arrive only once a list is actually
+  // entered, so this asks for them the moment the screen has a list to ask about.
+  useEffect(() => {
+    if (list && !list.itemsLoaded) void loadListItems(listId);
+  }, [list, list?.itemsLoaded, listId, loadListItems]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       title: list?.name ?? 'List',
@@ -111,6 +118,16 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     return (
       <View style={styles.container}>
         <EmptyState title="List not found" hint="Go back and pick a list from the list screen." />
+      </View>
+    );
+  }
+
+  // Nothing below this reads from the database yet — the list was fetched, but its items were
+  // not. `loadListItems`, triggered above, is on its way.
+  if (!list.itemsLoaded) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator accessibilityLabel="Loading list items" color={colors.accent} />
       </View>
     );
   }
@@ -215,6 +232,12 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.background,
   },
   headerButtons: {

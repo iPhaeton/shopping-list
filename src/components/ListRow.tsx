@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { countDone, liveItems } from '../state/listsReducer';
 import type { List } from '../state/types';
 import { colors, radius, spacing } from '../theme';
 
@@ -14,20 +13,6 @@ export function ListRow({
   /** Absent for anyone but an owner, who alone may bin a list or bring one back. */
   onSetDeleted?: (deleted: boolean) => void;
 }) {
-  const done = countDone(list);
-
-  // `liveItems`, not `list.items`: a binned item is still a row on this list, and counting it would
-  // read "2 of 47 done" with 42 of them in the bin — right in every test that never deletes
-  // anything, and wrong in the app the moment somebody does.
-  const total = liveItems(list).length;
-
-  // "2 of 5 done" is exact only when every live row is loaded. Until the list has been scrolled to
-  // its end, `total` is a page, so the row says what it knows — "400+ items" — and becomes exact
-  // the moment `nextLive` clears. No count is asked of the server: it would be a second request
-  // per fetch for a number that is only displayed.
-  const summary =
-    total === 0 ? 'No items yet' : list.nextLive !== null ? `${total}+ items` : `${done} of ${total} done`;
-
   const deleted = list.deletedAt !== null;
 
   // Somebody else's list that you have been given access to. It deliberately does not say *how
@@ -39,12 +24,11 @@ export function ListRow({
     <View style={[styles.row, deleted && styles.rowDeleted]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={shared ? `${list.name}, ${summary}, shared with you` : `${list.name}, ${summary}`}
+        accessibilityLabel={shared ? `${list.name}, shared with you` : list.name}
         onPress={onPress}
         style={({ pressed }) => [styles.tap, pressed && styles.rowPressed]}>
         <View style={styles.text}>
           <Text style={styles.name}>{list.name}</Text>
-          <Text style={styles.summary}>{summary}</Text>
           {shared ? <Text style={styles.summary}>Shared with you</Text> : null}
           {deleted ? <Text style={styles.tag}>Deleted</Text> : null}
         </View>

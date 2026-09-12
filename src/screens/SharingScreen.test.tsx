@@ -62,7 +62,7 @@ beforeEach(async () => {
 /** Renders the screen for a list the signed-in account holds `role` on. */
 async function renderScreen(role: Role = 'owner') {
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role, deletedAt: null, items: [], nextLive: null, nextBin: null }],
+    lists: [{ id: 'l1', name: 'Groceries', role, deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
     error: null,
     truncated: false,
   });
@@ -88,7 +88,7 @@ it('shows everyone with access, and which one is you', async () => {
 it('says the roster is on its way before it arrives', async () => {
   jest.mocked(fetchMembers).mockReturnValue(new Promise(() => {}));
   jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null }],
+    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
     error: null,
     truncated: false,
   });

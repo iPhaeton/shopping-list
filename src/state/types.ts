@@ -48,14 +48,23 @@ export type List = {
   /** As on `Item`, and independent of it: restoring a list does not restore the items in its bin. */
   deletedAt: string | null;
   /**
+   * Whether this list's first page of both streams has been fetched — on entering it, on a cache
+   * hit that already had it, or after `reloadPages` re-expands it. `false` with `items: []` means
+   * "not fetched yet," not "empty" — `fetchLists` no longer carries any items, so every list
+   * arrives this way until the list screen asks for it. A locally created list starts `true`:
+   * there is nothing on the server yet to fetch.
+   */
+  itemsLoaded: boolean;
+  /**
    * Every row loaded so far, both streams, plus any optimistic rows. Fetched rows carry
    * `createdAt`; a page is inserted before the first row that does not, so the live view stays in
    * creation order with an item added offline still last.
    */
   items: Item[];
   /**
-   * Where the next page of live rows starts. `null` means every live row is in `items`, which is
-   * also what makes the "N of M done" summary exact.
+   * Where the next page of live rows starts. Only meaningful once `itemsLoaded` is true: `null`
+   * then means every live row is in `items`; before that, it is just the "nothing fetched yet"
+   * default and carries no meaning on its own.
    *
    * Required, like `deletedAt`: an older cached blob would rehydrate it as `undefined`, and
    * `undefined !== null` reads as "there is more", so the first scroll would ask for a page after
@@ -99,6 +108,19 @@ export type Action =
       items: Item[];
       stream?: { name: Stream; next: Cursor | null };
     }
+  /**
+   * The first page of both streams, fetched together on entering a list. One combined action
+   * rather than two `items/pageLoaded` dispatches plus a separate flag flip: the provider only
+   * ever builds this once *both* fetches have succeeded, so there is no moment where state holds
+   * one stream's rows but `itemsLoaded` is still false. Not a write, for the same reason
+   * `items/pageLoaded` is not.
+   */
+  | {
+      type: 'items/firstPageLoaded';
+      listId: string;
+      live: { items: Item[]; next: Cursor | null };
+      bin: { items: Item[]; next: Cursor | null };
+    }
   | { type: 'list/created'; id: string; name: string }
   | { type: 'list/renamed'; id: string; name: string }
   | { type: 'list/setDeleted'; id: string; deletedAt: string | null }
@@ -110,7 +132,10 @@ export type Action =
 /**
  * The seven actions that owe the database a write. They are the outbox's entries as well as the
  * reducer's actions — `src/lib/outbox.ts` stores exactly these — which is what lets a pending write
- * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`). The two reads
- * are excluded: neither owes anything, so neither is queued and neither is folded.
+ * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`). The three
+ * reads are excluded: none of them owes anything, so none is queued and none is folded.
  */
-export type WriteAction = Exclude<Action, { type: 'lists/loaded' } | { type: 'items/pageLoaded' }>;
+export type WriteAction = Exclude<
+  Action,
+  { type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }
+>;

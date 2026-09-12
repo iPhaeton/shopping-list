@@ -25,6 +25,7 @@ function listWith({
       name: 'Groceries',
       role,
       deletedAt: listDeleted ? DELETED_AT : null,
+      itemsLoaded: true,
       items: [
         { id: 'i1', title: 'Milk', doneAt: null, deletedAt: itemDeleted ? DELETED_AT : null, createdAt: null },
       ],

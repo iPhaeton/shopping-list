@@ -26,8 +26,15 @@ import { inOrder } from './storageQueue';
  * "there is more", so the first scroll would ask for a page after a cursor that does not exist.
  * `Item` gained `createdAt` too. `outbox.ts` stays at `1` a third time: `item/added` deliberately
  * carries no timestamp, so a queued v1 op is still exactly what the reducer expects.
+ *
+ * **`5` since items stopped riding along with `fetchLists`.** `List` gained `itemsLoaded`, and
+ * unlike the two bumps above a missing one is not actively dangerous — `undefined` reads as
+ * falsy everywhere it is checked, so it fails closed to "not loaded" rather than lying. Bumped
+ * anyway, on the same convention as every other shape change here: a v4 blob left alone would
+ * make a deeply-scrolled cached list look never-opened and pay for a redundant re-fetch from page
+ * 1, which is cheap but still wrong, and the fix costs nothing but one more dropped blob.
  */
-const VERSION = 4;
+const VERSION = 5;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 

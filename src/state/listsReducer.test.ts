@@ -16,7 +16,7 @@ function stateWithItems(...titles: string[]): State {
 describe('lists/loaded', () => {
   it('replaces the lists with what the database returned', () => {
     const lists = [
-      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null, createdAt: null }], nextLive: null, nextBin: null },
+      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, itemsLoaded: true, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null, createdAt: null }], nextLive: null, nextBin: null },
     ];
 
     const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists });
@@ -39,7 +39,13 @@ describe('list/created', () => {
       name: 'Groceries',
     });
 
-    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, items: [], nextLive: null, nextBin: null }]);
+    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: true, items: [], nextLive: null, nextBin: null }]);
+  });
+
+  it('starts itemsLoaded true — nothing on the server yet to fetch', () => {
+    const state = listsReducer(initialState, { type: 'list/created', id: 'l1', name: 'Groceries' });
+
+    expect(state.lists[0].itemsLoaded).toBe(true);
   });
 
   it('trims the name', () => {
@@ -660,6 +666,109 @@ describe('items/pageLoaded', () => {
         listId: 'nope',
         items: [fetched('i2', 'Bread', T2)],
         stream: { name: 'live', next: null },
+      })
+    ).toBe(before);
+  });
+});
+
+/**
+ * A list as `fetchLists` returns it now: metadata only, nothing loaded. `list/created` sets
+ * `itemsLoaded: true` immediately (there is nothing on the server yet to fetch), so it cannot
+ * stand in for "not yet loaded" here — this seeds state through `lists/loaded` instead, the way a
+ * real fetch would.
+ */
+function stateWithBareList(): State {
+  return listsReducer(initialState, {
+    type: 'lists/loaded',
+    lists: [
+      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+    ],
+  });
+}
+
+describe('items/firstPageLoaded', () => {
+  it('appends both streams, moves both cursors, and marks the list loaded', () => {
+    const state = listsReducer(stateWithBareList(), {
+      type: 'items/firstPageLoaded',
+      listId: 'l1',
+      live: { items: [fetched('i1', 'Milk', T1)], next: CURSOR },
+      bin: { items: [fetched('i9', 'Jam', T3, DELETED_AT)], next: null },
+    });
+
+    expect(state.lists[0].items.map((item) => item.id)).toEqual(['i1', 'i9']);
+    expect(state.lists[0].nextLive).toEqual(CURSOR);
+    expect(state.lists[0].nextBin).toBeNull();
+    expect(state.lists[0].itemsLoaded).toBe(true);
+  });
+
+  it('dedupes against a row already there, such as an optimistic one folded back on top', () => {
+    const withOffline = listsReducer(stateWithBareList(), {
+      type: 'item/added',
+      listId: 'l1',
+      id: 'i1',
+      title: 'Milk',
+    });
+
+    const state = listsReducer(withOffline, {
+      type: 'items/firstPageLoaded',
+      listId: 'l1',
+      live: { items: [fetched('i1', 'Milk', T1)], next: null },
+      bin: { items: [], next: null },
+    });
+
+    // The optimistic row wins — its `createdAt: null` copy is left alone, not replaced by the
+    // fetched one, matching `items/pageLoaded`'s "leave a known row alone" rule.
+    expect(state.lists[0].items).toEqual([
+      { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null },
+    ]);
+    expect(state.lists[0].itemsLoaded).toBe(true);
+  });
+
+  it('inserts the fetched rows before the first optimistic row', () => {
+    const withOffline = listsReducer(stateWithBareList(), {
+      type: 'item/added',
+      listId: 'l1',
+      id: 'new',
+      title: 'Eggs',
+    });
+
+    const state = listsReducer(withOffline, {
+      type: 'items/firstPageLoaded',
+      listId: 'l1',
+      live: { items: [fetched('i1', 'Milk', T1)], next: null },
+      bin: { items: [], next: null },
+    });
+
+    expect(state.lists[0].items.map((item) => item.id)).toEqual(['i1', 'new']);
+  });
+
+  it('is a no-op once the list is already loaded', () => {
+    const before = listsReducer(stateWithBareList(), {
+      type: 'items/firstPageLoaded',
+      listId: 'l1',
+      live: { items: [fetched('i1', 'Milk', T1)], next: null },
+      bin: { items: [], next: null },
+    });
+
+    const after = listsReducer(before, {
+      type: 'items/firstPageLoaded',
+      listId: 'l1',
+      live: { items: [fetched('i2', 'Bread', T2)], next: null },
+      bin: { items: [], next: null },
+    });
+
+    expect(after).toBe(before);
+  });
+
+  it('is a no-op for an unknown list', () => {
+    const before = stateWithItems('Milk');
+
+    expect(
+      listsReducer(before, {
+        type: 'items/firstPageLoaded',
+        listId: 'nope',
+        live: { items: [fetched('i2', 'Bread', T2)], next: null },
+        bin: { items: [], next: null },
       })
     ).toBe(before);
   });

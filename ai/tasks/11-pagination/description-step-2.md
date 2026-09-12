@@ -1,0 +1,1 @@
+The request for lists fetches also the 1st page of items. This makes the list screen vary laggy. The items should be fetched only when the user enters the list.
