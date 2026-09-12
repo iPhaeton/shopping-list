@@ -10,9 +10,9 @@ import { supabase } from './supabase';
  * plain function and no websocket is ever opened under jest.
  *
  * **The message is a nudge, and answering it is the caller's business.** The payload carries a list
- * id and nothing about the change, so there is nothing here to decode: `onChange` means "re-read",
- * which is a code path the app already has. See the migration for why the payload is deliberately
- * this thin.
+ * id and nothing about *what* changed, so `onChange` decodes only that much: it means "re-read this
+ * list", which is a code path the app already has. See the migration for why the rest of the payload
+ * is deliberately left undecoded.
  *
  * `private: true` is what makes the server evaluate the `realtime.messages` select policy at join —
  * without it the channel is a public room anyone could listen to. supabase-js re-authenticates the
@@ -21,17 +21,22 @@ import { supabase } from './supabase';
  */
 export function subscribeToChanges(
   userId: string,
-  onChange: () => void,
+  /** `undefined` when the payload carries no usable list id — a malformed or missing one. */
+  onChange: (listId?: string) => void,
   /**
    * Fired on every `SUBSCRIBED`, **including reconnects**, and it is not the same event as a change.
    * Delivery is at-most-once: anything the database sent while the socket was down is gone, with no
-   * queue, no ack and no redelivery. A re-read on resubscribe is the repair.
+   * queue, no ack and no redelivery. A re-read on resubscribe is the repair — and it can never know
+   * what it missed, so it never carries a list id.
    */
   onResubscribe: () => void
 ): () => void {
   const channel = supabase
     .channel(`user:${userId}`, { config: { private: true } })
-    .on('broadcast', { event: 'list/changed' }, () => onChange())
+    .on('broadcast', { event: 'list/changed' }, (message: { payload?: { listId?: unknown } }) => {
+      const { listId } = message.payload ?? {};
+      onChange(typeof listId === 'string' ? listId : undefined);
+    })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') onResubscribe();
     });

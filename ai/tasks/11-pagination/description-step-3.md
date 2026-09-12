@@ -1,0 +1,2 @@
+Currently when a notification comes, all lists are refetched and items of all lists currently in the device storage are refetched.
+Only the updated lists and their items should be refetched. If the notification doesn't provide information on which list has changed, it should be updated.

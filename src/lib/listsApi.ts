@@ -170,6 +170,30 @@ export async function fetchItem(
   return { item: data ? toItem(data as unknown as ItemRow) : null, error: null };
 }
 
+/**
+ * One list's own metadata — the read a realtime nudge that names a list uses instead of asking
+ * `fetchLists` for every list again. Same root as `fetchLists`, filtered to one list via
+ * `list_members`'s own `list_id` column; row-level security still supplies `user_id = auth.uid()`.
+ *
+ * `{ list: null, error: null }` means "not visible to me" — unshared, or the list is gone
+ * (`list_members` cascades on `lists` delete) — and RLS cannot tell those apart any more than a row
+ * simply missing from `fetchLists` can. **Not** the soft-delete case: the `lists` select policy
+ * carries no `deleted_at` condition, so a list you are still a member of but that has been binned
+ * comes back non-null, with `deletedAt` set, exactly as `fetchLists` has always returned it.
+ */
+export async function fetchList(
+  listId: string
+): Promise<{ list: List | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('list_members')
+    .select('role, lists!inner ( id, name, deleted_at )')
+    .eq('list_id', listId)
+    .maybeSingle();
+
+  if (error) return { list: null, error: error.message };
+  return { list: data ? toList(data as unknown as MembershipRow) : null, error: null };
+}
+
 /** `created_by` is deliberately not sent: it defaults to `auth.uid()` in the database. */
 export async function insertList(id: string, name: string): Promise<Result> {
   const { error, status } = await supabase.from('lists').insert({ id, name });

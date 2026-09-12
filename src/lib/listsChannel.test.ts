@@ -28,9 +28,9 @@ function stubChannel() {
 }
 
 /** The broadcast handler the module registered, as Realtime would call it. */
-function deliver(channel: ReturnType<typeof stubChannel>) {
+function deliver(channel: ReturnType<typeof stubChannel>, payload?: unknown) {
   const handler = channel.on.mock.calls[0][2] as (message: unknown) => void;
-  handler({ event: 'list/changed', payload: { listId: 'l1' } });
+  handler({ event: 'list/changed', payload });
 }
 
 /** The status callback the module passed to `subscribe`. */
@@ -52,15 +52,31 @@ it('joins the private inbox topic for the account', async () => {
   expect(channel.on).toHaveBeenCalledWith('broadcast', { event: 'list/changed' }, expect.any(Function));
 });
 
-it('reports a change without handing on anything from the message', async () => {
+it('decodes the list id from the payload', async () => {
   const channel = stubChannel();
   const onChange = jest.fn();
 
   subscribeToChanges(USER, onChange, jest.fn());
-  deliver(channel);
+  deliver(channel, { listId: 'l1' });
 
   expect(onChange).toHaveBeenCalledTimes(1);
-  expect(onChange).toHaveBeenCalledWith();
+  expect(onChange).toHaveBeenCalledWith('l1');
+});
+
+/** A payload with no usable list id must not be mistaken for one naming an empty string or `null`. */
+it.each([
+  ['no payload at all', undefined],
+  ['a missing listId', {}],
+  ['a null listId', { listId: null }],
+  ['a non-string listId', { listId: 42 }],
+])('reports no list id for %s', async (_name, payload) => {
+  const channel = stubChannel();
+  const onChange = jest.fn();
+
+  subscribeToChanges(USER, onChange, jest.fn());
+  deliver(channel, payload);
+
+  expect(onChange).toHaveBeenCalledWith(undefined);
 });
 
 /** A resubscribe is the repair for at-most-once delivery, so it is its own callback. */

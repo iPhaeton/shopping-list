@@ -7,6 +7,7 @@ import {
   addItem,
   fetchItem,
   fetchItems,
+  fetchList,
   fetchLists,
   insertList,
   renameItem,
@@ -38,6 +39,7 @@ jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(),
   fetchItems: jest.fn(),
   fetchItem: jest.fn(),
+  fetchList: jest.fn(),
   insertList: jest.fn(),
   addItem: jest.fn(),
   renameItem: jest.fn(),
@@ -57,6 +59,7 @@ const api = {
   fetchLists: jest.mocked(fetchLists),
   fetchItems: jest.mocked(fetchItems),
   fetchItem: jest.mocked(fetchItem),
+  fetchList: jest.mocked(fetchList),
   insertList: jest.mocked(insertList),
   addItem: jest.mocked(addItem),
   renameItem: jest.mocked(renameItem),
@@ -69,7 +72,7 @@ const api = {
 const unsubscribe = jest.fn();
 
 /** Captured so a test can deliver a nudge, or a reconnect, the way the database would. */
-let nudge: () => void;
+let nudge: (listId?: string) => void;
 let resubscribe: () => void;
 
 const USER = 'u1';
@@ -106,6 +109,7 @@ beforeEach(async () => {
   api.fetchLists.mockResolvedValue({ lists: [], error: null, truncated: false });
   api.fetchItems.mockResolvedValue({ items: [], next: null, error: null });
   api.fetchItem.mockResolvedValue({ item: null, error: null });
+  api.fetchList.mockResolvedValue({ list: null, error: null });
   api.insertList.mockResolvedValue(OK);
   api.addItem.mockResolvedValue(OK);
   api.renameItem.mockResolvedValue(OK);
@@ -754,6 +758,142 @@ it('closes the channel when the provider goes away', async () => {
   await screen.unmount();
 
   expect(unsubscribe).toHaveBeenCalledTimes(1);
+});
+
+/**
+ * A nudge that names a list is now scoped: it should read that one list, never every list, and the
+ * point of this step is exactly that difference from the tests above.
+ */
+it('asks only for the list a nudge names, not every list', async () => {
+  jest.useFakeTimers();
+  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText(/l1 Groceries/)).toBeOnTheScreen());
+
+  api.fetchList.mockResolvedValueOnce({ list: GROCERIES, error: null });
+
+  await act(async () => nudge('l1'));
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  await waitFor(() => expect(api.fetchList).toHaveBeenCalledWith('l1'));
+  // Still just the mount's call — a named nudge never falls back to asking for every list.
+  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+});
+
+/** A list just shared with you is one `fetchList` has never seen locally before — it should appear. */
+it('adds a list a nudge names once it becomes visible', async () => {
+  jest.useFakeTimers();
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText('status: ready')).toBeOnTheScreen());
+
+  const shared = {
+    id: 'l9',
+    name: 'Shared with me',
+    role: 'reader' as const,
+    deletedAt: null,
+    itemsLoaded: false,
+    items: [],
+    nextLive: null,
+    nextBin: null,
+  };
+  api.fetchList.mockResolvedValueOnce({ list: shared, error: null });
+
+  await act(async () => nudge('l9'));
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  await waitFor(() => expect(screen.getByText(/l9 Shared with me/)).toBeOnTheScreen());
+  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+});
+
+/** Unshared, or purged — `fetchList` answers the same way either time: not visible any more. */
+it('drops a list a nudge names once it is no longer visible', async () => {
+  jest.useFakeTimers();
+  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText(/l1 Groceries/)).toBeOnTheScreen());
+
+  api.fetchList.mockResolvedValueOnce({ list: null, error: null });
+
+  await act(async () => nudge('l1'));
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  await waitFor(() => expect(screen.queryByText(/l1 Groceries/)).toBeNull());
+});
+
+/**
+ * Deletion is a tombstone: a list still shared with you but put in the bin must not disappear the
+ * way an unshared one does — it stays, marked binned, exactly as a full `fetchLists` has always
+ * shown it.
+ */
+it('keeps a list a nudge names that is merely binned, not gone', async () => {
+  jest.useFakeTimers();
+  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen());
+
+  api.fetchList.mockResolvedValueOnce({
+    list: {
+      ...GROCERIES,
+      deletedAt: '2026-09-10T09:00:00.000Z',
+      items: [],
+      itemsLoaded: false,
+      nextLive: null,
+      nextBin: null,
+    },
+    error: null,
+  });
+
+  await act(async () => nudge('l1'));
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  await waitFor(() => expect(screen.getByText(/l1 Groceries \[binned\]/)).toBeOnTheScreen());
+});
+
+/**
+ * The point of this step, proven directly: a nudge naming one list must not re-walk another
+ * previously-opened list's pages, the way a full `hydrate` (a nudge with no list id) still does.
+ */
+it('reloads only the list a nudge names, leaving another loaded list untouched', async () => {
+  jest.useFakeTimers();
+  api.fetchLists.mockResolvedValueOnce({
+    lists: [
+      { ...GROCERIES, items: [fetched('i1', 'Milk', 1)] },
+      { ...GROCERIES, id: 'l2', name: 'Hardware', items: [fetched('i2', 'Nails', 2)] },
+    ],
+    error: null,
+    truncated: false,
+  });
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText(/l2 Hardware: Nails/)).toBeOnTheScreen());
+
+  api.fetchList.mockResolvedValueOnce({
+    list: { ...GROCERIES, items: [], itemsLoaded: false, nextLive: null, nextBin: null },
+    error: null,
+  });
+  api.fetchItems.mockResolvedValueOnce({
+    items: [fetched('i1', 'Milk', 1)],
+    next: null,
+    error: null,
+  });
+
+  await act(async () => nudge('l1'));
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+
+  await waitFor(() => expect(api.fetchItems).toHaveBeenCalledTimes(1));
+  expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', null);
+  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen();
+  expect(screen.getByText(/l2 Hardware: Nails/)).toBeOnTheScreen();
 });
 
 // --- Writing to something somebody else put in the bin ------------------------------------------

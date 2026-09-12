@@ -2,6 +2,7 @@ import {
   addItem,
   fetchItem,
   fetchItems,
+  fetchList,
   fetchLists,
   fetchMembers,
   MAX_ROWS,
@@ -283,6 +284,58 @@ describe('fetchItem', () => {
     respondWith({ data: null, error: null });
 
     expect(await fetchItem('i9')).toEqual({ item: null, error: null });
+  });
+});
+
+/**
+ * `fetchList` is `fetchLists` narrowed to one list — the read a realtime nudge naming a list uses
+ * instead of asking for every list again.
+ */
+describe('fetchList', () => {
+  it('reads one membership row, filtered to the one list', async () => {
+    const { calls } = respondWith({ data: membership(1), error: null });
+
+    const { list } = await fetchList('l1');
+
+    expect(argsOf(calls, 'from')).toEqual([['list_members']]);
+    expect(argsOf(calls, 'select')[0][0]).toContain('lists!inner');
+    expect(argsOf(calls, 'eq')).toEqual([['list_id', 'l1']]);
+    expect(argsOf(calls, 'maybeSingle')).toEqual([[]]);
+    expect(list).toEqual({
+      id: 'l1',
+      name: 'List 1',
+      role: 'owner',
+      deletedAt: null,
+      itemsLoaded: false,
+      items: [],
+      nextLive: null,
+      nextBin: null,
+    });
+  });
+
+  /** Not visible to the caller — unshared, or the list is gone — same answer either way. */
+  it('answers null for a list that is not there', async () => {
+    respondWith({ data: null, error: null });
+
+    expect(await fetchList('l9')).toEqual({ list: null, error: null });
+  });
+
+  /**
+   * Deletion is a tombstone: a list still shared with the caller but put in the bin must not read
+   * as "not there" — it comes back like any other list, with `deletedAt` set.
+   */
+  it('still returns a list that is merely binned, not gone', async () => {
+    respondWith({ data: membership(1, 'owner', '2026-09-01T00:00:00Z'), error: null });
+
+    const { list } = await fetchList('l1');
+
+    expect(list?.deletedAt).toBe('2026-09-01T00:00:00Z');
+  });
+
+  it('reports the database error rather than swallowing it', async () => {
+    respondWith({ data: null, error: { message: 'JWT expired' } });
+
+    expect(await fetchList('l1')).toEqual({ list: null, error: 'JWT expired' });
   });
 });
 

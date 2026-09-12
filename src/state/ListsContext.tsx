@@ -18,6 +18,7 @@ import {
   addItem as addItemRequest,
   fetchItem,
   fetchItems,
+  fetchList,
   fetchLists,
   insertList,
   MAX_ROWS,
@@ -133,10 +134,13 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   // answer — so this is a guard beside `flushing`/`fetching` rather than a piece of screen state.
   const stuck = useRef(false);
 
-  // Realtime's two. `nudge` is the debounce timer collapsing a burst of somebody else's writes;
-  // `owed` is a nudge the guards turned away, remembered so it can be honoured later.
+  // Realtime's two. `nudge` is the debounce timer collapsing a burst of somebody else's writes into
+  // one fetch; `dirty` is which lists that burst named — a set of ids, or `'all'` once any nudge (or
+  // a resubscribe) arrives with no list id, since then nothing narrower is safe. Mutated on every
+  // nudge regardless of whether the guards below let a fetch start, so nothing a burst names is lost
+  // while a write or another fetch is in the way — `drainDirty` is what acts on it once they clear.
   const nudge = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const owed = useRef(false);
+  const dirty = useRef<Set<string> | 'all'>(new Set());
 
   // Paging's two. `listsRef` mirrors `state.lists` for the callbacks that must not depend on it
   // (`hydrate` reads how much of each list was loaded; `loadMore` reads the cursors); `paging` is
@@ -221,6 +225,61 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   }, [userId]);
 
   /**
+   * `hydrate`, scoped to `listIds`. Fetches fresh metadata for just those lists; everything else in
+   * state passes through `listsRef.current` unchanged. `reloadPages` only reloads a list whose
+   * "fetched" copy holds fewer rows than its "previous" copy — for an object compared against
+   * itself that is never true, so nothing outside `listIds` triggers a single item request.
+   *
+   * Deliberately does not cache. The untouched lists it hands `reloadPages` are `listsRef.current`'s
+   * own objects — the *replayed* view, which may hold a write the database has not acknowledged
+   * yet. Caching that would persist an unsent write as server truth, the mistake `writeCachedLists`
+   * exists to avoid. `hydrate` may cache because everything it hands over came from a fetch; this
+   * does not, so it does not — the existing `pending === 0` effect below catches this dispatch once
+   * the outbox actually empties.
+   *
+   * A list `fetchList` reports as no longer visible (unshared, purged) is dropped from state; one
+   * it has never seen before is appended (freshly shared) at the end of the array — not inserted at
+   * its `created_at` position, since nothing here tracks that for a list and nothing downstream
+   * sorts on it. A per-id fetch that errors leaves that id's local copy untouched, matching a failed
+   * nudge-triggered `hydrate` today: silent.
+   */
+  const hydrateLists = useCallback(async (listIds: Set<string>): Promise<void> => {
+    fetching.current = true;
+
+    try {
+      const results = await Promise.all(
+        [...listIds].map(async (id) => [id, await fetchList(id)] as const)
+      );
+      if (!live.current) return;
+
+      const removed = new Set<string>();
+      const fetchedById = new Map<string, List>();
+      for (const [id, { list, error }] of results) {
+        if (error) continue;
+        if (list === null) removed.add(id);
+        else fetchedById.set(id, list);
+      }
+
+      const previous = listsRef.current;
+      const fetched = previous
+        .filter((list) => !removed.has(list.id))
+        .map((list) => fetchedById.get(list.id) ?? list);
+      for (const [id, list] of fetchedById) {
+        if (!previous.some((candidate) => candidate.id === id)) fetched.push(list);
+      }
+
+      const lists = await reloadPages(fetched, previous, fetchItems);
+      if (!live.current) return;
+
+      const loaded = replay(lists, queue.current);
+      dispatch({ type: 'lists/loaded', lists: loaded });
+      listsRef.current = loaded;
+    } finally {
+      fetching.current = false;
+    }
+  }, []);
+
+  /**
    * A page is server truth, and what the screen shows is server truth with the outbox on top — so
    * the queue goes back over it, exactly as `replay` puts it over a fetch. Through `dispatch`
    * rather than `replay` because a page lands on whatever state holds *now*, and every write
@@ -258,19 +317,37 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   }, [foldPage]);
 
   /**
-   * The nudge that arrived while a write of ours was in the air, honoured now that it has landed.
-   *
-   * Without this the app would be stalest exactly when it is busiest: somebody else editing the list
-   * while your own write is retrying is precisely when `refresh` stands down, and a nudge is a
-   * one-shot — nothing redelivers it. `hydrate` rather than `refresh` only because `refresh` is
-   * defined below this; the guards are re-checked here, which is what `refresh` would have done.
+   * Acts on whatever `dirty` holds, and loops if a nudge names something else while it is working —
+   * `hydrate`/`hydrateLists` hold `fetching.current` for their own duration, so nothing else can
+   * start a fetch meanwhile, and this loop is the one place that notices when it is safe to.
    */
-  const drainOwed = useCallback(() => {
-    if (!owed.current || flushing.current || retry.current) return;
+  const runDirty = useCallback(async () => {
+    while (live.current && (dirty.current === 'all' || dirty.current.size > 0)) {
+      const targets = dirty.current;
+      dirty.current = new Set();
+      if (targets === 'all') await hydrate();
+      else await hydrateLists(targets);
+    }
+  }, [hydrate, hydrateLists]);
 
-    owed.current = false;
-    void hydrate();
-  }, [hydrate]);
+  /**
+   * The nudges a write, or another fetch, turned away — remembered in `dirty` rather than dropped,
+   * since nothing redelivers one. Called from the debounce timer once it fires, and from `flush`'s
+   * own `finally` once a write stops holding the door.
+   *
+   * Not called from `hydrate`'s or `hydrateLists`'s own `finally`: doing so would make a
+   * `useCallback` cycle (`drainDirty` → `runDirty` → `hydrateLists` → `drainDirty`) and would race
+   * `discardBlocked`/`restoreBlocked`'s `hydrate().then(flush())` chains — a drain fired
+   * synchronously inside `hydrate`'s `finally` sets `fetching.current` back to `true` before that
+   * `.then` resumes, so `flush` would see it set and bail with the write still queued.
+   * `runDirty`'s own loop already covers "something else was named while I was working" without
+   * either hazard: a nudge that arrives mid-fetch is picked up by the same `runDirty` call the
+   * moment `fetching.current` clears, since its loop is still running.
+   */
+  const drainDirty = useCallback(() => {
+    if (flushing.current || retry.current || fetching.current) return;
+    if (dirty.current === 'all' || dirty.current.size > 0) void runDirty();
+  }, [runDirty]);
 
   /**
    * Sends the head of the outbox, one at a time, until it is empty or the network refuses to
@@ -356,10 +433,10 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
         }
       } finally {
         flushing.current = false;
-        drainOwed();
+        drainDirty();
       }
     },
-    [persist, hydrate, fetchMissingTarget, drainOwed]
+    [persist, hydrate, fetchMissingTarget, drainDirty]
   );
 
   /**
@@ -442,38 +519,57 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
    * while a write is in the air can come back without that write just as the loop removes it from
    * the queue — and the row disappears from the screen until the next fetch. A set `retry` means
    * backoff took over, so we are offline and a fetch would fail anyway.
+   *
+   * Unlike a nudge, this carries no information about which list changed — "I want the truth" or
+   * "the app just came to the foreground" say nothing narrower — so it is always a full `hydrate`,
+   * never `hydrateLists`. It also does not check `fetching.current`, so it can in principle start
+   * alongside a nudge-driven `runDirty` already in flight; whichever dispatch lands last wins. That
+   * gap already exists between any two independent triggers of `hydrate` today, this does not widen
+   * it, and the outcome is bounded — one list's view rolls back one cycle, repaired by the next
+   * nudge or foreground event — so it is not worth a larger guard here.
    */
   const refresh = useCallback(async () => {
     if (flushing.current || retry.current) return;
-    owed.current = false;
+    dirty.current = new Set();
     await hydrate();
   }, [hydrate]);
 
   /**
-   * Somebody else changed a list you are in. Trailing debounce, so a burst of their writes is one
-   * fetch rather than one each.
+   * Somebody else changed a list you are in — `listId` when the nudge named one, `undefined` when
+   * it did not (a malformed payload, or a resubscribe, which can never know what it missed).
+   * Trailing debounce, so a burst of their writes is one fetch rather than one each, scoped to
+   * whichever lists the burst actually named.
    *
-   * The nudge itself is never applied to state — it says *that* something changed, not what, and the
-   * fetch is the mechanism. That is deliberate: `replay` is the only place that knows how server
-   * truth and pending writes combine, a dropped message costs staleness while a mis-applied delta
-   * costs divergence, and server-stamped values like `done_at` arrive correct only by being read.
+   * `dirty` is updated before the early return below, on *every* call: a nudge that arrives while a
+   * timer is already pending must still be counted, or a burst naming two lists would silently drop
+   * the second one's id. Once `dirty` is `'all'` it stays that way regardless of what arrives after,
+   * until something drains it.
    *
-   * When the guards `refresh` carries turn the fetch away, the nudge is *remembered* rather than
-   * dropped — see `drainOwed`.
+   * The nudge itself is never applied to state — it says *that* a list changed, not what, and a
+   * fetch of that list is the mechanism. That is deliberate: `replay` is the only place that knows
+   * how server truth and pending writes combine, a dropped message costs staleness while a
+   * mis-applied delta costs divergence, and server-stamped values like `done_at` arrive correct only
+   * by being read.
+   *
+   * When the guards `drainDirty` carries turn the fetch away, `dirty` already holds what was
+   * turned away — nothing extra to remember, unlike the old boolean `owed` this replaced.
    */
-  const refreshSoon = useCallback(() => {
-    if (nudge.current) return;
-
-    nudge.current = setTimeout(() => {
-      nudge.current = null;
-      if (flushing.current || retry.current) {
-        owed.current = true;
-        return;
+  const refreshSoon = useCallback(
+    (listId?: string) => {
+      if (dirty.current !== 'all') {
+        if (listId === undefined) dirty.current = 'all';
+        else dirty.current.add(listId);
       }
 
-      void refresh();
-    }, NUDGE_DEBOUNCE_MS);
-  }, [refresh]);
+      if (nudge.current) return;
+
+      nudge.current = setTimeout(() => {
+        nudge.current = null;
+        drainDirty();
+      }, NUDGE_DEBOUNCE_MS);
+    },
+    [drainDirty]
+  );
 
   // Hydrate: the outbox and the cached rows first, so the app is usable with no network at all,
   // then the database.
