@@ -124,6 +124,12 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     listsRef.current = state.lists;
   }, [state.lists]);
 
+  // The same mirror, for `flush`: `useHydration` runs before `useOutbox`, so `hydrate`'s own
+  // `finally` cannot close over `flush` directly — `flush` is built from `hydrate` one hook later,
+  // and closing over it would make a dependency cycle. Kept current the same way `listsRef` is,
+  // once `useOutbox` produces the real function below.
+  const flushRef = useRef<(() => Promise<void>) | null>(null);
+
   useEffect(() => {
     live.current = true;
 
@@ -145,6 +151,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     fetching,
     flushing,
     retry,
+    flushRef,
   });
 
   const { persist, flush, enqueueOp } = useOutbox({
@@ -163,6 +170,10 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     setBlocked,
     setPending,
   });
+
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
 
   const { createList, renameList, addItem, renameItem, toggleItem, setListDeleted, setItemDeleted } =
     useListWrites({ lists: state.lists, dispatch, enqueueOp, setError });

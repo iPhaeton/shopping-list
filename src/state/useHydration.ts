@@ -22,6 +22,16 @@ const NUDGE_DEBOUNCE_MS = 300;
  * is written in this hook but read by `useOutbox`'s flush guard, and `flushing`/`retry` are written
  * there but read here by `refresh`'s and `drainDirty`'s guards — shared bidirectionally, so both
  * hooks receive them from `ListsContext` rather than either owning them.
+ *
+ * `flushRef` is the same shape as `listsRef` below — a ref `ListsContext` keeps current with a
+ * mirroring `useEffect` — for a reason specific to hook order: `useOutbox` builds `flush` from
+ * `hydrate`, one hook after this one runs, so `hydrate` cannot close over `flush` directly without a
+ * dependency cycle (`hydrate` → `flush` → `hydrate`). Reading it through a ref sidesteps that the
+ * same way `listsRef` already sidesteps depending on `state.lists` directly. It exists so
+ * `hydrate`/`hydrateLists`'s own `finally` can retrigger the send `fetching.current` turned away:
+ * unlike `flushing`/`stuck`, which are self-healing (something already running picks a turned-away
+ * write back up), nothing previously called `flush` again once a fetch that was in flight when a
+ * write got enqueued finished — the write sat in the outbox until an unrelated event did.
  */
 export function useHydration({
   userId,
@@ -32,6 +42,7 @@ export function useHydration({
   fetching,
   flushing,
   retry,
+  flushRef,
 }: {
   userId: string;
   dispatch: Dispatch<Action>;
@@ -41,6 +52,7 @@ export function useHydration({
   fetching: MutableRefObject<boolean>;
   flushing: MutableRefObject<boolean>;
   retry: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  flushRef: MutableRefObject<(() => Promise<void>) | null>;
 }) {
   // Realtime's two. `nudge` is the debounce timer collapsing a burst of somebody else's writes into
   // one fetch; `dirty` is which lists that burst named — a set of ids, or `'all'` once any nudge (or
@@ -72,6 +84,14 @@ export function useHydration({
    *
    * Returns the array it dispatched, so a caller that needs to know what state holds *now* — the
    * blocked-write path — does not have to wait for React to commit it.
+   *
+   * The `finally` also retriggers `flush` once `fetching` clears, guarded the same way `enqueueOp`
+   * guards its own call: skip when `retry` already has a timer pending, since another write is not
+   * evidence the network came back. A write enqueued while this fetch was in flight persisted to the
+   * outbox and found `fetching.current` still true, so its own call to `flush` bailed with nothing
+   * scheduled — this is what redelivers it. A no-op when there is nothing queued, and a no-op when
+   * `flush` is already running (its own `flushing` guard covers that, including the two places below
+   * where `flush` calls `hydrate` from *inside* an already-running flush).
    */
   const hydrate = useCallback(async (): Promise<{ error: string | null; lists: List[] | null }> => {
     fetching.current = true;
@@ -102,6 +122,7 @@ export function useHydration({
       return { error: failure, lists: loaded };
     } finally {
       fetching.current = false;
+      if (!retry.current) void flushRef.current?.();
     }
   }, [userId]);
 
@@ -123,6 +144,9 @@ export function useHydration({
    * its `created_at` position, since nothing here tracks that for a list and nothing downstream
    * sorts on it. A per-id fetch that errors leaves that id's local copy untouched, matching a failed
    * nudge-triggered `hydrate` today: silent.
+   *
+   * Retriggers `flush` from its own `finally` too, for the same reason and under the same guard as
+   * `hydrate` — see there.
    */
   const hydrateLists = useCallback(async (listIds: Set<string>): Promise<void> => {
     fetching.current = true;
@@ -157,6 +181,7 @@ export function useHydration({
       listsRef.current = loaded;
     } finally {
       fetching.current = false;
+      if (!retry.current) void flushRef.current?.();
     }
   }, []);
 

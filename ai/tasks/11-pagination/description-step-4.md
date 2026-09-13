@@ -1,0 +1,2 @@
+Probably a bug. Investigate the following:
+If a list item is checked while the list is being updated after the notification, the item update is never sent, "1 change will sync when you're back online" message stays, other users do not see items checked.

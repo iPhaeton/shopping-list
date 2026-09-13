@@ -4,9 +4,9 @@ title: Hydration replaces list state, so nothing may write before status is 'rea
 type: gotcha
 status: current
 tags: [state, persistence, testing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/11-pagination/implementation-log-step-3.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts, src/state/useHydration.ts]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-4.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts, src/state/useHydration.ts, src/state/ListsContext.tsx]
 last_verified: 2026-09-13
-verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/useHydration.ts && ! grep -q 'replay' src/state/listsReducer.ts && grep -q 'const hydrateLists = useCallback' src/state/useHydration.ts && grep -q "dirty = useRef<Set<string> | 'all'>" src/state/useHydration.ts && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'dirty.current = new Set();' && grep -A3 'const drainDirty = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current || fetching.current) return;' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q '(listId?: string)' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'drainDirty();' && ! grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'void refresh()' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && grep -q 'listsRef.current = loaded;' src/state/useHydration.ts
+verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/useHydration.ts && ! grep -q 'replay' src/state/listsReducer.ts && grep -q 'const hydrateLists = useCallback' src/state/useHydration.ts && grep -q "dirty = useRef<Set<string> | 'all'>" src/state/useHydration.ts && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'dirty.current = new Set();' && grep -A3 'const drainDirty = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current || fetching.current) return;' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q '(listId?: string)' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'drainDirty();' && ! grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'void refresh()' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && grep -q 'listsRef.current = loaded;' src/state/useHydration.ts && test "$(grep -c 'if (!retry.current) void flushRef.current?.();' src/state/useHydration.ts)" = 2 && grep -q 'flushRef.current = flush;' src/state/ListsContext.tsx
 related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone]
 ---
 
@@ -66,6 +66,19 @@ That would make a `useCallback` cycle (`drainDirty` → `runDirty` → `hydrateL
 would race `discardBlocked`/`restoreBlocked`'s `hydrate().then(() => flush())` chains: a drain firing
 synchronously inside `hydrate`'s `finally` sets `fetching.current` back to `true` before that `.then`
 resumes, so `flush` would see it set and silently skip a queued write.
+
+**Step 11-4 put a *different* call in those same `finally` blocks — `flush` itself, not
+`drainDirty`/`hydrate`.** `flushing`/`stuck` are self-healing (something already running picks a
+turned-away write back up); before this, nothing redelivered a write `enqueueOp` enqueued while a
+nudge-triggered fetch was already running — its own call to `flush` found `fetching.current` still
+`true` and bailed, and nothing retried until an unrelated foreground/online event or another enqueue
+happened to fire `flush` while no fetch was in progress. Both `finally` blocks now end
+`if (!retry.current) void flushRef.current?.();` (`flushRef`: a ref kept current the same way as
+`listsRef`, needed because `useHydration` runs before `useOutbox` builds `flush` from `hydrate`).
+Neither hazard above applies: reading `flush` through a ref is not a closure or a cycle, and `flush`
+never touches `fetching.current`, so a racing `.then(() => flush())` chain sees `flushing.current` true
+only because it is already sending the same write. Guarded on `retry.current` alone, mirroring
+`enqueueOp`'s own guard, so a fetch completing mid-backoff does not fire an out-of-schedule retry.
 
 **Step 9 gave the flush loop a second reason to call `hydrate` directly** (never `hydrateLists` — the
 flush loop does not know which list changed) **and made the *timing* load-bearing.** When a write

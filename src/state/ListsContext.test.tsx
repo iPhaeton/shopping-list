@@ -753,6 +753,73 @@ it('remembers a nudge that arrived while a write was in flight', async () => {
   await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
 });
 
+/**
+ * The mirror image of the test above: here the fetch comes first. `enqueueOp`'s own call to `flush`
+ * finds `fetching.current` still true and bails with nothing scheduled — nothing else redelivers it.
+ * `hydrateLists`'s own `finally` is what has to pick the write back up once the fetch that was
+ * holding the door clears, with no further trigger (no foreground event, no second nudge) firing in
+ * this test.
+ */
+it('sends a write enqueued while a nudge-triggered fetch was in flight', async () => {
+  jest.useFakeTimers();
+  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen());
+
+  let settleFetch = (_result: { list: List | null; error: string | null }) => {};
+  api.fetchList.mockReturnValue(
+    new Promise((resolve) => {
+      settleFetch = resolve;
+    })
+  );
+
+  await act(async () => nudge('l1'));
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+  await waitFor(() => expect(api.fetchList).toHaveBeenCalledWith('l1'));
+
+  await fireEvent.press(screen.getByLabelText('toggle'));
+  await screen.findByText('pending: 1');
+  // Turned away, not sent: `fetching.current` was still true when `enqueueOp` called `flush`.
+  expect(api.setItemDone).not.toHaveBeenCalled();
+
+  await act(async () => settleFetch({ list: GROCERIES, error: null }));
+
+  await waitFor(() => expect(api.setItemDone).toHaveBeenCalledWith('i1', true));
+  await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+});
+
+/** Same fix, the other door onto it: a full (unnamed) nudge's `hydrate`, not a named one's `hydrateLists`. */
+it('sends a write enqueued while an unnamed nudge fetch was in flight', async () => {
+  jest.useFakeTimers();
+  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  await renderProbe();
+  await waitFor(() => expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen());
+
+  let settleFetch = (_result: { lists: List[] | null; error: string | null; truncated: boolean }) => {};
+  api.fetchLists.mockReturnValue(
+    new Promise((resolve) => {
+      settleFetch = resolve;
+    })
+  );
+
+  await act(async () => resubscribe());
+  await act(async () => {
+    jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+
+  await fireEvent.press(screen.getByLabelText('toggle'));
+  await screen.findByText('pending: 1');
+  expect(api.setItemDone).not.toHaveBeenCalled();
+
+  await act(async () => settleFetch({ lists: [GROCERIES], error: null, truncated: false }));
+
+  await waitFor(() => expect(api.setItemDone).toHaveBeenCalledWith('i1', true));
+  await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+});
+
 it('closes the channel when the provider goes away', async () => {
   await renderProbe();
   await screen.unmount();
