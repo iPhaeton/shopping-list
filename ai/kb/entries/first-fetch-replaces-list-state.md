@@ -4,9 +4,9 @@ title: Hydration replaces list state, so nothing may write before status is 'rea
 type: gotcha
 status: current
 tags: [state, persistence, testing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/11-pagination/implementation-log-step-3.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts]
-last_verified: 2026-09-12
-verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/ListsContext.tsx && ! grep -q 'replay' src/state/listsReducer.ts && grep -q 'const hydrateLists = useCallback' src/state/ListsContext.tsx && grep -q "dirty = useRef<Set<string> | 'all'>" src/state/ListsContext.tsx && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/ListsContext.tsx | grep -q 'dirty.current = new Set();' && grep -A3 'const drainDirty = useCallback' src/state/ListsContext.tsx | grep -q 'if (flushing.current || retry.current || fetching.current) return;' && grep -A15 'const refreshSoon = useCallback' src/state/ListsContext.tsx | grep -q '(listId?: string)' && grep -A15 'const refreshSoon = useCallback' src/state/ListsContext.tsx | grep -q 'drainDirty();' && ! grep -A15 'const refreshSoon = useCallback' src/state/ListsContext.tsx | grep -q 'void refresh()' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && grep -q 'listsRef.current = loaded;' src/state/ListsContext.tsx
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/11-pagination/implementation-log-step-3.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts, src/state/useHydration.ts]
+last_verified: 2026-09-13
+verify: grep -q 'lists: action.lists' src/state/listsReducer.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/useHydration.ts && ! grep -q 'replay' src/state/listsReducer.ts && grep -q 'const hydrateLists = useCallback' src/state/useHydration.ts && grep -q "dirty = useRef<Set<string> | 'all'>" src/state/useHydration.ts && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'dirty.current = new Set();' && grep -A3 'const drainDirty = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current || fetching.current) return;' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q '(listId?: string)' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'drainDirty();' && ! grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'void refresh()' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && grep -q 'listsRef.current = loaded;' src/state/useHydration.ts
 related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone]
 ---
 
@@ -43,8 +43,11 @@ those re-reads, not only the first.
 
 **Three fetch functions now, and which one a caller reaches for is the part to get wrong.** `hydrate`
 (full, all lists) and `hydrateLists` (step 11-3, one or more named lists — see
-[realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)) are both
-**private and unguarded**. `refresh` is the only one the context exposes, wraps `hydrate` alone, and
+[realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)), along with
+`refresh`, `refreshSoon` and `drainDirty` below, all now live in
+[useHydration.ts](../../../src/state/useHydration.ts), split out of `ListsContext.tsx` in step 11-4 —
+same functions, same guards, just not a `useCallback` in the provider component any more. `hydrate`
+and `hydrateLists` are both **private and unguarded**. `refresh` is the only one the context exposes, wraps `hydrate` alone, and
 **skips while `flushing` or `retry` is set** — `flush` already guards itself against a fetch, but
 nothing guarded a fetch against a flush, and a read issued while a write is in the air can come back
 without that write just as the loop dequeues it.

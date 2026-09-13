@@ -12,14 +12,14 @@ import {
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { RolePicker } from '../components/RolePicker';
+import type { Result } from '../lib/listsApi';
 import {
   fetchMembers,
   removeMember,
   setMemberRole,
   shareList,
   type Member,
-  type Result,
-} from '../lib/listsApi';
+} from '../lib/membersApi';
 import type { SharingScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { canManageList } from '../state/roles';

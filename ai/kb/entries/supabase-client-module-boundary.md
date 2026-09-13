@@ -4,8 +4,8 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts]
-last_verified: 2026-09-11
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts]
+last_verified: 2026-09-13
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl 'ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes]
 ---
@@ -29,6 +29,18 @@ plain query functions — four after step 3, nine after step 7's sharing UI adde
 but "one importer": query modules import `../lib/supabase`, and screens and providers import the
 query module. See [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md).
 
+**The sharing/roster functions later split into a second query module, and it is not a
+duplicate seam.** An ad hoc refactor moved `fetchMembers`, `shareList`, `setMemberRole` and
+`removeMember` out of `listsApi.ts` into a sibling,
+[src/lib/membersApi.ts](../../../src/lib/membersApi.ts), along the `// --- Who else has access ---`
+divider the file already carried. `membersApi.ts` imports `supabase` from here directly — it does
+not duplicate the client — and imports `resultFor`/`type Result` from `listsApi.ts` rather than
+redefining them, so it is built *on top of* `listsApi.ts`, the same relationship `listsChannel.ts` has
+below. `listsApi.ts` keeps the list/item functions and the shared result-classification helpers
+(`resultFor` is exported now, for exactly this reason). Every suite that renders a screen touching
+both mocks `../lib/listsApi` and `../lib/membersApi` as two separate `jest.mock(...)` calls, never one
+file standing in for the other.
+
 **Step 8 added a second module at that seam, and it is not a query module.**
 [src/lib/listsChannel.ts](../../../src/lib/listsChannel.ts) holds `subscribeToChanges` — the whole
 client side of the realtime socket
@@ -48,19 +60,23 @@ deliver a nudge or a reconnect by hand, wrapped in `act` because it is an extern
 **A screen may call the query module directly, and one does.** `SharingScreen` calls `fetchMembers`
 / `shareList` / `setMemberRole` / `removeMember` itself rather than going through `ListsContext`,
 because the roster is not in `State`, is not cached, and has nothing for `replay` to fold. The seam
-is unchanged by that — the screen still imports `listsApi`, never `supabase` — and its suite mocks
-`../lib/listsApi` like all the others. The rule to carry: state that the reducer owns goes through
-the provider; state that only one screen has goes in that screen's `useState`, calling the query
-module directly.
+is unchanged by that — the screen still imports a query module, never `supabase` — it is just
+`membersApi.ts` for those four now, plus `type Result` from `listsApi.ts`. Its suite mocks
+`../lib/listsApi` and `../lib/membersApi` separately, like every other suite that touches both. The
+rule to carry: state that the reducer owns goes through the provider; state that only one screen has
+goes in that screen's `useState`, calling the query module directly.
 
-**One suite is the exception, and it has to be: `listsApi`'s own.**
-[src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) mocks `./supabase` — the seam *below*
-the module under test — because `fetchLists` and `fetchItems` are where a query shape can be got
-wrong. Since step 11 it carries two helpers: `respondWith`, a **recording** builder whose every
-method returns itself and logs `[method, args]`, so a test asserts the shape of a read (`argsOf(calls,
-'limit')`) without the stub knowing which methods the read chains or in what order; and
-`respondToRpcWith` for every write, since nothing writes a table directly any more. A module cannot
-be tested through the mock of itself; every suite *above* `listsApi` still mocks `listsApi`.
+**One suite is the exception, and it has to be: `listsApi`'s own — and `membersApi`'s is the same
+exception a second time.** [src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) mocks
+`./supabase` — the seam *below* the module under test — because `fetchLists` and `fetchItems` are
+where a query shape can be got wrong. Since step 11 it carries two helpers: `respondWith`, a
+**recording** builder whose every method returns itself and logs `[method, args]`, so a test asserts
+the shape of a read (`argsOf(calls, 'limit')`) without the stub knowing which methods the read chains
+or in what order; and `respondToRpcWith` for every write, since nothing writes a table directly any
+more. `src/lib/membersApi.test.ts` mocks `./supabase` directly for the same reason, with its own small
+`respondToRpcWith` — deliberately duplicated rather than imported from `listsApi.test.ts`, matching
+how every suite *above* these two already mocks them wholesale rather than share builder helpers
+across suites. A module cannot be tested through the mock of itself.
 
 **Not every module beside it is a seam to mock, though.** Step 4's `src/lib/outbox.ts` and
 `src/lib/listCache.ts` are also plain modules under `lib/`, but the list suites deliberately let

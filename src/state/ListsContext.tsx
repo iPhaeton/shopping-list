@@ -1,6 +1,5 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -11,42 +10,18 @@ import {
 } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { newId } from '../lib/ids';
 import { readCachedLists, writeCachedLists } from '../lib/listCache';
 import { subscribeToChanges } from '../lib/listsChannel';
-import {
-  addItem as addItemRequest,
-  fetchItem,
-  fetchItems,
-  fetchList,
-  fetchLists,
-  insertList,
-  MAX_ROWS,
-  renameItem as renameItemRequest,
-  renameList as renameListRequest,
-  setItemDeleted as setItemDeletedRequest,
-  setItemDone,
-  setListDeleted as setListDeletedRequest,
-  type Result,
-} from '../lib/listsApi';
-import { dropDependents, enqueue, loadOutbox, queueFirst, saveOutbox } from '../lib/outbox';
+import { loadOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
-import { reloadPages } from './reloadPages';
 import { replay } from './replay';
-import { itemIdOf, listIdOf, restorePlan, type Blocked } from './restorePlan';
-import { canEditItems, canManageList } from './roles';
-import type { Action, Cursor, List, Stream, WriteAction } from './types';
-
-/** Backoff floor and ceiling. Doubling from one second gets to the cap in six attempts. */
-const FIRST_RETRY_MS = 1_000;
-const MAX_RETRY_MS = 30_000;
-
-/**
- * How long a nudge from another device waits for company. Somebody adding five items sends five
- * nudges; this collapses them into one fetch, and is short enough that the screen still reads as
- * live.
- */
-const NUDGE_DEBOUNCE_MS = 300;
+import type { Blocked } from './restorePlan';
+import type { List, WriteAction } from './types';
+import { useBlockedWrites } from './useBlockedWrites';
+import { useHydration } from './useHydration';
+import { useListWrites } from './useListWrites';
+import { useOutbox } from './useOutbox';
+import { usePaging } from './usePaging';
 
 type ListsContextValue = {
   lists: List[];
@@ -112,6 +87,12 @@ const ListsContext = createContext<ListsContextValue | null>(null);
  * it lands — across backgrounding, across a restart, across days of no signal. What the screen
  * shows is always server truth with the outbox replayed on top, so a pending write is visible long
  * before the database has it, and a refused one disappears when the re-fetch arrives.
+ *
+ * The fetch/retry/paging machinery that makes this true lives one level down, in three hooks this
+ * component wires together: `useHydration` (server reads), `useOutbox` (the queue and its flush
+ * loop), `usePaging` (a list's own scroll). They share refs rather than a shared object because
+ * each ref's readers and writers cross hook boundaries in different directions — see each hook's own
+ * comment for which.
  */
 export function ListsProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [state, dispatch] = useReducer(listsReducer, initialState);
@@ -134,19 +115,10 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   // answer — so this is a guard beside `flushing`/`fetching` rather than a piece of screen state.
   const stuck = useRef(false);
 
-  // Realtime's two. `nudge` is the debounce timer collapsing a burst of somebody else's writes into
-  // one fetch; `dirty` is which lists that burst named — a set of ids, or `'all'` once any nudge (or
-  // a resubscribe) arrives with no list id, since then nothing narrower is safe. Mutated on every
-  // nudge regardless of whether the guards below let a fetch start, so nothing a burst names is lost
-  // while a write or another fetch is in the way — `drainDirty` is what acts on it once they clear.
-  const nudge = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dirty = useRef<Set<string> | 'all'>(new Set());
-
-  // Paging's two. `listsRef` mirrors `state.lists` for the callbacks that must not depend on it
-  // (`hydrate` reads how much of each list was loaded; `loadMore` reads the cursors); `paging` is
-  // the set of lists with a page in flight, so a scroll that fires twice sends one request.
+  // Mirrors `state.lists` for callbacks that must not depend on it directly — `useHydration` reads
+  // how much of each list was loaded, `usePaging` reads the cursors — so it is shared between them
+  // rather than owned by either.
   const listsRef = useRef(state.lists);
-  const paging = useRef(new Set<string>());
 
   useEffect(() => {
     listsRef.current = state.lists;
@@ -159,417 +131,53 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
       live.current = false;
       if (retry.current) clearTimeout(retry.current);
       retry.current = null;
-      if (nudge.current) clearTimeout(nudge.current);
-      nudge.current = null;
     };
   }, []);
 
-  const persist = useCallback(async () => {
-    setPending(queue.current.length);
+  const { loadMore, loadListItems } = usePaging({ listsRef, live, dispatch, queue });
 
-    try {
-      await saveOutbox(userId, queue.current);
-    } catch {
-      // The queue is still in memory and will still be sent; what is lost is surviving a restart,
-      // and that is worth saying out loud rather than pretending the change is safe.
-      setError('Could not save your changes on this device — they will be lost if the app closes.');
-    }
-  }, [userId]);
+  const { hydrate, refresh, refreshSoon, drainDirty } = useHydration({
+    userId,
+    dispatch,
+    queue,
+    live,
+    listsRef,
+    fetching,
+    flushing,
+    retry,
+  });
 
-  /**
-   * Server truth, with everything still unsent folded back on top.
-   *
-   * Unguarded on purpose — the flush loop calls it to roll a refused write back, and that happens
-   * with `flushing` set. `refresh` below is the guarded door everyone else comes through.
-   *
-   * A fetch carries a first page of each list's rows, and `lists/loaded` replaces state wholesale,
-   * so this re-reads as many pages as were loaded before — see `reloadPages` — inside the same
-   * `fetching` guard, one page per request. "Loaded before" is read from `listsRef`, a mirror of
-   * state, rather than from a dependency: `hydrate` is a dependency of `flush`, which is a
-   * dependency of everything, and re-creating that chain on every render is how the effects above
-   * it start re-subscribing.
-   *
-   * Returns the array it dispatched, so a caller that needs to know what state holds *now* — the
-   * blocked-write path — does not have to wait for React to commit it.
-   */
-  const hydrate = useCallback(async (): Promise<{ error: string | null; lists: List[] | null }> => {
-    fetching.current = true;
+  const { persist, flush, enqueueOp } = useOutbox({
+    userId,
+    dispatch,
+    queue,
+    live,
+    fetching,
+    flushing,
+    retry,
+    attempt,
+    stuck,
+    hydrate,
+    drainDirty,
+    setError,
+    setBlocked,
+    setPending,
+  });
 
-    try {
-      const { lists: fetched, error: failure, truncated } = await fetchLists();
-      if (!live.current || !fetched) return { error: failure, lists: null };
+  const { createList, renameList, addItem, renameItem, toggleItem, setListDeleted, setItemDeleted } =
+    useListWrites({ lists: state.lists, dispatch, enqueueOp, setError });
 
-      // Lists are capped, not paged: the read stops at `MAX_ROWS` memberships and PostgREST would
-      // stop there silently anyway. A warning is all this earns until somebody is in a thousand
-      // lists — see the `(user_id, created_at)` index if that day comes.
-      if (truncated && __DEV__) {
-        console.warn(`fetchLists hit MAX_ROWS (${MAX_ROWS}); lists beyond the cap are not shown.`);
-      }
-
-      const lists = await reloadPages(fetched, listsRef.current, fetchItems);
-      if (!live.current) return { error: failure, lists: null };
-
-      const loaded = replay(lists, queue.current);
-      dispatch({ type: 'lists/loaded', lists: loaded });
-      // Set here too, not only by the mirroring effect below: a screen's own mount effect can run
-      // in the same commit as this dispatch, and children's effects fire before their parent's —
-      // reading the ref there would see it one commit behind, the same trap `hydrate`'s return
-      // value exists to avoid for the blocked-write path.
-      listsRef.current = loaded;
-      // The fetched rows, never the replayed view — see `writeCachedLists`.
-      void writeCachedLists(userId, lists);
-      return { error: failure, lists: loaded };
-    } finally {
-      fetching.current = false;
-    }
-  }, [userId]);
-
-  /**
-   * `hydrate`, scoped to `listIds`. Fetches fresh metadata for just those lists; everything else in
-   * state passes through `listsRef.current` unchanged. `reloadPages` only reloads a list whose
-   * "fetched" copy holds fewer rows than its "previous" copy — for an object compared against
-   * itself that is never true, so nothing outside `listIds` triggers a single item request.
-   *
-   * Deliberately does not cache. The untouched lists it hands `reloadPages` are `listsRef.current`'s
-   * own objects — the *replayed* view, which may hold a write the database has not acknowledged
-   * yet. Caching that would persist an unsent write as server truth, the mistake `writeCachedLists`
-   * exists to avoid. `hydrate` may cache because everything it hands over came from a fetch; this
-   * does not, so it does not — the existing `pending === 0` effect below catches this dispatch once
-   * the outbox actually empties.
-   *
-   * A list `fetchList` reports as no longer visible (unshared, purged) is dropped from state; one
-   * it has never seen before is appended (freshly shared) at the end of the array — not inserted at
-   * its `created_at` position, since nothing here tracks that for a list and nothing downstream
-   * sorts on it. A per-id fetch that errors leaves that id's local copy untouched, matching a failed
-   * nudge-triggered `hydrate` today: silent.
-   */
-  const hydrateLists = useCallback(async (listIds: Set<string>): Promise<void> => {
-    fetching.current = true;
-
-    try {
-      const results = await Promise.all(
-        [...listIds].map(async (id) => [id, await fetchList(id)] as const)
-      );
-      if (!live.current) return;
-
-      const removed = new Set<string>();
-      const fetchedById = new Map<string, List>();
-      for (const [id, { list, error }] of results) {
-        if (error) continue;
-        if (list === null) removed.add(id);
-        else fetchedById.set(id, list);
-      }
-
-      const previous = listsRef.current;
-      const fetched = previous
-        .filter((list) => !removed.has(list.id))
-        .map((list) => fetchedById.get(list.id) ?? list);
-      for (const [id, list] of fetchedById) {
-        if (!previous.some((candidate) => candidate.id === id)) fetched.push(list);
-      }
-
-      const lists = await reloadPages(fetched, previous, fetchItems);
-      if (!live.current) return;
-
-      const loaded = replay(lists, queue.current);
-      dispatch({ type: 'lists/loaded', lists: loaded });
-      listsRef.current = loaded;
-    } finally {
-      fetching.current = false;
-    }
-  }, []);
-
-  /**
-   * A page is server truth, and what the screen shows is server truth with the outbox on top — so
-   * the queue goes back over it, exactly as `replay` puts it over a fetch. Through `dispatch`
-   * rather than `replay` because a page lands on whatever state holds *now*, and every write
-   * action is idempotent by id: re-applying one to a row that already carries it changes nothing,
-   * and applying it to a row the page just brought is the point.
-   */
-  const foldPage = useCallback(
-    (action: Extract<Action, { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }>) => {
-      dispatch(action);
-      for (const queued of queue.current) dispatch(queued);
-    },
-    []
-  );
-
-  /**
-   * The row a blocked write landed on, when the fetch did not bring it.
-   *
-   * `restorePlan` reads the tombstone out of state, and an empty plan means *discard the write*.
-   * `fetchLists` carries no items at all now, so this fires for essentially every blocked write on
-   * a list that is not currently (or was not previously) open — read that one row by key and fold
-   * it in with no `stream`, leaving the cursors where they are. A row the caller cannot see comes
-   * back `null`, and the plan is empty for the same reason it always was: purged, or removed.
-   */
-  const fetchMissingTarget = useCallback(async (op: WriteAction, loaded: List[] | null) => {
-    const itemId = itemIdOf(op);
-    if (!itemId || !loaded) return;
-
-    const listId = listIdOf(op);
-    const list = loaded.find((candidate) => candidate.id === listId);
-    if (!list || list.items.some((item) => item.id === itemId)) return;
-
-    const { item } = await fetchItem(itemId);
-    if (!live.current || !item) return;
-    foldPage({ type: 'items/pageLoaded', listId, items: [item] });
-  }, [foldPage]);
-
-  /**
-   * Acts on whatever `dirty` holds, and loops if a nudge names something else while it is working —
-   * `hydrate`/`hydrateLists` hold `fetching.current` for their own duration, so nothing else can
-   * start a fetch meanwhile, and this loop is the one place that notices when it is safe to.
-   */
-  const runDirty = useCallback(async () => {
-    while (live.current && (dirty.current === 'all' || dirty.current.size > 0)) {
-      const targets = dirty.current;
-      dirty.current = new Set();
-      if (targets === 'all') await hydrate();
-      else await hydrateLists(targets);
-    }
-  }, [hydrate, hydrateLists]);
-
-  /**
-   * The nudges a write, or another fetch, turned away — remembered in `dirty` rather than dropped,
-   * since nothing redelivers one. Called from the debounce timer once it fires, and from `flush`'s
-   * own `finally` once a write stops holding the door.
-   *
-   * Not called from `hydrate`'s or `hydrateLists`'s own `finally`: doing so would make a
-   * `useCallback` cycle (`drainDirty` → `runDirty` → `hydrateLists` → `drainDirty`) and would race
-   * `discardBlocked`/`restoreBlocked`'s `hydrate().then(flush())` chains — a drain fired
-   * synchronously inside `hydrate`'s `finally` sets `fetching.current` back to `true` before that
-   * `.then` resumes, so `flush` would see it set and bail with the write still queued.
-   * `runDirty`'s own loop already covers "something else was named while I was working" without
-   * either hazard: a nudge that arrives mid-fetch is picked up by the same `runDirty` call the
-   * moment `fetching.current` clears, since its loop is still running.
-   */
-  const drainDirty = useCallback(() => {
-    if (flushing.current || retry.current || fetching.current) return;
-    if (dirty.current === 'all' || dirty.current.size > 0) void runDirty();
-  }, [runDirty]);
-
-  /**
-   * Sends the head of the outbox, one at a time, until it is empty or the network refuses to
-   * cooperate. Serial on purpose: `items.list_id` is a foreign key, so an item insert must not
-   * overtake the list insert it depends on.
-   *
-   * Never runs alongside a fetch. If they overlapped, a write that completed while the fetch was in
-   * flight would be missing from both the response and the queue, and the row would vanish.
-   */
-  const flush = useCallback(
-    async function run(): Promise<void> {
-      if (flushing.current || fetching.current || stuck.current) return;
-      flushing.current = true;
-
-      try {
-        while (live.current && queue.current.length > 0) {
-          const op = queue.current[0];
-          const { error: message, verdict, outcome } = await send(op);
-          if (!live.current) return;
-
-          // The write was accepted and the caller was allowed to make it — there was just nothing
-          // live left for it to land on, because somebody put the list or the item in the bin.
-          //
-          // **Nothing is removed from the queue here, and that is the whole design.** Treating this
-          // like a refusal was the first attempt and it is wrong three ways over: `dropDependents`
-          // would throw away the tick queued behind an add, so "keep my change" would restore the
-          // item unticked; the op would exist only in React state, so a reload before the user
-          // answered would lose it; and the loop would carry on to the next write on the same list,
-          // overwrite this prompt, and leave a restore queued *behind* a write it was meant to
-          // unblock. So: leave it at the head, persist nothing, stop, and ask.
-          if (verdict === 'ok' && outcome === 'target_deleted') {
-            stuck.current = true;
-            attempt.current = 0;
-            setError(null);
-
-            // **The fetch comes first, and the order is load-bearing.** The tombstone is somebody
-            // else's write, so this device has never seen it; `restorePlan` reading the pre-delete
-            // view would find nothing in the bin, conclude there was nothing to offer, and *discard
-            // the write* — silently, which is exactly what happened in the browser before this was
-            // reordered. Announce the block only once state can answer the question.
-            //
-            // The op stays queued throughout, so `replay` keeps the optimistic row on screen where
-            // it belongs: the write is pending, not refused.
-            //
-            // Two fetches now, both before the announcement: the tombstone may be beyond the
-            // first page of the bin, where the wholesale read does not reach.
-            const { lists: loaded } = await hydrate();
-            if (!live.current) return;
-            await fetchMissingTarget(op, loaded);
-            if (!live.current) return;
-
-            setBlocked({ op, listId: listIdOf(op) });
-            return;
-          }
-
-          if (verdict === 'retryable') {
-            if (retry.current) return;
-
-            const delay = Math.min(MAX_RETRY_MS, FIRST_RETRY_MS * 2 ** attempt.current);
-            attempt.current += 1;
-            retry.current = setTimeout(() => {
-              retry.current = null;
-              void run();
-            }, delay);
-            return;
-          }
-
-          // By identity, not by position: a toggle coalesced into the head while this one was in
-          // flight is a *different*, newer write, and dropping it by index would lose it.
-          const rest = queue.current.filter((candidate) => candidate !== op);
-          queue.current = verdict === 'permanent' ? dropDependents(rest, op) : rest;
-          await persist();
-
-          if (verdict === 'permanent') {
-            setError(message);
-            // The one case that still rolls back by re-fetching: the write is never happening, so
-            // the screen has to stop showing it.
-            await hydrate();
-          } else {
-            attempt.current = 0;
-            setError(null);
-          }
-        }
-      } finally {
-        flushing.current = false;
-        drainDirty();
-      }
-    },
-    [persist, hydrate, fetchMissingTarget, drainDirty]
-  );
-
-  /**
-   * The next page of one list, on scroll.
-   *
-   * A read, so it carries none of `refresh`'s guards and may overlap a `hydrate`: a page that lands
-   * during one is either included in the re-read `hydrate` does anyway, or dropped by the replace
-   * and reloaded on the next scroll — both correct, neither worth a guard. What must not overlap is
-   * still a flush and a fetch, and nothing here touches that.
-   *
-   * The bin only when asked, because the screen only shows it when asked, and one list at a time:
-   * a scroll fires `onEndReached` more than once, and the second call finds the first in `paging`.
-   * A page that fails is silent — the cursor is untouched, so the next scroll simply asks again —
-   * since `error` is for a write the database refused, and a read hiccup is not that.
-   */
-  const loadMore = useCallback(async (listId: string, includeBin: boolean) => {
-    if (paging.current.has(listId)) return;
-    const list = listsRef.current.find((candidate) => candidate.id === listId);
-    if (!list) return;
-
-    const pages: [Stream, Cursor | null][] = [['live', list.nextLive]];
-    if (includeBin) pages.push(['bin', list.nextBin]);
-
-    paging.current.add(listId);
-    try {
-      for (const [stream, after] of pages) {
-        if (after === null) continue;
-
-        const { items, next } = await fetchItems(listId, stream, after);
-        if (!live.current) return;
-        if (!items) continue;
-
-        foldPage({ type: 'items/pageLoaded', listId, items, stream: { name: stream, next } });
-      }
-    } finally {
-      paging.current.delete(listId);
-    }
-  }, [foldPage]);
-
-  /**
-   * A list's first page of both streams, fetched once — when the user opens it. Live and bin
-   * together, matching what `fetchLists` used to embed and preserving the same guarantee: the
-   * bin's first page is available offline for "Show deleted" and the blocked-write restore prompt,
-   * from the moment the list is entered.
-   *
-   * `itemsLoaded` only flips once *both* requests have succeeded — a live-only or bin-only result
-   * must not tell `ListDetailScreen` or `reloadPages` the list is loaded when half of it is
-   * missing, so a partial failure dispatches nothing and leaves the flag false for the next mount
-   * effect to retry.
-   */
-  const loadListItems = useCallback(async (listId: string) => {
-    if (paging.current.has(listId)) return;
-    const list = listsRef.current.find((candidate) => candidate.id === listId);
-    if (!list || list.itemsLoaded) return;
-
-    paging.current.add(listId);
-    try {
-      const [liveResult, binResult] = await Promise.all([
-        fetchItems(listId, 'live', null),
-        fetchItems(listId, 'bin', null),
-      ]);
-      if (!live.current) return;
-      if (liveResult.items === null || binResult.items === null) return;
-
-      foldPage({
-        type: 'items/firstPageLoaded',
-        listId,
-        live: { items: liveResult.items, next: liveResult.next },
-        bin: { items: binResult.items, next: binResult.next },
-      });
-    } finally {
-      paging.current.delete(listId);
-    }
-  }, [foldPage]);
-
-  /**
-   * A re-read on demand, for the sharing screen and for coming back to the app.
-   *
-   * `flush` guards itself against a fetch; nothing guards a fetch against a flush. A read issued
-   * while a write is in the air can come back without that write just as the loop removes it from
-   * the queue — and the row disappears from the screen until the next fetch. A set `retry` means
-   * backoff took over, so we are offline and a fetch would fail anyway.
-   *
-   * Unlike a nudge, this carries no information about which list changed — "I want the truth" or
-   * "the app just came to the foreground" say nothing narrower — so it is always a full `hydrate`,
-   * never `hydrateLists`. It also does not check `fetching.current`, so it can in principle start
-   * alongside a nudge-driven `runDirty` already in flight; whichever dispatch lands last wins. That
-   * gap already exists between any two independent triggers of `hydrate` today, this does not widen
-   * it, and the outcome is bounded — one list's view rolls back one cycle, repaired by the next
-   * nudge or foreground event — so it is not worth a larger guard here.
-   */
-  const refresh = useCallback(async () => {
-    if (flushing.current || retry.current) return;
-    dirty.current = new Set();
-    await hydrate();
-  }, [hydrate]);
-
-  /**
-   * Somebody else changed a list you are in — `listId` when the nudge named one, `undefined` when
-   * it did not (a malformed payload, or a resubscribe, which can never know what it missed).
-   * Trailing debounce, so a burst of their writes is one fetch rather than one each, scoped to
-   * whichever lists the burst actually named.
-   *
-   * `dirty` is updated before the early return below, on *every* call: a nudge that arrives while a
-   * timer is already pending must still be counted, or a burst naming two lists would silently drop
-   * the second one's id. Once `dirty` is `'all'` it stays that way regardless of what arrives after,
-   * until something drains it.
-   *
-   * The nudge itself is never applied to state — it says *that* a list changed, not what, and a
-   * fetch of that list is the mechanism. That is deliberate: `replay` is the only place that knows
-   * how server truth and pending writes combine, a dropped message costs staleness while a
-   * mis-applied delta costs divergence, and server-stamped values like `done_at` arrive correct only
-   * by being read.
-   *
-   * When the guards `drainDirty` carries turn the fetch away, `dirty` already holds what was
-   * turned away — nothing extra to remember, unlike the old boolean `owed` this replaced.
-   */
-  const refreshSoon = useCallback(
-    (listId?: string) => {
-      if (dirty.current !== 'all') {
-        if (listId === undefined) dirty.current = 'all';
-        else dirty.current.add(listId);
-      }
-
-      if (nudge.current) return;
-
-      nudge.current = setTimeout(() => {
-        nudge.current = null;
-        drainDirty();
-      }, NUDGE_DEBOUNCE_MS);
-    },
-    [drainDirty]
-  );
+  const { restoreBlocked, discardBlocked } = useBlockedWrites({
+    blocked,
+    setBlocked,
+    lists: state.lists,
+    dispatch,
+    queue,
+    stuck,
+    persist,
+    hydrate,
+    flush,
+  });
 
   // Hydrate: the outbox and the cached rows first, so the app is usable with no network at all,
   // then the database.
@@ -668,245 +276,6 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     return subscribeToChanges(userId, refreshSoon, refreshSoon);
   }, [userId, status, refreshSoon]);
 
-  const enqueueOp = useCallback(
-    async (op: WriteAction) => {
-      queue.current = enqueue(queue.current, op);
-      // On disk before the request goes out, so a crash between the two loses nothing.
-      await persist();
-
-      // A backoff timer already running means the network just refused us. Another write is not
-      // evidence that it came back, so let the timer decide when to try again.
-      if (!retry.current) void flush();
-    },
-    [persist, flush]
-  );
-
-  const createList = useCallback(
-    (name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return null;
-
-      const id = newId();
-      const op: WriteAction = { type: 'list/created', id, name: trimmed };
-      dispatch(op);
-      void enqueueOp(op);
-      return id;
-    },
-    [enqueueOp]
-  );
-
-  /**
-   * No id to mint — the list already has one. Renaming is an absolute value like a toggle, so a
-   * retry cannot double-apply it and a queued rename can be replaced by a newer one.
-   */
-  const renameList = useCallback(
-    (listId: string, name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return;
-
-      const list = state.lists.find((candidate) => candidate.id === listId);
-      if (!list) return;
-      if (!canManageList(list.role)) {
-        setError('Only an owner can rename this list.');
-        return;
-      }
-
-      const op: WriteAction = { type: 'list/renamed', id: listId, name: trimmed };
-      dispatch(op);
-      void enqueueOp(op);
-    },
-    [state.lists, enqueueOp]
-  );
-
-  const addItem = useCallback(
-    (listId: string, title: string) => {
-      const trimmed = title.trim();
-      if (!trimmed) return;
-
-      const list = state.lists.find((candidate) => candidate.id === listId);
-      if (!list) return;
-      if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
-        return;
-      }
-
-      const op: WriteAction = { type: 'item/added', listId, id: newId(), title: trimmed };
-      dispatch(op);
-      void enqueueOp(op);
-    },
-    [state.lists, enqueueOp]
-  );
-
-  /**
-   * `renameList` one rung down: whoever may add an item may rename one. Same shape too — no id to
-   * mint, an absolute value, so a retry cannot double-apply and a queued rename is replaced by a
-   * newer one rather than sent twice.
-   */
-  const renameItem = useCallback(
-    (listId: string, itemId: string, title: string) => {
-      const trimmed = title.trim();
-      if (!trimmed) return;
-
-      const list = state.lists.find((candidate) => candidate.id === listId);
-      const item = list?.items.find((candidate) => candidate.id === itemId);
-      if (!list || !item) return;
-      if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
-        return;
-      }
-
-      const op: WriteAction = { type: 'item/renamed', listId, itemId, title: trimmed };
-      dispatch(op);
-      void enqueueOp(op);
-    },
-    [state.lists, enqueueOp]
-  );
-
-  const toggleItem = useCallback(
-    (listId: string, itemId: string) => {
-      const list = state.lists.find((candidate) => candidate.id === listId);
-      const item = list?.items.find((candidate) => candidate.id === itemId);
-      if (!list || !item) return;
-
-      // Unreachable from the UI, which hides the controls a reader may not use. Written anyway,
-      // because the next screen to call these will not remember the rule.
-      if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
-        return;
-      }
-
-      // The target state, computed here and sent whole. The reducer is never asked to flip, which
-      // is also what makes a queued toggle safe to replace with a newer one.
-      const done = item.doneAt === null;
-
-      // A placeholder for the optimistic row only — this device's clock does not decide when an
-      // item was checked off. The database stamps the real instant, and the next hydration replaces
-      // what is dispatched here.
-      const doneAt = done ? new Date().toISOString() : null;
-
-      const op: WriteAction = { type: 'item/setDone', listId, itemId, doneAt };
-      dispatch(op);
-      void enqueueOp(op);
-    },
-    [state.lists, enqueueOp]
-  );
-
-  /**
-   * Putting a list in the bin, and taking it back out. Owners only, matching `set_list_deleted`.
-   *
-   * Like every other write here the value is absolute and the timestamp is a placeholder for the
-   * optimistic row: the database stamps the real one, and the next hydration replaces this. That
-   * matters more than it does for `doneAt`, because the stored instant is what the nightly purge
-   * measures its thirty days against.
-   */
-  const setListDeleted = useCallback(
-    (listId: string, deleted: boolean) => {
-      const list = state.lists.find((candidate) => candidate.id === listId);
-      if (!list) return;
-      if (!canManageList(list.role)) {
-        setError('Only an owner can delete or restore this list.');
-        return;
-      }
-
-      const op: WriteAction = {
-        type: 'list/setDeleted',
-        id: listId,
-        deletedAt: deleted ? new Date().toISOString() : null,
-      };
-      dispatch(op);
-      void enqueueOp(op);
-    },
-    [state.lists, enqueueOp]
-  );
-
-  /** The same one rung down: whoever may add an item may bin one, and may bring it back. */
-  const setItemDeleted = useCallback(
-    (listId: string, itemId: string, deleted: boolean) => {
-      const list = state.lists.find((candidate) => candidate.id === listId);
-      const item = list?.items.find((candidate) => candidate.id === itemId);
-      if (!list || !item) return;
-
-      if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
-        return;
-      }
-
-      const op: WriteAction = {
-        type: 'item/setDeleted',
-        listId,
-        itemId,
-        deletedAt: deleted ? new Date().toISOString() : null,
-      };
-      dispatch(op);
-      void enqueueOp(op);
-    },
-    [state.lists, enqueueOp]
-  );
-
-  /**
-   * "Restore it and keep my change."
-   *
-   * Every tombstone between the user and their write is lifted, not just the first one: an item
-   * binned inside a binned list needs both, or the write is blocked again by the item the moment the
-   * list comes back — and the user, having already said yes once, would be asked again.
-   *
-   * The restores go to the **front** of the queue. The blocked write is still queued and still
-   * first, so appending them would send it before the thing meant to unblock it and earn the same
-   * answer a second time.
-   */
-  const discardBlocked = useCallback(() => {
-    if (!blocked) return;
-
-    // By identity, matching the flush loop: whatever is at the head is the op this prompt is about.
-    queue.current = queue.current.filter((candidate) => candidate !== blocked.op);
-    stuck.current = false;
-    setBlocked(null);
-    void persist().then(async () => {
-      // The write is never happening, so the screen has to stop showing it. **Awaited**, not fired
-      // off: `hydrate` holds `fetching` for its duration and `flush` refuses to run alongside a
-      // fetch, so an un-awaited read here would make the flush below a no-op and strand whatever
-      // was queued behind the write just discarded.
-      await hydrate();
-      return flush();
-    });
-  }, [blocked, persist, hydrate, flush]);
-
-  const restoreBlocked = useCallback(() => {
-    if (!blocked) return;
-
-    const restores = restorePlan(state.lists, blocked);
-    if (restores.length === 0) {
-      discardBlocked();
-      return;
-    }
-
-    for (const restore of restores) {
-      dispatch(restore);
-      queue.current = queueFirst(queue.current, restore);
-    }
-
-    stuck.current = false;
-    setBlocked(null);
-    void persist().then(() => flush());
-  }, [blocked, state.lists, persist, flush, discardBlocked]);
-
-  /**
-   * A blocked write nobody on this account may unblock is dropped rather than left to sit.
-   *
-   * It has to happen here rather than in the banner, which could only decline to render: the write
-   * is still the head of the outbox and the flush loop is stopped while it is, so a prompt that is
-   * merely invisible would stall every write behind it. This is the writer's half of the brief —
-   * their write to a list an owner binned just drops — and it is also what stops the prompt looping
-   * when a restore is itself refused, because the fetch that follows the refusal carries the role
-   * that refused it.
-   */
-  useEffect(() => {
-    if (!blocked) return;
-    if (restorePlan(state.lists, blocked).length > 0) return;
-
-    discardBlocked();
-  }, [blocked, state.lists, discardBlocked]);
-
   const value = useMemo(
     () => ({
       lists: state.lists,
@@ -951,38 +320,6 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
   );
 
   return <ListsContext.Provider value={value}>{children}</ListsContext.Provider>;
-}
-
-/**
- * The queued action carries everything the request needs, so this is the whole mapping from "a
- * write" to "a call". The boolean is derived rather than stored: `doneAt` on the action is the
- * optimistic row's placeholder, and only the database's clock decides the real one.
- */
-function send(op: WriteAction): Promise<Result> {
-  switch (op.type) {
-    case 'list/created':
-      return insertList(op.id, op.name);
-
-    case 'list/renamed':
-      return renameListRequest(op.id, op.name);
-
-    case 'list/setDeleted':
-      return setListDeletedRequest(op.id, op.deletedAt !== null);
-
-    case 'item/added':
-      return addItemRequest(op.id, op.listId, op.title);
-
-    case 'item/renamed':
-      return renameItemRequest(op.itemId, op.title);
-
-    case 'item/setDone':
-      return setItemDone(op.itemId, op.doneAt !== null);
-
-    // The boolean is derived at send time, exactly as `doneAt` is: what is queued is the value the
-    // row should have, so a coalesced delete-then-restore sends one request saying "not deleted".
-    case 'item/setDeleted':
-      return setItemDeletedRequest(op.itemId, op.deletedAt !== null);
-  }
 }
 
 export function useLists(): ListsContextValue {

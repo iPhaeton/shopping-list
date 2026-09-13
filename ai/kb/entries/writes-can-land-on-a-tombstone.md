@@ -4,9 +4,9 @@ title: A queued write can land on something in the bin — `target_deleted` is n
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, deletion, architecture]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/ListsContext.tsx, src/state/restorePlan.ts, src/lib/listsApi.ts]
-last_verified: 2026-09-10
-verify: grep -q "create type public.write_outcome as enum ('applied', 'target_deleted');" supabase/migrations/20260910000000_deletion.sql && grep -q "verdict === 'ok' && outcome === 'target_deleted'" src/state/ListsContext.tsx && grep -B6 'setBlocked({ op' src/state/ListsContext.tsx | grep -q 'await hydrate();' && grep -q 'queueFirst(queue.current, restore)' src/state/ListsContext.tsx && grep -q 'restorePlan(state.lists, blocked).length > 0' src/state/ListsContext.tsx && grep -q "rpc('add_item'" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts && awk '/create function public.set_item_done/,/^\$\$;/' supabase/migrations/20260910000000_deletion.sql | grep -E "raise exception|return 'target_deleted'" | tail -2 | head -1 | grep -q 'raise exception'
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
+last_verified: 2026-09-13
+verify: grep -q "create type public.write_outcome as enum ('applied', 'target_deleted');" supabase/migrations/20260910000000_deletion.sql && grep -q "verdict === 'ok' && outcome === 'target_deleted'" src/state/useOutbox.ts && grep -B6 'setBlocked({ op' src/state/useOutbox.ts | grep -q 'await hydrate();' && grep -q 'queueFirst(queue.current, restore)' src/state/useBlockedWrites.ts && grep -q 'restorePlan(lists, blocked).length > 0' src/state/useBlockedWrites.ts && grep -q "rpc('add_item'" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts && awk '/create function public.set_item_done/,/^\$\$;/' supabase/migrations/20260910000000_deletion.sql | grep -E "raise exception|return 'target_deleted'" | tail -2 | head -1 | grep -q 'raise exception'
 related: [deletion-is-a-tombstone, writes-retry-from-an-outbox, refused-writes-return-zero-rows, server-stamps-done-at, first-fetch-replaces-list-state, list-data-scoped-by-rls, queries-go-through-a11y-labels]
 ---
 
@@ -48,7 +48,11 @@ duplicated into a return value that could not enforce it anyway.
 - **Restores are prepended with `queueFirst`, not enqueued.** The blocked write is still first, so an
   append would send it before the thing meant to unblock it. And **both** tombstones are lifted when
   an item was binned inside a binned list — restoring only the list blocks the retry again on the
-  item and asks a user who has already said yes to say it twice.
+  item and asks a user who has already said yes to say it twice. `restoreBlocked`/`discardBlocked` and
+  the auto-discard effect live in [useBlockedWrites.ts](../../../src/state/useBlockedWrites.ts), an ad
+  hoc extraction from `ListsContext.tsx`; the `flush` loop that produces `blocked` in the first place
+  moved separately, into [useOutbox.ts](../../../src/state/useOutbox.ts) — the two hooks talk through
+  `stuck`, `hydrate` and `flush` passed in as params, not a shared file.
 
 **An empty plan means discard, and that is a mechanism rather than a rendering choice.** When
 `restorePlan` returns nothing — the row was purged, or this account is a writer, or it was demoted or

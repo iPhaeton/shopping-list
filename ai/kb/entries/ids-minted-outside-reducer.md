@@ -4,17 +4,19 @@ title: Ids and timestamps are minted outside the reducer and arrive on the actio
 type: convention
 status: current
 tags: [state, reducer, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md]
-last_verified: 2026-09-11
-verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/ListsContext.tsx
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/state/useListWrites.ts]
+last_verified: 2026-09-13
+verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/useListWrites.ts
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 ---
 
 [src/state/listsReducer.ts](../../../src/state/listsReducer.ts) generates nothing non-deterministic.
 Every action that creates something carries the new id on it
 (`{ type: 'list/created', id, name }`), and
-[src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx) mints it at dispatch time via
-`newId()` from [src/lib/ids.ts](../../../src/lib/ids.ts).
+[src/state/useListWrites.ts](../../../src/state/useListWrites.ts) mints it at dispatch time via
+`newId()` from [src/lib/ids.ts](../../../src/lib/ids.ts). That hook holds the seven write-action
+creators split out of `ListsContext.tsx` in an ad hoc structural refactor; `ListsContext.tsx` still
+calls them, but no longer mints anything itself.
 
 **As of step 3 the same rule governs a second value: the `doneAt` timestamp.** `item/setDone` carries
 the absolute value the item should hold — `new Date().toISOString()` or `null` — computed in the

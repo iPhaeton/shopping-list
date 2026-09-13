@@ -1,23 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import {
-  fetchLists,
-  fetchMembers,
-  removeMember,
-  setMemberRole,
-  shareList,
-  type Member,
-} from '../lib/listsApi';
+import { fetchLists } from '../lib/listsApi';
+import { fetchMembers, removeMember, setMemberRole, shareList, type Member } from '../lib/membersApi';
 import type { SharingScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
 import type { Role } from '../state/types';
 import { SharingScreen } from './SharingScreen';
 
 /**
- * `src/lib/listsApi.ts` is mocked at the module boundary, as every list suite does. This screen is
- * the one that calls it directly rather than through the provider: the roster is not in `State`, it
- * is not cached, and its writes deliberately skip the outbox, so what is worth asserting is which
+ * `src/lib/listsApi.ts` is mocked at the module boundary, as every list suite does — the provider
+ * still reads and writes through it. `src/lib/membersApi.ts` is this screen's own seam: it calls
+ * those four directly rather than through the provider, since the roster is not in `State`, it is
+ * not cached, and its writes deliberately skip the outbox, so what is worth asserting is which
  * function was called with what — and what the screen does with the answer.
  */
 jest.mock('../lib/listsApi', () => ({
@@ -30,6 +25,9 @@ jest.mock('../lib/listsApi', () => ({
   renameList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setListDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setItemDeleted: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+}));
+
+jest.mock('../lib/membersApi', () => ({
   fetchMembers: jest.fn(),
   shareList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setMemberRole: jest.fn(async () => ({ error: null, verdict: 'ok' })),

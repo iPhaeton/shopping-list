@@ -4,9 +4,9 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/lib/listCache.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-12
-verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(userId, replay' src/state/ListsContext.tsx && grep -q 'const VERSION = 5;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/lib/listCache.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
+last_verified: 2026-09-13
+verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists)' src/state/useHydration.ts && ! grep -q 'writeCachedLists(userId, replay' src/state/useHydration.ts && grep -q 'const VERSION = 5;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
 related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, update-list-identity-preserving, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack]
 ---
 

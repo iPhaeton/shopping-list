@@ -4,9 +4,9 @@ title: Deleting stamps `deleted_at` and leaves the row — the bin's first page 
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-12
-verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/ListsContext.tsx && grep -q "fetchItems(listId, 'bin', null)" src/state/ListsContext.tsx && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
+last_verified: 2026-09-13
+verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
 related: [writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack]
 ---
 
@@ -49,7 +49,7 @@ nothing; neither returns an outcome, because a delete cannot itself land on a de
 **The bin arrives with the live stream the moment a list is opened, not with `fetchLists` — since
 step 11-2 — and the client is what hides it.** `fetchLists` is list metadata only (`id, name,
 deleted_at`); it carries no items at all any more. Opening a list runs `loadListItems`
-([src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx)), which fetches both streams from
+([src/state/usePaging.ts](../../../src/state/usePaging.ts)), which fetches both streams from
 `null` via `Promise.all` and folds them into state together as one `items/firstPageLoaded`, each
 capped at `PAGE_SIZE` server-side; the policies add no filter, and `fetchItems(listId, 'bin',
 cursor)` reads the rest of the bin on scroll

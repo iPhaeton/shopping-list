@@ -4,15 +4,15 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/state/ListsContext.tsx, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
-last_verified: 2026-09-12
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(grep -c 'dispatch(op);' src/state/ListsContext.tsx)" = "$(grep -c 'void enqueueOp(op);' src/state/ListsContext.tsx)" && grep -q "verdict === 'retryable'" src/state/ListsContext.tsx && grep -q "verdict === 'permanent'" src/state/ListsContext.tsx && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/ListsContext.tsx && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
+last_verified: 2026-09-13
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts
 related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries]
 ---
 
 Every reducer-owned write dispatches first — the row is on screen before any request — and is then
 written to an outbox on disk (`outbox:<userId>`, [src/lib/outbox.ts](../../../src/lib/outbox.ts))
-*before* the request goes out. A serial flush loop in [ListsContext](../../../src/state/ListsContext.tsx)
+*before* the request goes out. A serial flush loop, now in [useOutbox.ts](../../../src/state/useOutbox.ts),
 keeps sending it until the database takes it: across backgrounding, a restart, days with no signal
 ([optimistic-list-writes](optimistic-list-writes.md) is the fire-once design this replaced).
 
@@ -33,8 +33,8 @@ fire in exactly the case the feature exists for. Backoff is 1s doubling to a 30s
 by the web `online` event or `AppState` going `active`.
 
 **The queue holds reducer actions, not a second vocabulary for "a write".** `WriteAction` in
-[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the three *reads* (`lists/loaded`,
-`items/pageLoaded` since step 11, `items/firstPageLoaded` since step 11-2) — seven writes, two of them
+[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the three *reads*
+(`lists/loaded`, `items/pageLoaded`, `items/firstPageLoaded`) — seven writes, two of them
 renames — which is what lets [replay](../../../src/state/replay.ts) fold pending ops back over fetched
 rows with the reducer itself; a page gets the same treatment by re-dispatch (`foldPage`). Every one
 carries an **absolute value**, never a flip or an inverse, so a retry or a coalesced duplicate is
@@ -44,10 +44,9 @@ while offline is one request. Nothing *removes* anything from `state.lists` — 
 `deletedAt`, and there is no `list/removed` or `item/removed`. The boolean `set_item_done` takes is
 derived at send time from `doneAt !== null`, not stored ([server-stamps-done-at](server-stamps-done-at.md)).
 
-**Adding a write is a new action plus a case in `send()`, and the type errors enumerate the rest.**
-`listIdOf`, `itemIdOf`, `send()` and `dropDependents`'s "strands nothing" arm are exhaustive
-switches, so let the compiler point at them. Two things in `outbox.ts` do **not** defend themselves
-and must be edited by hand — steps 7 and 10 both did, and each has a test naming the trap:
+**Adding a write is a new action plus a case in `sendWrite()`, and the type errors enumerate the rest.** `listIdOf`, `itemIdOf`, `sendWrite()`
+(`send()` renamed, now in [sendWrite.ts](../../../src/state/sendWrite.ts), alongside the seven action creators in [useListWrites.ts](../../../src/state/useListWrites.ts))
+and `dropDependents`'s "strands nothing" arm are exhaustive switches, so let the compiler point at them. Two things in `outbox.ts` do **not** defend themselves and must be edited by hand, each with a test naming the trap:
 `supersedes` ends in `default: return false`, so a new absolute-valued write silently stops
 coalescing; and `dropDependents`'s `item/added` arm is a filter predicate rather than a `switch`, so
 it silently keeps a new item action that a refused insert should have stranded. **`outbox.ts`'s
@@ -111,10 +110,11 @@ banner minutes or days after the tap; the membership RPCs keep the raw message.
 (PowerSync if this ever needs real convergence), no warning when signing out with writes pending.
 
 The `verify:` command asserts shape, not plumbing: one `useReducer` caller; dispatch and enqueue
-counts equal (**a write that skips the outbox fails** — it counts the literal `dispatch(op);`, so a
-loop over already-queued ops must name its variable differently, as `foldPage` does); both verdict
-branches; the `P0002` rule; no attempt cap (a heuristic); no connectivity library; no `…/removed`
-action (case-insensitive — a case-sensitive grep once let `'item/setDeleted'` past); no
-`state.lists.filter` in the reducer; exactly **ten** `Action` members (counted by `type:` line, since
-`items/pageLoaded` and `items/firstPageLoaded` each span several) and `WriteAction` excluding exactly
-the three reads — so the next write cannot be added without revisiting this entry.
+counts equal, now summed over `ListsContext.tsx` and `useListWrites.ts` (**a write that skips the
+outbox fails** — it counts the literal `dispatch(op);`, so a loop over already-queued ops must name
+its variable differently, as `foldPage` does); both verdict branches; the `P0002` rule; no attempt
+cap (a heuristic); no connectivity library; no `…/removed` action (case-insensitive — a
+case-sensitive grep once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer;
+exactly **ten** `Action` members (counted by `type:` line, since `items/pageLoaded` and
+`items/firstPageLoaded` each span several) and `WriteAction` excluding exactly the three reads — so
+the next write cannot be added without revisiting this entry.
