@@ -4,9 +4,9 @@ title: Realtime is a nudge fanned out to each member's per-user inbox topic, ans
 type: decision
 status: current
 tags: [supabase, realtime, rls, security, state, architecture]
-sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
+sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-5.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
 last_verified: 2026-09-13
-verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'return subscribeToChanges(userId, refreshSoon, refreshSoon);' src/state/ListsContext.tsx
+verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'return subscribeToChanges(userId, refreshSoon, refreshSoon);' src/state/ListsContext.tsx && grep -q 'let connected = false;' src/lib/listsChannel.ts && grep -q 'if (connected) onResubscribe();' src/lib/listsChannel.ts
 related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, deletion-is-a-tombstone, supabase-local-stack, scope-boundaries]
 ---
 
@@ -59,9 +59,11 @@ would trust rather than merely re-read.
 
 **Delivery is at-most-once, measured.** Anything sent while a socket was down is gone: no queue, no
 ack, no redelivery (Realtime decodes `realtime.messages` through a *temporary* replication slot that
-dies with its connection). Hence two callbacks rather than one — `onResubscribe` fires on every
-`SUBSCRIBED`, reconnects included, and a re-read is the repair; it never carries a list id, since it
-cannot know what it missed. `broadcast: { replay: { since, limit } }` exists and works, but redelivers
+dies with its connection). Hence two callbacks rather than one — `onResubscribe` fires only on a
+**reconnect** (a `SUBSCRIBED` after the channel's first one, step 11-5), never on the initial connect,
+since nothing could have been missed before the channel existed and the caller's own mount fetch
+already has current truth. A re-read is the repair; it never carries a list id, since it cannot know
+what it missed. `broadcast: { replay: { since, limit } }` exists and works, but redelivers
 duplicates and is bounded by a limit and by three days of retention; one fetch is unbounded and already
 written. **`realtime.send` also swallows its own failures**, so a nudge that cannot be written never
 aborts the user's write — one more reason a message is a hint, never the thing that makes a change
@@ -114,4 +116,5 @@ The `verify:` command asserts the shape: the receive policy is still the topic-o
 still exactly **one** policy on `realtime.messages`, the fan-out still reads membership at write time,
 the `lists` trigger is still update-only, no `.on('postgres_changes', …)` subscription exists anywhere
 in `src`, the channel is still `private`, the broadcast handler still decodes `listId` the same way,
-and both callbacks still land on `refreshSoon`.
+both callbacks still land on `refreshSoon`, and `subscribeToChanges` still gates `onResubscribe` on
+its `connected` closure flag rather than firing it on every `SUBSCRIBED`.

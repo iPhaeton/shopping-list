@@ -24,13 +24,20 @@ export function subscribeToChanges(
   /** `undefined` when the payload carries no usable list id — a malformed or missing one. */
   onChange: (listId?: string) => void,
   /**
-   * Fired on every `SUBSCRIBED`, **including reconnects**, and it is not the same event as a change.
-   * Delivery is at-most-once: anything the database sent while the socket was down is gone, with no
-   * queue, no ack and no redelivery. A re-read on resubscribe is the repair — and it can never know
-   * what it missed, so it never carries a list id.
+   * Fired on a reconnect — a `SUBSCRIBED` after one already happened on this channel — never the
+   * initial connect. Delivery is at-most-once: anything the database sent while the socket was down
+   * is gone, with no queue, no ack and no redelivery. A re-read on resubscribe is the repair, and it
+   * can never know what it missed, so it never carries a list id. The first connect needs no repair:
+   * nothing could have been missed before the channel existed, and the caller's own mount fetch
+   * already has current truth.
    */
   onResubscribe: () => void
 ): () => void {
+  // Sees only whether this channel has ever reached `SUBSCRIBED` before, not whether it is currently
+  // connected — a second `SUBSCRIBED` on the same instance is a reconnect by definition, since the
+  // channel had to drop and rejoin to report it again.
+  let connected = false;
+
   const channel = supabase
     .channel(`user:${userId}`, { config: { private: true } })
     .on('broadcast', { event: 'list/changed' }, (message: { payload?: { listId?: unknown } }) => {
@@ -38,7 +45,9 @@ export function subscribeToChanges(
       onChange(typeof listId === 'string' ? listId : undefined);
     })
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') onResubscribe();
+      if (status !== 'SUBSCRIBED') return;
+      if (connected) onResubscribe();
+      connected = true;
     });
 
   return () => {

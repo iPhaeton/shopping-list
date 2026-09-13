@@ -9,7 +9,7 @@
 8. Unsaved changes message flickering
 (9. Item and list deletion)
 10. Removing oneself from list
-11. Pagination for lists, items, list members, users
+11. Pagination for list members, users
 12. Push notifications on list/item completed/created/deleted
 (13. Rename item)
 14. Refactor authentication. Users should have names

@@ -79,8 +79,8 @@ it.each([
   expect(onChange).toHaveBeenCalledWith(undefined);
 });
 
-/** A resubscribe is the repair for at-most-once delivery, so it is its own callback. */
-it('reports a subscription, and nothing else', async () => {
+/** The initial connect needs no repair — the caller's own mount fetch already has current truth. */
+it('does not treat the first connection as a resubscribe', async () => {
   const channel = stubChannel();
   const onResubscribe = jest.fn();
 
@@ -88,8 +88,21 @@ it('reports a subscription, and nothing else', async () => {
 
   report(channel, 'CLOSED');
   report(channel, 'CHANNEL_ERROR');
+  report(channel, 'SUBSCRIBED');
+  expect(onResubscribe).not.toHaveBeenCalled();
+});
+
+/** A resubscribe is the repair for at-most-once delivery, so it is its own callback. */
+it('reports a reconnect, and nothing else', async () => {
+  const channel = stubChannel();
+  const onResubscribe = jest.fn();
+
+  subscribeToChanges(USER, jest.fn(), onResubscribe);
+
+  report(channel, 'SUBSCRIBED');
   expect(onResubscribe).not.toHaveBeenCalled();
 
+  report(channel, 'CLOSED');
   report(channel, 'SUBSCRIBED');
   expect(onResubscribe).toHaveBeenCalledTimes(1);
 });
