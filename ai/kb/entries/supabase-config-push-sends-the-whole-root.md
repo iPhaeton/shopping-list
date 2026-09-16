@@ -4,10 +4,10 @@ title: config push sends the whole root config — [remotes.production] holds on
 type: gotcha
 status: current
 tags: [supabase, config, auth, deployment, cloud]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, supabase/config.toml]
-last_verified: 2026-09-07
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, supabase/config.toml]
+last_verified: 2026-09-16
 verify: grep -q '^\[remotes.production\]' supabase/config.toml && grep -q '^project_id = "gvosanjceygakbubjfkv"' supabase/config.toml && grep -q '^site_url = "shopping-list://"' supabase/config.toml && grep -q '^max_frequency = "60s"' supabase/config.toml && grep -q '^site_url = "http://127.0.0.1:3000"' supabase/config.toml && grep -q '^\[remotes.production.auth.rate_limit\]' supabase/config.toml && grep -q '^email_sent = 30' supabase/config.toml
-related: [otp-email-templates-carry-the-code, supabase-local-stack, supabase-target-picked-at-runtime, scope-boundaries]
+related: [otp-email-templates-carry-the-code, supabase-local-stack, supabase-target-picked-at-runtime, scope-boundaries, shoppingloop-is-the-visible-name-only]
 ---
 
 `supabase/config.toml` holds the **local** stack at its root. `npx supabase config push` sends that
@@ -43,7 +43,10 @@ it at the root and let it inherit.
 
 **What is overridden, and why:** `site_url` / `additional_redirect_urls` become `shopping-list://`
 (the app's own scheme from `app.json` — there is no web deployment, and the code-based OTP flow
-renders neither into an email; they are overridden so a push cannot leak a loopback address),
+renders neither into an email; they are overridden so a push cannot leak a loopback address. The
+scheme stayed `shopping-list` through the ShoppingLoop rename precisely because these two keys and
+this entry's `verify:` move with it —
+[shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md)),
 `[remotes.production.auth.email] max_frequency` becomes `"60s"`, which is what makes
 `SignInScreen`'s 60-second resend cooldown a true statement about the server rather than a
 client-side hope, and — since step 6 — `[auth.rate_limit] email_sent` becomes `30`.

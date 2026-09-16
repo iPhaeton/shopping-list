@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, postgrest, pagination, config, persistence]
 sources: [ai/tasks/11-pagination/implementation-log-step-1.md, ai/suggestions/pagination.md, supabase/config.toml, src/lib/listsApi.ts, src/state/useHydration.ts]
-last_verified: 2026-09-13
+last_verified: 2026-09-16
 verify: test "$(grep -oE '^max_rows = [0-9]+' supabase/config.toml | grep -oE '[0-9]+')" = "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && ! awk '/^\[remotes\.production\]/{f=1} f' supabase/config.toml | grep -q '^max_rows' && grep -q 'if (limit > MAX_ROWS)' src/lib/listsApi.ts && grep -q 'truncated: rows.length === MAX_ROWS' src/lib/listsApi.ts && grep -q 'truncated && __DEV__' src/state/useHydration.ts
 related: [read-rooted-at-list-members, deletion-is-a-tombstone, supabase-config-push-sends-the-whole-root, scope-boundaries, supabase-local-stack]
 ---

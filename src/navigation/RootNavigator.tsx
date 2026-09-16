@@ -51,7 +51,7 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
         <Stack.Screen
           name="SignIn"
           component={SignInScreen}
-          options={{ title: 'Shopping List' }}
+          options={{ title: 'ShoppingLoop' }}
         />
       );
     case 'signedIn':

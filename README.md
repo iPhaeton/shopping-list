@@ -1,4 +1,4 @@
-# Shopping List
+# ShoppingLoop
 
 A simple shopping list app built with React Native and Expo.
 

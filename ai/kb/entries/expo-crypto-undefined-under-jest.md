@@ -8,6 +8,7 @@ sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/im
 last_verified: 2026-09-03
 verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json && ! grep -q 'expo-device' jest.setup.ts && grep -q "jest.mock('expo-device'" src/lib/supabaseTarget.test.ts
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, supabase-target-picked-at-runtime]
+indexed: false
 ---
 
 `randomUUID()` from `expo-crypto` is a native call. jest-expo mocks native modules away, and this
@@ -62,3 +63,12 @@ fallback and a test for it instead of trusting the flag.
 a decision about *where* its mock lives — `jest.setup.ts` when one behaviour serves everyone, the
 suite when the test steers it — and check first whether the library ships its own mock, as
 AsyncStorage does. Retire this entry if the app stops minting ids on the client.
+
+**Demoted out of `INDEX.md` at step 12** (`indexed: false`), not retired: still true, still checked
+every audit, still found by `/librarian ask`, and linked from
+[ids-minted-outside-reducer](ids-minted-outside-reducer.md), where anyone touching id minting starts,
+and from [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) and
+[list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md), where a storage test
+starts — the shared in-memory AsyncStorage above is the trap those readers would otherwise miss.
+No step since 5 has cited it, the fix is already wired in `jest.setup.ts`, and the `verify:` catches
+the one edit that could undo it.

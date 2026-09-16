@@ -78,6 +78,7 @@ add:
 | **GroceryLoop** | App-store/trademark research | Contains "grocery" (validated equal to "shopping list" in volume); does not contain "shared" (the highest-value qualifier) | Clean on both stores | No registration; **no existing business found anywhere** | Cleanest diligence result of any candidate, but misses the single best-validated keyword in the bare name |
 | **ListLoop** | App-store/trademark research | Contains "list"; same "shared" gap as GroceryLoop | Clean on both stores | No registration; but `listloop.com` (email publishing) and `listloop.net` (classifieds) are active under this exact name | Real prior use, unrelated category |
 | **CartHive** | App-store/trademark research | "Cart" isn't a term either data source validates as demand-backed | Clean (one near-miss: "Cardhive") | No registration; but "Cart Hive Ltd." (UK), `carthiveonline.com`, and a live Shopify store all trade under this name | Weakest keyword fit + real prior use |
+| **ShoppingLoop** | App-store/trademark research | Contains "shopping" — the base term the Keyword Planner data confirms reads naturally worldwide (vs. "grocery"'s American skew); same "shared" gap as GroceryLoop/ListLoop | Clean on both stores | No registration; **no prior use found anywhere** — the only web hits are unrelated (physical malls branded "The Loop," and "Shoploop," a discontinued Google project with a different spelling) | **Cleanest diligence result of any candidate checked**, combined with the single best-validated base keyword — a genuine rival to Same List |
 | **Shared List** | Keyword Planner research | Literal match to the best-validated cluster ("shared" + "shopping list") — maximum keyword relevance by construction | **Not checked** | **Not checked** | Best keyword-only fit, flagged by its own source as "generic, weak as a brand, hard to protect" — needs the uniqueness/trademark pass before it can be compared fairly to the others |
 | **Listmates** | Keyword Planner research | "Mates" implies sharing, informal/friendly register | Not checked by me directly (note: I separately checked the singular **"Listmate"** and dropped it for the same reason) | **Taken** — "ListMate" is a live Google Play app (`com.bjorudev.listmate`) with shared lists and realtime sync — same product, same name, plus "My ListMate" and "ListiMate" on the App Store | **Dropped — taken**, confirmed independently in both documents under the singular/plural variants |
 | **OurCart** | Keyword Planner research | "Our" signals sharing informally; not a tested search cluster itself | Not checked | Not checked | Flagged in its own source as "close to OurGroceries in feel" — real risk, unverified |
@@ -85,18 +86,21 @@ add:
 
 ## Reconciled recommendation
 
-1. **Same List** — promoted to co-lead. It's the only name **two independent methodologies
-   converged on without seeing each other's work**: the Keyword Planner data built it from real
-   "shared list" search demand, and the app-store/trademark pass independently found it clean on
-   both stores and at the USPTO. Its one flaw — an unrelated B2B mailing-tool already live under
-   the bare name — is a real but distant-category common-law conflict, comparable in kind to what
-   ListLoop and CartHive carry below. Store title would still want the literal descriptor (e.g.
-   "Same List: Shared Shopping List") so the bare-name's indirect positioning doesn't cost the
-   literal "shared shopping list" keyword match.
-2. **GroceryLoop** — still the cleanest name on pure diligence (zero prior use found by any check),
-   and "grocery" is a fully validated, high-volume, low-competition term. Its gap is not carrying
-   "shared" in the bare name, which both data sources agree is the single most valuable qualifier —
-   manageable via the subtitle, as already drafted in [app-naming-candidates.md](app-naming-candidates.md).
+1. **Same List** and **ShoppingLoop** — now co-leads, on different grounds. Same List is the only
+   name **two independent methodologies converged on without seeing each other's work**: the
+   Keyword Planner data built it from real "shared list" search demand, and the app-store/trademark
+   pass independently found it clean on both stores and at the USPTO. Its one flaw — an unrelated
+   B2B mailing-tool already live under the bare name — is a real but distant-category common-law
+   conflict. **ShoppingLoop** wins on a different axis: it's the cleanest diligence result of *any*
+   candidate checked in this whole exercise (no app-store match, no USPTO record, and no prior use
+   found anywhere on the open web), and it carries "shopping" — the single base term validated as
+   reading naturally worldwide, unlike "grocery." Neither name literally contains "shared" (the
+   single best-validated qualifier), so whichever is chosen, the store title should carry it
+   explicitly (e.g. "Same List: Shared Shopping List" / "ShoppingLoop: Shared Shopping List").
+2. **GroceryLoop** — still fully clean on diligence, and "grocery" is equally well-validated by
+   volume, but American-skewed wording makes it a notch behind ShoppingLoop for a global name (the
+   Keyword Planner data's own recommendation is "shopping list" over "grocery" for the brand-facing
+   name). Same "shared" gap as the co-leads.
 3. **ListLoop** and **CartHive** — remain viable runners-up for the reasons already recorded in
    [app-naming-candidates.md](app-naming-candidates.md), each carrying a real but distant-category
    prior-use conflict.

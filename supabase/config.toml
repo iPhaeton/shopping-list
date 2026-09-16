@@ -460,7 +460,7 @@ pass = "env(RESEND_API_KEY)"         # resolved at push time from the gitignored
 # account; every other recipient gets a 403. Replace with no-reply@<the verified domain> and push
 # again — that swap is the whole of phase 2, and until it happens this app is single-user.
 admin_email = "onboarding@resend.dev"
-sender_name = "Shopping List"
+sender_name = "ShoppingLoop"
 
 [remotes.production.auth.rate_limit]
 # Only means anything now that smtp above is enabled — the root's 2/hour is exactly what the

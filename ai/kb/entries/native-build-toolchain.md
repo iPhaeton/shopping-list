@@ -5,9 +5,9 @@ type: environment
 status: current
 tags: [environment, verification, expo, ios, android]
 sources: [README.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md]
-last_verified: 2026-09-03
+last_verified: 2026-09-16
 verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone
-related: [expo-sdk-54-pinned, supabase-local-stack, supabase-target-picked-at-runtime]
+related: [expo-sdk-54-pinned, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only]
 ---
 
 Machine state as of 2026-08-29, probed directly. **Xcode arrived on 2026-08-28** — before that this

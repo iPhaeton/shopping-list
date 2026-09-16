@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, auth, email, otp]
 sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, supabase/config.toml]
-last_verified: 2026-09-03
+last_verified: 2026-09-16
 verify: test "$(grep -c '^content_path = "./supabase/templates/otp-code.html"' supabase/config.toml)" = 2 && grep -q '{{ .Token }}' supabase/templates/otp-code.html
 related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, scope-boundaries]
 indexed: false

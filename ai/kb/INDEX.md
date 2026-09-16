@@ -14,6 +14,7 @@ Run `npm run kb:audit` to check every entry still holds.
 **Scope**
 
 - [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion and paged items in; invites, leaving a list and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
+- [ShoppingLoop is the visible name only](ai/kb/entries/shoppingloop-is-the-visible-name-only.md) — `expo.name`, the sign-in title, the mail sender and template say it; `slug`, `scheme`, `package.json` and `project_id` stay `shopping-list`, and the scheme is chained to production `site_url` (decision)
 
 **Auth**
 
@@ -45,7 +46,6 @@ Run `npm run kb:audit` to check every entry still holds.
 **Testing**
 
 - [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent/unmount; `toBeChecked` replaced `toHaveAccessibilityState`; `act` for external updates (gotcha)
-- [expo-crypto is undefined under jest](ai/kb/entries/expo-crypto-undefined-under-jest.md) — `randomUUID()` returns `undefined` silently; `jest.setup.ts` maps it to Node's and holds AsyncStorage's in-memory mock (gotcha)
 
 ---
 
