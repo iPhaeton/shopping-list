@@ -6,7 +6,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Stack and environment**
 
-- [iOS simulator works; Android does not](ai/kb/entries/native-build-toolchain.md) — `npm run ios` boots a sim into Expo Go; no Android SDK, no CocoaPods, no dev build yet — but a dev build and community native modules are allowed when a feature needs them, and a paid Apple Developer account is available on request (environment)
+- [iOS simulator and Android emulator both work](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` boot Expo Go; CocoaPods and a native dev build are still absent, but allowed when a feature needs them, and a paid Apple Developer account is available on request (environment)
 - [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; verify in the browser (environment)
 - [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
 - [`config push` sends the whole root config](ai/kb/entries/supabase-config-push-sends-the-whole-root.md) — `[remotes.production]` holds only what differs, unset keys inherit, there is no dry run and no read-back, and the `[Y/n]` prompt defaults to Y under automation (gotcha)
