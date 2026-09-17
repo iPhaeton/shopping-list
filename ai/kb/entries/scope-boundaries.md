@@ -4,9 +4,9 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md]
-last_verified: 2026-09-16
-related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, shoppingloop-is-the-visible-name-only]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, b78d16f]
+last_verified: 2026-09-17
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
@@ -20,7 +20,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 3 | lists and items in Postgres, one owner each, surviving a reload |
 | step 4 | writes queued on disk and retried until they land; the lists readable with no signal |
 | step 5 | a cloud Supabase project as a second environment, which a physical device talks to |
-| step 6 | custom SMTP (phase 1) pushed to production — sign-in mail is real mail now |
+| step 6 | custom SMTP, both phases — production sign-in mail leaves through Resend from a verified domain to any address |
 | step 7 step 1 | sharing at reader/writer/owner, enforced entirely in the database — no UI |
 | step 7 step 2 | the UI for it: role-gated screens, list rename, a sharing screen (invite / change role / remove), a re-fetch when the app comes to the front |
 | step 8 | realtime: a change by one member reaches every other member in about a second, both apps in the foreground |
@@ -72,13 +72,15 @@ Each of these is easy to assume and wrong:
 - **step 5, cloud** — no user-facing feature and no schema change. Nothing about the local-first
   workflow changed; web is still where work is verified
   ([supabase-local-stack](supabase-local-stack.md)).
-- **step 6, SMTP** — not multi-user sign-in. Resend's sandbox sender (`onboarding@resend.dev`)
-  delivers only to the address that owns the Resend account, so a stranger's `signInWithOtp` is
-  accepted by the API and the mail silently never arrives: the app stays structurally single-user
-  until phase 2 verifies a sending domain. The push plus a dashboard read-back is config-level proof,
-  not delivery proof — no physical-device sign-in has been run against it
-  ([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md),
-  [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)).
+- **step 6, SMTP** — phase 2 (a verified sending domain) landed 2026-09-17, so the single-recipient
+  restriction is gone: a stranger's `signInWithOtp` now reaches a real inbox, not just the Resend
+  account owner's. What did not land with it is proof of *deliverability*: the `confirmation`
+  template has not been exercised with a fresh address, no DMARC record exists yet, and whether mail
+  reaches another provider (Outlook, iCloud) or lands in spam is unproven — a fresh domain with no
+  reputation is exactly where mail goes quietly missing. No physical-device sign-in has been run
+  against production at all
+  ([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md),
+  [otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).
 - **step 8, realtime** — no echo suppression (`x-client-id`) and no "just updated" `SyncBanner`; both
   were offered to the user and declined. No presence and no per-field conflict UI either:
   last-write-wins is made *visible* rather than replaced
