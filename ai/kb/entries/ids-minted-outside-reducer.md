@@ -8,6 +8,7 @@ sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log
 last_verified: 2026-09-13
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/useListWrites.ts
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
+indexed: false
 ---
 
 [src/state/listsReducer.ts](../../../src/state/listsReducer.ts) generates nothing non-deterministic.
@@ -61,3 +62,11 @@ the second one earns is read as "already applied"
 **What to do:** a new case that creates an entity, or records a moment, puts the value on the action
 and mints it in the provider. `crypto.randomUUID()` or `new Date()` inside the reducer is the mistake
 this prevents; the `verify:` command greps for both.
+
+**Demoted out of `INDEX.md` at task 6 phase 2** (`indexed: false`), not retired: still true, still
+checked every audit, still found by `/librarian ask`, and linked from
+[update-list-identity-preserving](update-list-identity-preserving.md),
+[server-stamps-done-at](server-stamps-done-at.md) and
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) — the three indexed entries anyone
+touching the reducer or a write reaches first. No task log has cited it since task 3, and the index
+was full.

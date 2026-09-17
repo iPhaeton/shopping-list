@@ -4,10 +4,10 @@ title: config push sends the whole root config — [remotes.production] holds on
 type: gotcha
 status: current
 tags: [supabase, config, auth, deployment, cloud]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, supabase/config.toml]
-last_verified: 2026-09-16
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, supabase/config.toml]
+last_verified: 2026-09-17
 verify: grep -q '^\[remotes.production\]' supabase/config.toml && grep -q '^project_id = "gvosanjceygakbubjfkv"' supabase/config.toml && grep -q '^site_url = "shopping-list://"' supabase/config.toml && grep -q '^max_frequency = "60s"' supabase/config.toml && grep -q '^site_url = "http://127.0.0.1:3000"' supabase/config.toml && grep -q '^\[remotes.production.auth.rate_limit\]' supabase/config.toml && grep -q '^email_sent = 30' supabase/config.toml
-related: [otp-email-templates-carry-the-code, supabase-local-stack, supabase-target-picked-at-runtime, scope-boundaries, shoppingloop-is-the-visible-name-only]
+related: [cloud-auth-mail-goes-through-resend, otp-email-templates-carry-the-code, supabase-local-stack, supabase-target-picked-at-runtime, scope-boundaries, shoppingloop-is-the-visible-name-only]
 ---
 
 `supabase/config.toml` holds the **local** stack at its root. `npx supabase config push` sends that
@@ -16,14 +16,26 @@ production unless the `[remotes.production]` block restates it. Left alone, a pu
 production's `site_url` to `http://127.0.0.1:3000` and let anyone request a fresh sign-in code every
 second (`max_frequency = "1s"`, which exists so a Playwright run never waits).
 
-Three rules make the block work:
+What makes the block work, and what a push will not tell you:
 
 - **A remote is matched to a project by `project_id`**, not by its name — `[remotes.production]` is a
   label. The value under it is the cloud ref, not the root's `project_id` (which is the local
   stack's `shopping-list`).
 - **Any key left unset inherits from the root.** So the block is a diff, not a copy.
-- **There is no `--dry-run`.** Run `npx supabase config push` *without* `--yes` so the CLI prints the
-  diff and waits — that prompt is the entire review, and it is a live production change.
+- **There is no `--dry-run`, and the confirmation prompt defaults to Y.** The CLI prints the diff,
+  then asks `[Y/n]`; under any automation — piped stdin, a pty, `expect` — that prompt is swallowed
+  and the default fires. A push run "just to see the diff" put a throwaway template on production
+  once (2026-09-16, reverted within a minute), so **never run it to look**. A human reviews by running
+  it *without* `--yes` at a real terminal, where the prompt is the whole review. An agent runs it
+  only when the intent is to apply, with **`--yes` explicit** so the outcome is never ambiguous; the
+  diff still prints, and that printout goes in the step's log as the record. Before either, source
+  `.env` and confirm `RESEND_API_KEY` is non-empty
+  ([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)).
+- **There is no read-back either.** `--debug` logs request URLs, not bodies, and the access token
+  `npx supabase login` stores in the macOS keychain is not scoped for the Management API —
+  `GET /v1/projects/{ref}/config/auth` and even a plain project list answer `403`. Cloud auth config
+  is read only from the dashboard, by eye or driven with Playwright after a human signs in (schema is
+  different: [supabase-local-stack](supabase-local-stack.md)).
 - **`npx supabase status` is not a schema check on the block, whatever it looks like.** It only errors
   on genuinely malformed TOML (`CliConfigParseError`); an unrecognized key — a typo like `emailz_sent`
   for `email_sent` — is silently dropped and parses clean. That typo would then push as "no change,"
@@ -55,10 +67,11 @@ client-side hope, and — since step 6 — `[auth.rate_limit] email_sent` become
 `[auth.rate_limit] email_sent` stayed at the root's 2/hour — exactly what the built-in hosted mailer
 allows — until [ai/tasks/6-custom-smtp/implementation-log-step-1.md](../../tasks/6-custom-smtp/implementation-log-step-1.md)
 enabled `[remotes.production.auth.email.smtp]` (Resend) and raised it to 30 in the same push, per
-[ai/suggestions/production-supabase.md](../../suggestions/production-supabase.md) §4 — no longer just
-a proposal for this piece, though that document's phase 2 (a verified sending domain) still is. 30 is
-Supabase's own floor for custom SMTP, not Resend's ceiling (its free plan allows 100/day); treat it as
-a burst cap, not an allowance.
+[ai/suggestions/production-supabase.md](../../suggestions/production-supabase.md) §4 — no longer a
+proposal, and neither is its phase 2: the verified sending domain landed on 2026-09-17
+([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)). 30 is Supabase's
+own floor for custom SMTP, not Resend's ceiling (its free plan allows 100/day); treat it as a burst
+cap, not an allowance.
 
 **What to do:** adding a key to the root means asking whether it is a *local* truth. If it is,
 override it in the block in the same edit; a push is the moment the omission becomes production's

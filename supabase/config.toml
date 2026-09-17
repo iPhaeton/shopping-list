@@ -456,10 +456,10 @@ host = "smtp.resend.com"
 port = 465
 user = "resend"                      # literal — the API key is the password, not the username
 pass = "env(RESEND_API_KEY)"         # resolved at push time from the gitignored .env, or the shell
-# PHASE 1 PLACEHOLDER. Resend's sandbox sender delivers only to the address that owns the Resend
-# account; every other recipient gets a 403. Replace with no-reply@<the verified domain> and push
-# again — that swap is the whole of phase 2, and until it happens this app is single-user.
-admin_email = "onboarding@resend.dev"
+# Must sit on the exact domain verified in Resend — mail.shopping-loop.com, a subdomain so the app's
+# sending reputation stays apart from the domain's own mail. The free plan allows one verified
+# domain, and Resend answers 403 to any From outside it, which reads as "the code never arrived".
+admin_email = "no-reply@mail.shopping-loop.com"
 sender_name = "ShoppingLoop"
 
 [remotes.production.auth.rate_limit]

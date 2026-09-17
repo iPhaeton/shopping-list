@@ -9,7 +9,7 @@ Run `npm run kb:audit` to check every entry still holds.
 - [iOS simulator works; Android does not](ai/kb/entries/native-build-toolchain.md) — `npm run ios` boots a sim into Expo Go; no Android SDK and no CocoaPods, and no native dev build is needed (environment)
 - [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; verify in the browser (environment)
 - [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
-- [`config push` sends the whole root config](ai/kb/entries/supabase-config-push-sends-the-whole-root.md) — `[remotes.production]` holds only what differs, unset keys inherit, and there is no dry run (gotcha)
+- [`config push` sends the whole root config](ai/kb/entries/supabase-config-push-sends-the-whole-root.md) — `[remotes.production]` holds only what differs, unset keys inherit, there is no dry run and no read-back, and the `[Y/n]` prompt defaults to Y under automation (gotcha)
 
 **Scope**
 
@@ -19,10 +19,10 @@ Run `npm run kb:audit` to check every entry still holds.
 **Auth**
 
 - [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock it, or the query module above it (convention)
+- [Cloud auth mail goes through Resend](ai/kb/entries/cloud-auth-mail-goes-through-resend.md) — from `no-reply@mail.shopping-loop.com`, the one verified domain, so any address gets the code now; DNS resolving is not verification, a `403` from `POST /emails` is the only local signal and gates the push (environment)
 
 **State and persistence**
 
-- [Ids and timestamps are minted outside the reducer](ai/kb/entries/ids-minted-outside-reducer.md) — they arrive on the action, keeping it pure (convention)
 - [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
 - [Writes are queued on disk and retried](ai/kb/entries/writes-retry-from-an-outbox.md) — optimistic, never dropped, only a refusal re-fetches; seven write actions, three reads, and membership writes stay out (decision)
 - [A refused write comes back as zero rows](ai/kb/entries/refused-writes-return-zero-rows.md) — 204 and no error, so an UPDATE or DELETE must ask for the row back or it lies (gotcha)

@@ -4,10 +4,10 @@ title: OTP needs both the confirmation and magic_link templates overridden to re
 type: gotcha
 status: current
 tags: [supabase, auth, email, otp]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, supabase/config.toml]
-last_verified: 2026-09-16
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, supabase/config.toml]
+last_verified: 2026-09-17
 verify: test "$(grep -c '^content_path = "./supabase/templates/otp-code.html"' supabase/config.toml)" = 2 && grep -q '{{ .Token }}' supabase/templates/otp-code.html
-related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, scope-boundaries]
+related: [cloud-auth-mail-goes-through-resend, supabase-local-stack, supabase-config-push-sends-the-whole-root, scope-boundaries]
 indexed: false
 ---
 
@@ -39,17 +39,19 @@ project, and a second copy would be a second thing to keep in sync — as well a
 
 **As of 2026-09-03 the push has happened and the dashboard confirms it landed.** Task 6 pushed
 `[remotes.production.auth.email.smtp]` (custom SMTP via Resend —
-[supabase-local-stack](supabase-local-stack.md) has the detail) in the same `config push` that
+[cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md) has the detail) in the same `config push` that
 carries these two templates to production by inheritance. Auth → Emails in the live dashboard was
 read directly from the source editor for both slots — labeled "Confirm sign up" and "Magic link or
 OTP" in the current dashboard UI, not "Confirm signup" / "Magic Link" as in older docs — and both
 render `{{ .Token }}` from `otp-code.html`.
 
-**That is config-level and dashboard-level proof, not delivery proof.** No physical device has
-completed a sign-in against production yet. That still needs two runs — a brand-new address
-(exercises `confirmation`), then the same address again (exercises `magic_link`) — and until both
-happen, treat "the templates are correctly wired" and "device sign-in works end to end" as separate
-claims, not the same one.
+**That is config-level and dashboard-level proof, plus one send — not delivery proof.** On
+2026-09-17 `POST /auth/v1/otp` for the owner's existing address returned `200` through Resend with
+the verified From ([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)),
+which exercised `magic_link` only. The `confirmation` path — a brand-new address — has never been
+sent from production, and no physical device has completed a sign-in against it. Until both happen,
+treat "the templates are correctly wired" and "device sign-in works end to end" as separate claims,
+not the same one.
 
 **What to do:** any further auth email (email change, recovery) needs the same treatment before it
 is used with `verifyOtp`. After editing a template or `config.toml`, restart the stack — see

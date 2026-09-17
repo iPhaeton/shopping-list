@@ -4,8 +4,8 @@ title: iOS simulator works on this machine; Android SDK and CocoaPods are still 
 type: environment
 status: current
 tags: [environment, verification, expo, ios, android]
-sources: [README.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md]
-last_verified: 2026-09-16
+sources: [README.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md]
+last_verified: 2026-09-17
 verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone
 related: [expo-sdk-54-pinned, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only]
 ---
@@ -61,7 +61,7 @@ step 5.** It used to be reachability: everything ran on this machine's `127.0.0.
 Expo Go stopped at the sign-in screen no matter how healthy the native tooling was. A device now gets
 a cloud project instead ([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)),
 so the wall is gone — what remains is that only Mailpit makes the six-digit code machine-readable,
-and that the cloud project's own setup is unfinished. The simulator picks the local stack like the
+and that no device has yet completed a sign-in against production. The simulator picks the local stack like the
 browser and boots against it, though no sign-in has been driven there either. See
 [supabase-local-stack](supabase-local-stack.md) for the state of both environments.
 
