@@ -4,10 +4,10 @@ title: ai/suggestions/*.md are proposals, not scope — and eight of their desig
 type: constraint
 status: current
 tags: [scope, process, suggestions]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md]
-last_verified: 2026-09-11
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md]
+last_verified: 2026-09-17
 verify: grep -q 'deleted_at < cutoff' ai/suggestions/deletion.md && grep -q 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql && grep -q 'coalesce(new.list_id, old.list_id)' ai/suggestions/realtime-sync.md && grep -q 'tg_op' supabase/migrations/20260909000000_realtime.sql && grep -q 'pickTarget()' src/lib/supabase.ts
-related: [scope-boundaries, supabase-target-picked-at-runtime, read-rooted-at-list-members, select-policy-gates-update-and-delete, list-data-scoped-by-rls, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-retry-from-an-outbox]
+related: [scope-boundaries, supabase-target-picked-at-runtime, read-rooted-at-list-members, select-policy-gates-update-and-delete, list-data-scoped-by-rls, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-retry-from-an-outbox, native-build-toolchain]
 indexed: false
 ---
 
@@ -19,7 +19,7 @@ the rest of it** ([scope-boundaries](scope-boundaries.md)). What has been promot
 
 | document | promoted | still only a proposal |
 |---|---|---|
-| `otp-biometric-auth.md` | step 2 — the auth half | biometric unlock; it also needs a native dev build |
+| `otp-biometric-auth.md` | step 2 — the auth half | biometric unlock; it also needs a native dev build, allowed but not set up |
 | `supabase-persistence.md` | step 3 — staging step 1 | everything else; its `is_list_member` helper was rejected outright when sharing arrived |
 | `production-supabase.md` | step 5 — project/schema/config; step 6 — §4 phase 1, custom SMTP | §4 phase 2, a verified sending domain |
 | `list-sharing.md` | step 7 step 1 — the SQL | — |
@@ -66,10 +66,23 @@ step 5 did it anyway, because the task made the phone a target and removed the s
 ([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)). So a document is not
 merely un-promoted until a task lands — parts of it can be wrong afterwards.
 
-**What to do:** read a suggestion for its reasoning, never for its authority. The documents are never
-edited — not to record that they landed, not to record that they were wrong — so the KB and the
-migrations are the only current account of either. Before building from one, check that a task
-description promoted it, then check its design against the entries linked above, and against itself.
+**What to do:** read a suggestion for its reasoning, never for its authority. By default the
+documents are not edited — not to record that they landed, not to record that they were wrong — so
+the KB and the migrations are the only current account of either, and the eight errors above still
+stand uncorrected in their files.
+
+**The one exception, since 2026-09-17: the user may direct a revision.** Do not revise on your own
+judgement. When the user does direct one, reuse the shape the first revisions used: a dated
+`**Revised <date> — <one line on what changed>**` paragraph directly under the document's
+`**Date:**` line, plus an inline *(revised <date>: …)* marker on each corrected passage, with the
+original wording left readable so the document still shows what it said on the day it was written.
+Two documents have been revised so far, both on 2026-09-17 and both only on the toolchain premise
+that [native-build-toolchain](native-build-toolchain.md) lifted —
+[social-sign-in.md](../../suggestions/social-sign-in.md) and
+[otp-biometric-auth.md](../../suggestions/otp-biometric-auth.md). No design content changed in either.
+
+Before building from one, check that a task description promoted it, then check its design against
+the entries linked above, and against itself.
 
 The `verify:` command asserts three of the divergences above still stand in both directions: the
 purge comparison (`<` in the document, `<=` in the migration), the false DELETE-trigger warning

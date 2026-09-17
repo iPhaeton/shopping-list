@@ -54,8 +54,11 @@ without it.
 (Xcode 26.6, iOS 26.5). `npm run android` still needs the Android SDK, which is not installed.
 
 A native dev build (`npx expo run:ios`) would additionally need CocoaPods and an
-`ios.bundleIdentifier` in `app.json` — neither is set up, and nothing here calls for it: every
-dependency ships inside the Expo Go runtime.
+`ios.bundleIdentifier` in `app.json` — neither is set up yet, because every dependency so far
+ships inside the Expo Go runtime. That is the current state, not a rule: a feature may pull in a
+native module that Expo Go does not carry, and the first one that does will bring a dev build with
+it. A paid Apple Developer account is available on request for anything that needs one — running
+such a build on a physical iPhone, or shipping through TestFlight and the App Store.
 
 ## Checks
 

@@ -6,6 +6,17 @@
 
 **Date:** 2026-09-15
 
+**Revised 2026-09-17 — the toolchain premise changed, the design did not.** This document was
+written when a native dev build was treated as something the project had decided not to have. On
+2026-09-17 the user directed that community native modules and a dev build may be used whenever a
+feature needs them, and that a paid Apple Developer account will be made available when something
+needs one ([native-build-toolchain](../kb/entries/native-build-toolchain.md)). What that changes
+here: native Google one-tap (`signInWithIdToken`) and Sign in with Apple are no longer excluded by
+policy, only by setup cost — a dev build is still not set up. The browser-based flow below remains
+the proposed first step for the reason that survives: one code path for web, simulator and phone,
+with no native setup at all. Passages marked *(revised 2026-09-17)* were corrected in place; the
+rest reads as written on 2026-09-15.
+
 **Relationship to [otp-biometric-auth.md](otp-biometric-auth.md):** email OTP stays exactly as it
 is — this adds a second door to the same account, it does not replace the first. The biometric
 half of that document is untouched and still needs a dev build.
@@ -40,12 +51,14 @@ Each of these shaped a decision below; do not re-derive them from the unversione
 
 1. **There is no native Google sign-in in Expo Go.** Supabase's Expo recipe for Google is
    `@react-native-google-signin/google-signin` + `signInWithIdToken`, and that library is a community
-   native module: it needs a development build, which this project does not have and has decided not
-   to buy ([native-build-toolchain](../kb/entries/native-build-toolchain.md)). The **browser-based
-   flow** — `signInWithOAuth` + `expo-web-browser`'s `openAuthSessionAsync` — runs in Expo Go, in the
-   simulator and in the browser from one code path, with two Expo SDK modules that ship inside Expo
-   Go (`expo-web-browser`, `expo-linking`). That is the flow proposed. Native one-tap is the upgrade
-   path once a dev build exists, not the starting point.
+   native module: it needs a development build, which this project does not yet have *(revised
+   2026-09-17: a dev build is allowed, just not set up —
+   [native-build-toolchain](../kb/entries/native-build-toolchain.md) lists what it costs)*. The
+   **browser-based flow** — `signInWithOAuth` + `expo-web-browser`'s `openAuthSessionAsync` — runs in
+   Expo Go, in the simulator and in the browser from one code path, with two Expo SDK modules that
+   ship inside Expo Go (`expo-web-browser`, `expo-linking`). That is the flow proposed. Native one-tap
+   is the upgrade path once a dev build exists, not the starting point — because it needs no native
+   setup, not because native is off the table.
 2. **In Expo Go the callback URL is `exp://<lan-ip>:8081/--/<path>`, not `shopping-list://<path>`.**
    `Linking.createURL('auth/callback')` returns the `exp://` form under Expo Go and the custom scheme
    only in a dev/standalone build (and `http://localhost:8081/auth/callback` on web). The `scheme` in
@@ -62,7 +75,8 @@ Each of these shaped a decision below; do not re-derive them from the unversione
    user identifier (`sub`) per team — an account minted that way is **not the same user** in a later
    build under this project's own team. The web-flow alternative (Services ID + a client-secret JWT
    that expires every six months and has to be regenerated and pushed) avoids that but, like the
-   native one, needs a paid Apple Developer Program membership. And App Store Review Guideline 4.8
+   native one, needs a paid Apple Developer Program membership *(revised 2026-09-17: available on
+   request, so this is a sequencing choice now, not a blocker)*. And App Store Review Guideline 4.8
    requires Sign in with Apple the day an app offering Google login ships through the store — which
    binds a future dev-build step, not this one.
 5. **`public.users.email` is `not null` and the trigger copies `auth.users.email`.** A provider that
@@ -235,7 +249,8 @@ sensitive scopes, so no brand verification is needed to leave Testing later.
 
 - **Apple, Facebook, X** — constraints 4 and 5. Facebook additionally needs Meta app review before
   anyone outside the developer's own account can use it.
-- **Native `signInWithIdToken` for Google** — needs a dev build; it is the upgrade, not the base.
+- **Native `signInWithIdToken` for Google** — needs a dev build; it is the upgrade, not the base
+  *(revised 2026-09-17: out of this step by sequencing, not by policy — a dev build is allowed)*.
 - **Identity management** — no "linked accounts" screen, no `unlinkIdentity`, no manual linking
   (`enable_manual_linking` stays `false`). Auto-link covers the one case the product has.
 - **What the sharing roster shows** — still the email. A `display_name` column on `public.users`

@@ -6,6 +6,16 @@
 
 **Date:** 2026-08-27
 
+**Revised 2026-09-17 — the dev build this plan needs is allowed.** On 2026-09-17 the user directed
+that native modules and a native dev build may be used whenever a feature needs them, and that a
+paid Apple Developer account will be made available when something needs one
+([native-build-toolchain](../kb/entries/native-build-toolchain.md)). The OTP half of this plan has
+shipped since (task 2); the biometric half has not, and the design below still holds. What was dated
+is the Risks section, which believed the toolchain was unavailable: Xcode and an iOS simulator have
+been installed since 2026-08-28, and what remains is setup — CocoaPods, `expo-dev-client`, an
+`ios.bundleIdentifier` — not permission. Passages marked *(revised 2026-09-17)* were corrected in
+place; the rest reads as written on 2026-08-27.
+
 **Relationship to [supabase-persistence.md](supabase-persistence.md):** this plan replaces that
 document's email/password `SignInScreen` with email OTP and adds the biometric layer. Everything
 else there — schema, RLS, the `security definer` helper, UUID ids, `done_at`, realtime — stands
@@ -258,10 +268,11 @@ Reducer tests are untouched and stay pure. New screen tests query through a11y l
 
 ## Risks
 
-- **A dev build is now required**, which
-  [no-native-build-toolchain](../kb/entries/no-native-build-toolchain.md) currently says is
-  unavailable. That entry becomes stale the moment Xcode is installed and needs a librarian pass —
-  *after* the install, not in anticipation of it.
+- **A dev build is now required** *(revised 2026-09-17: allowed, and Xcode is installed — what is
+  still missing is CocoaPods, `expo-dev-client` and an `ios.bundleIdentifier`;
+  [native-build-toolchain](../kb/entries/native-build-toolchain.md) lists each with its route. The
+  simulator can run the build and simulate Face ID enrollment; a physical iPhone needs the Apple
+  Developer account, which is available on request)*.
 - **Biometric enrollment changes destroy the stored key.** Handled by design via the OTP fallback,
   but it will happen to real users and must be tested, not reasoned about.
 - **The cipher choice is unsettled** (above). It is the one part of this plan not yet grounded in a
@@ -272,4 +283,6 @@ Reducer tests are untouched and stay pure. New screen tests query through a11y l
   does nothing about a compromised mailbox — passkeys are the answer to that, and this design leaves
   room for them as an additional credential on the same `users` row.
 - **Manual setup only you can do:** create the Supabase project, edit the OTP email template, and
-  install Xcode/Android Studio for the dev build.
+  install Xcode/Android Studio for the dev build *(revised 2026-09-17: the Supabase project, the
+  template and Xcode are all done; Android Studio still is not, and the Apple Developer account is
+  needed only when the build goes to a physical device)*.
