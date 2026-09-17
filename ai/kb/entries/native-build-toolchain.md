@@ -1,113 +1,100 @@
 ---
 id: native-build-toolchain
-title: iOS simulator and Android emulator both work; CocoaPods is still absent — and a native dev build or community module is allowed the day a feature needs one
+title: A native dev build now works end to end — CocoaPods, both bundle identifiers, and expo-dev-client are set; `npm run ios`/`npm run android` build it, not Expo Go
 type: environment
 status: current
-tags: [environment, verification, expo, ios, android]
-sources: [README.md, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md]
+tags: [environment, verification, expo, ios, android, java]
+sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md]
 last_verified: 2026-09-17
-verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator
+verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator && command -v pod >/dev/null && grep -q '"expo-dev-client"' package.json && test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = com.shoppingloop.app && test "$(node -p "require('./app.json').expo.android.package")" = com.shoppingloop.app && grep -q '"android": "expo run:android"' package.json && grep -q '"ios": "expo run:ios"' package.json && test -x /opt/homebrew/opt/openjdk/bin/java && /opt/homebrew/opt/openjdk/bin/java -version 2>&1 | grep -qE '"(1[7-9]|[2-9][0-9])'
 related: [expo-sdk-54-pinned, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only, suggestions-are-proposals, expo-crypto-undefined-under-jest]
 ---
 
-Machine state as of 2026-09-17, probed directly. **Xcode arrived on 2026-08-28, the Android SDK and
-an emulator on 2026-09-17** — before that this entry said neither existed, and any advice you
-remember to that effect is out of date.
-
-**Works today, no setup:**
+Machine state as of 2026-09-17. Everything this entry used to list as "still absent" for a native
+dev build — CocoaPods, both platform identifiers, `expo-dev-client`, a prebuild — is now present and
+an Android build has been run end to end. **The headline change: `npm run ios` and `npm run android`
+no longer boot Expo Go.** They now run `expo run:ios`/`expo run:android`, which build and install the
+native dev client. Anything written before today that assumes those two scripts open Expo Go is wrong.
 
 | target | command | what backs it |
 |---|---|---|
 | web | `npm run web` | dev server at http://localhost:8081; Playwright MCP is allowlisted for driving it |
-| iOS simulator | `npm run ios` | Xcode 26.6 and the iOS 26.5 runtime, both installed — boots a simulator and opens the app in Expo Go |
-| Android emulator | `npm run android` | Android SDK, platform-tools, emulator and a `Pixel_10` AVD (arm64 Google Play image) all installed — boots the emulator and opens the app in Expo Go |
-| physical device | `npm start` | QR code into Expo Go |
+| iOS simulator, Expo Go | `npx expo start --ios --go` | Xcode 26.6, iOS 26.5 runtime |
+| iOS simulator, dev build | `npm run ios` (`expo run:ios`) | CocoaPods installed, `ios/Pods` populated; not run to a booted app this session — `ios/build` has no `.app` yet, only Android has the end-to-end proof below |
+| Android emulator, Expo Go | `npx expo start --android --go` | SDK, platform-tools, emulator, one AVD (`Pixel_10`, arm64 Google Play) |
+| Android emulator, dev build | `npm run android` (`expo run:android`) | run end to end 2026-09-17, produced `android/app/build/outputs/apk/debug/app-debug.apk` (61MB) |
+| physical device | `npm start` | QR code into Expo Go — not reverified since `expo-dev-client` landed; it may now default away from Expo Go too, confirm before trusting this row |
 
-`xcode-select -p` points at `/Applications/Xcode.app/Contents/Developer` (it used to point at
-`/Library/Developer/CommandLineTools`), so `xcrun simctl` works and iPhone-family simulators are
-available — ask `xcrun simctl list devices available` rather than trusting a list written down here.
-`ANDROID_HOME` is `~/Library/Android/sdk`, exported from `~/.zshrc`; the SDK holds platform-tools,
-emulator, build-tools and one AVD, `Pixel_10`, an arm64 Google Play image (this machine is Apple
-Silicon, so no HAXM/x86 image applies). `npm run ios` and `npm run android` have each been run end
-to end and opened the app in the simulator or emulator; that, not just a probe of the tools, is the
-evidence behind this entry — `adb devices` showing `emulator-5554 device` after boot is the
-mechanical proof for Android, matching what `xcrun simctl` gives for iOS.
+`xcode-select -p` points at `/Applications/Xcode.app/Contents/Developer`; `ANDROID_HOME` is
+`~/Library/Android/sdk`, exported from `~/.zshrc`. Both were already true before today — see
+`adb devices` / `xcrun simctl` to reprobe rather than trusting a device list written down here.
+
+**New gotcha, cost a debugging cycle: the Android Gradle Plugin needs Java 17+, and plain `java`
+silently resolved to 11.** `JAVA_HOME` was unset, so `/usr/bin/java` fell through to
+`/usr/libexec/java_home`, which had only Homebrew's `openjdk@11` registered — even though the
+unversioned `openjdk` formula (Java 23) was already sitting at `/opt/homebrew/opt/openjdk`, just never
+wired up. `expo run:android` failed with "Android Gradle plugin requires Java 17 to run. You are
+currently using Java 11." Nothing needed installing; the fix was two lines in `~/.zshrc`, right after
+the existing `ANDROID_HOME` block:
+```
+export JAVA_HOME="/opt/homebrew/opt/openjdk"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+Same caveat as `ANDROID_HOME` below: the audit runs `verify:` under `/bin/sh`, which never sources
+`~/.zshrc`, so the check below probes the Homebrew path directly rather than the env var.
+
+**What was filled in today, all under the "pay it when a task calls for it" note this entry used to
+carry:**
+
+- **CocoaPods** — `brew install cocoapods` (not `sudo gem install`; system Ruby 2.6.10 is too old),
+  `pod 1.17.0` at `/opt/homebrew/bin/pod`.
+- **[`app.json`](../../../app.json)'s `ios.bundleIdentifier` and `android.package`, both
+  `com.shoppingloop.app`.** A new, independent
+  decision — not the ShoppingLoop/shopping-list split in
+  [shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md), which never
+  covered these keys. Chosen deliberately: reverse-DNS of the `shopping-loop.com` domain the project
+  already controls (verified via Resend for auth mail — see
+  [cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)), hyphen dropped
+  because Android package segments must be valid Java identifiers, `.app` appended so one string
+  serves both platforms. `ai/marketing/app-naming-candidates.md` line 12 ("no `ios.bundleIdentifier`/
+  `android.package` set yet — nothing blocks a rename") is now stale; that file is research, not KB,
+  so nothing here edits it — read this entry instead.
+- **`expo-dev-client` `~6.0.21`** added to [`package.json`](../../../package.json) via
+  `npx expo install expo-dev-client`, which also rewrote the `android`/`ios` scripts (the headline
+  change above).
+- **`npx expo prebuild`** ran — `ios/` and `android/` exist on disk now, still gitignored
+  (`.gitignore:41-42`), still regenerable, still the managed workflow underneath; nothing here argues
+  for ejecting (see the historical note below).
 
 **Still absent:**
 
-- **Everything a native dev build needs.** There is no `ios/` directory (`/ios` and `/android` are
-  gitignored — still the managed workflow), `pod` and `eas` are not on PATH, `expo-dev-client` is
-  not in `package.json`, and [app.json](../../../app.json) has no `ios.bundleIdentifier`. Nothing the
-  app imports needs more than Expo Go carries: `expo-crypto` and `expo-device` are the two native
-  modules it calls directly, both Expo SDK modules and so present in Expo Go (though absent under
-  jest — a separate problem with its own fix in
-  [expo-crypto-undefined-under-jest](expo-crypto-undefined-under-jest.md)).
+- **`eas`**, not on PATH and not resolvable via `npx eas` — needed for TestFlight/App Store builds.
+- **A completed iOS dev-build run.** Pods are installed but `expo run:ios` has not been driven to a
+  booted simulator with the app open; only Android has the end-to-end proof.
+- **The Apple Developer account.** Still available on request — needed for a physical-device run,
+  TestFlight, or the App Store; the simulator needs none of this.
+- **A production sign-in from any device.** Unrelated to the toolchain — see below.
 
-**That absence is a description of the current state, not a rule — since 2026-09-17.** Earlier
-versions of this entry read the same facts as a boundary: "don't reach for `expo prebuild` or `pod
-install`", "a community native module would break the managed workflow". On 2026-09-17 the user set
-that aside in chat, directing that agents **assume community native modules may be used when a
-feature needs them, and assume a paid Apple Developer account will be made available when something
-needs one** — a dev build on a physical iPhone, TestFlight, the App Store, Sign in with Apple. The
-Running section of [README.md](../../../README.md) records the same. So the first feature that pulls
-in a module Expo Go does not carry brings a dev build (`npx expo run:ios`, or `expo-dev-client` on
-top of the dev server) with it, and that is an allowed outcome — not a smell to design around.
+**The "don't build speculatively" preference is now moot for the toolchain itself.** This entry used
+to say a dev build should wait for a feature that needs one. CocoaPods, both identifiers,
+`expo-dev-client`, and a proven Android build now all exist independent of any single feature — that
+cost is already paid. What is still worth deferring is `eas`/store distribution and the Apple account;
+pay those when a feature actually needs a physical-device or store build.
 
-What that costs is real and still unpaid. Pay it *when* a task calls for it, not before:
+**The browser remains the only target verified end to end behind sign-in.** Neither the Expo Go boot
+test nor today's Android dev-build run drove the sign-in flow — only that the app opens. See
+[supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md) and
+[supabase-local-stack](supabase-local-stack.md) for which environment each target talks to.
 
-- **CocoaPods** — `brew install cocoapods`. The system Ruby is 2.6.10, too old for current gems, so
-  `sudo gem install cocoapods` is the wrong turn.
-- **An `ios.bundleIdentifier`** — none is set, and `ai/marketing/app-naming-candidates.md` notes
-  the same. Choose it deliberately: it is the app's permanent identity on the App Store, and
-  [shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md) says which
-  machine identifiers are meant to stay `shopping-list`.
-- **`expo-dev-client`**, if the build is to keep the dev-server loop rather than be a one-off run.
-- **The Apple Developer account**, for a physical device or a store build — ask for it. The
-  simulator needs none, and neither does anything above.
+**Historical note:** the *original* absence of any toolchain is why this project is Expo rather than
+bare React Native CLI — Xcode and the Android SDK showing up since, and a dev build now existing,
+argue for none of that: a dev build is still Expo, with the managed config intact.
 
-Two preferences survive the change. Reach for an Expo SDK module first when one does the job —
-`expo-device` was weighed against this entry before being added, an SDK module over a community one
-([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)), and keeping Expo Go as a
-target keeps the cheapest device loop there is. And do not add a dev build speculatively: the
-`scheme` in `app.json` (step 2) is groundwork for one, not one.
-
-Two suggestion docs were written under the old boundary and revised on 2026-09-17 at the user's
-direction to match the current one —
-[suggestions-are-proposals](suggestions-are-proposals.md) records the shape of that revision.
-[ai/suggestions/social-sign-in.md](../../suggestions/social-sign-in.md) and
-[ai/suggestions/otp-biometric-auth.md](../../suggestions/otp-biometric-auth.md) no longer assume no
-native toolchain exists; neither design changed.
-
-**Picking a target.** Web is still the fastest loop for ordinary UI and state work, and `npm test`
-covers the reducer, so a simulator or emulator arriving is not a reason to stop using either. Reach
-for one when what you are checking is platform-specific — safe-area insets, keyboard and gesture
-behaviour, real navigation animations — where `react-native-web`'s shims genuinely differ from the
-device. A screenshot from either is now a cheap verification step; it was not before.
-
-**The browser is still the only target verified end to end behind sign-in, but the reason changed in
-step 5.** It used to be reachability: everything ran on this machine's `127.0.0.1` and a phone in
-Expo Go stopped at the sign-in screen no matter how healthy the native tooling was. A device now gets
-a cloud project instead ([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)),
-so the wall is gone — what remains is that only Mailpit makes the six-digit code machine-readable,
-and that no device has yet completed a sign-in against production. The simulator and the emulator
-both pick the local stack like the browser and boot against it, though no sign-in has been driven on
-either yet. See [supabase-local-stack](supabase-local-stack.md) for the state of both environments.
-
-**Historical note:** the *original* absence of a toolchain is why this project is Expo rather than
-bare React Native CLI. At scaffolding time a bare RN CLI app could have been created here but never
-built or run, so Expo was chosen for its zero-toolchain web and Expo Go targets. Xcode and the
-Android SDK showing up since does not argue for ejecting, and neither does a dev build being
-allowed — a dev build is still Expo, with the managed config intact; that reasoning explains the
-framework choice and nothing more.
-
-**About the `verify:`.** The earlier version of this entry deliberately carried no check, on the
-grounds that asserting the *absence* of a toolchain encodes a temporary machine state as an invariant
-to defend, and would go red the day someone usefully installed it. That is precisely what happened
-twice — Xcode on 2026-08-28, the Android SDK on 2026-09-17. The check now asserts the **presence**
-that flipped: full Xcode selected with at least one iPhone simulator, and `adb`/`emulator` present
-under `~/Library/Android/sdk` rather than `$ANDROID_HOME` (the audit runs `verify:` under `/bin/sh`,
-which never sources `~/.zshrc`) — where going red means a capability really was lost, which is worth
-being told. Both halves probe the *machine*, not the repo, so a FAIL on any machine but this one is
-expected and honest, not a broken command. The remaining absences stay unchecked for the same reason,
-doubly so now that each is expected to flip the day a feature needs it. Keep this entry and the
-Running section of [README.md](../../../README.md) in step.
+**About the `verify:`.** Every clause asserts *presence*, the same principle as before: full Xcode
+plus a simulator, `adb`/`emulator` under the SDK path, CocoaPods on PATH, both identifiers in
+`app.json`, `expo-dev-client` in `package.json`, the `expo run:*` scripts, and Java 17+ at the
+Homebrew path rather than through `java_home` (which still only registers 11 — the env var bypasses
+it, so the check does too). All of it probes the *machine* and `app.json`/`package.json`, so a FAIL
+on another machine, or before these files are committed, is expected. Keep this entry and the Running
+section of [README.md](../../../README.md) in step — that file still describes the old
+`expo start --ios`/`--android` behavior and has not been swept for today's script change.
