@@ -4,8 +4,8 @@ title: Production auth mail leaves through Resend from no-reply@mail.shopping-lo
 type: environment
 status: current
 tags: [supabase, auth, email, resend, deployment, cloud]
-sources: [ai/tasks/6-custom-smtp/plan-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, supabase/config.toml, .env.example]
-last_verified: 2026-09-17
+sources: [ai/tasks/6-custom-smtp/plan-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, supabase/config.toml, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md]
+last_verified: 2026-09-18
 verify: grep -q '^admin_email = "no-reply@mail.shopping-loop.com"$' supabase/config.toml && awk '/^\[remotes\.production\.auth\.email\.smtp\]/{f=1;next} /^\[/{f=0} f' supabase/config.toml | grep -q '^enabled = true$' && grep -q '^host = "smtp.resend.com"$' supabase/config.toml && grep -q '^pass = "env(RESEND_API_KEY)"' supabase/config.toml && ! grep -q 'resend\.dev' supabase/config.toml && ! grep -q '^RESEND_API_KEY=' .env.example && grep -qx '.env' .gitignore
 related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, otp-email-templates-carry-the-code, shoppingloop-is-the-visible-name-only, scope-boundaries]
 ---

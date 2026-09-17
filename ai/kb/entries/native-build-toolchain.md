@@ -4,10 +4,10 @@ title: A native dev build now works end to end — CocoaPods, both bundle identi
 type: environment
 status: current
 tags: [environment, verification, expo, ios, android, java]
-sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md]
-last_verified: 2026-09-17
-verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator && command -v pod >/dev/null && grep -q '"expo-dev-client"' package.json && test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = com.shoppingloop.app && test "$(node -p "require('./app.json').expo.android.package")" = com.shoppingloop.app && grep -q '"android": "expo run:android"' package.json && grep -q '"ios": "expo run:ios"' package.json && test -x /opt/homebrew/opt/openjdk/bin/java && /opt/homebrew/opt/openjdk/bin/java -version 2>&1 | grep -qE '"(1[7-9]|[2-9][0-9])'
-related: [expo-sdk-54-pinned, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only, suggestions-are-proposals, expo-crypto-undefined-under-jest]
+sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md]
+last_verified: 2026-09-18
+verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q iPhone && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator && command -v pod >/dev/null && grep -q '"expo-dev-client"' package.json && test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = com.shoppingloop.app && test "$(node -p "require('./app.json').expo.android.package")" = com.shoppingloop.app && grep -q '"android": "expo run:android"' package.json && grep -q '"ios": "expo run:ios"' package.json && test -x /opt/homebrew/opt/openjdk/bin/java && /opt/homebrew/opt/openjdk/bin/java -version 2>&1 | grep -qE '"(1[7-9]|[2-9][0-9])' && (! test -f android/app/build.gradle || grep -q "storeFile file('debug.keystore')" android/app/build.gradle)
+related: [expo-sdk-54-pinned, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only, suggestions-are-proposals, expo-crypto-undefined-under-jest, scope-boundaries]
 ---
 
 Machine state as of 2026-09-17. Everything this entry used to list as "still absent" for a native
@@ -65,6 +65,20 @@ carry:**
 - **`npx expo prebuild`** ran — `ios/` and `android/` exist on disk now, still gitignored
   (`.gitignore:41-42`), still regenerable, still the managed workflow underneath; nothing here argues
   for ejecting (see the historical note below).
+
+**"Still regenerable" has a cost, found while planning Google sign-in (task 13): regenerating
+`android/` mints a new debug keystore, silently invalidating anything registered against the old
+one's fingerprint.** `android/app/build.gradle`'s `signingConfigs.debug` points at
+`file('debug.keystore')` — relative to `android/app/`, so it is this project-local, gitignored file,
+not the OS default `~/.android/debug.keystore` (which does not exist on this machine). Its SHA-1
+(`keytool -list -v -keystore android/app/debug.keystore -alias androiddebugkey -storepass android
+-keypass android`) is what a Google Cloud OAuth Android client is registered against. `npx expo
+prebuild --clean` deletes `android/` outright; the next `expo run:android` has Gradle mint a fresh
+keystore with a different, effectively random fingerprint, and the old registration stops matching
+with no error anywhere — a token exchange just starts failing. Copy `debug.keystore` aside before a
+`--clean` prebuild and restore it after, or re-run the `keytool` command and update the Console
+registration, whichever regenerates first ([scope-boundaries](scope-boundaries.md) has the Google
+sign-in phase this risk belongs to).
 
 **Still absent:**
 

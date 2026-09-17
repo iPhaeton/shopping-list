@@ -340,6 +340,14 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+[auth.external.google]
+enabled = true
+client_id = "857897394234-sgkdm3k7p7qd5feo1vmetchp3hjkavsu.apps.googleusercontent.com"
+additional_client_ids = "857897394234-7k91redv8k4nfiqbm40m2ln2333btlli.apps.googleusercontent.com,857897394234-srril4mc96j97hn4jfmuktdvdg96i66e.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
+email_optional = false
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]

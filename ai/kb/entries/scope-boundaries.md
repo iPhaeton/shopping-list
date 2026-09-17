@@ -4,14 +4,14 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, b78d16f]
-last_verified: 2026-09-17
-related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, b78d16f]
+last_verified: 2026-09-18
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 12:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 13 phase 1:
 
 | | |
 |---|---|
@@ -28,9 +28,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 10 | renaming an item, by an owner or writer — an inline editor on the row, sent through a `rename_item` RPC like every other item write |
 | step 11 | a list's items paged, fetched only once the list is opened — a first page of live rows and of the bin together, the rest read on scroll by keyset; lists themselves capped, not paged |
 | step 12 | the app is called **ShoppingLoop** wherever a person sees it — visible name only; `slug`, `scheme`, `package.json` and `project_id` stay `shopping-list` ([shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md)) |
-
-(The `-step-N` suffix counts steps *within* a task, not tasks: task 3's files are `-step-1`, and task
-2 is the only one whose suffix happens to match its directory.)
+| step 13 phase 1 | Google added as a second sign-in method, server side only: `[auth.external.google]` enabled in the local stack and proven to validate a real token; no client library, no button, no production push |
 
 **Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
 you do not own, showing an owner how widely a list is shared without opening it, passwords, and
@@ -72,13 +70,10 @@ Each of these is easy to assume and wrong:
 - **step 5, cloud** — no user-facing feature and no schema change. Nothing about the local-first
   workflow changed; web is still where work is verified
   ([supabase-local-stack](supabase-local-stack.md)).
-- **step 6, SMTP** — phase 2 (a verified sending domain) landed 2026-09-17, so the single-recipient
-  restriction is gone: a stranger's `signInWithOtp` now reaches a real inbox, not just the Resend
-  account owner's. What did not land with it is proof of *deliverability*: the `confirmation`
-  template has not been exercised with a fresh address, no DMARC record exists yet, and whether mail
-  reaches another provider (Outlook, iCloud) or lands in spam is unproven — a fresh domain with no
-  reputation is exactly where mail goes quietly missing. No physical-device sign-in has been run
-  against production at all
+- **step 6, SMTP** — phase 2 (a verified sending domain) landed 2026-09-17: a stranger's
+  `signInWithOtp` now reaches a real inbox, not just the Resend account owner's. Deliverability
+  itself is still unproven (fresh address, cross-provider, DMARC) and no physical-device sign-in has
+  ever completed against production
   ([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md),
   [otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).
 - **step 8, realtime** — no echo suppression (`x-client-id`) and no "just updated" `SyncBanner`; both
@@ -105,6 +100,11 @@ Each of these is easy to assume and wrong:
   ([read-rooted-at-list-members](read-rooted-at-list-members.md),
   [max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md),
   [deletion-is-a-tombstone](deletion-is-a-tombstone.md)).
+- **step 13 phase 1, Google sign-in** — server side only, by design: the Google Cloud clients and
+  `config.toml`'s `[auth.external.google]` block exist and the local stack validates a real token,
+  but no `src/` file changed, no client library is installed, there is no sign-in button, and nothing
+  has been pushed to production. The registered Android client's SHA-1 is also fragile until a later
+  phase accounts for it — [native-build-toolchain](native-build-toolchain.md).
 
 **Cloud is three migrations behind local.** The four migrations up to realtime are pushed and read
 back from the production project; step 9's two (`20260910000000_deletion.sql`,
