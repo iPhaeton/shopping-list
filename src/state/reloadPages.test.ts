@@ -53,13 +53,18 @@ function open(
   };
 }
 
-/** Pages of `size` rows per stream, cut from a stream `total` rows long, recording every call. */
-function pagesOf(total: number, size: number) {
+/**
+ * Pages of `size` rows per stream, cut from a `live` stream `total` rows long, recording every
+ * call. `binTotal` defaults to 0 — a genuinely empty bin, which the fix under test now asks about
+ * once per reload instead of never — and is only worth overriding when a test cares about bin rows.
+ */
+function pagesOf(total: number, size: number, binTotal = 0) {
   const calls: [string, Stream, Cursor | null][] = [];
   const fetchPage: FetchPage = async (listId, stream, after) => {
     calls.push([listId, stream, after]);
+    const streamTotal = stream === 'bin' ? binTotal : total;
     const from = after === null ? 1 : Number(after.id.split('-')[1]) + 1;
-    const items = rows(stream, from, Math.min(size, total - from + 1));
+    const items = rows(stream, from, Math.max(0, Math.min(size, streamTotal - from + 1)));
     return { items, next: items.length === size ? cursorAfter(items) : null };
   };
   return { calls, fetchPage };
@@ -85,14 +90,37 @@ it('ignores a list the previous state did not have', async () => {
   expect(calls).toEqual([]);
 });
 
-it('marks a previously-loaded, empty list loaded again with no fetch at all', async () => {
+it('still asks once per stream for a previously-loaded, empty list, in case rows arrived since', async () => {
   const fetched = [bare('l1')];
   const previous = [open('l1', [], [])];
-  const { calls, fetchPage } = pagesOf(9, 3);
+  const calls: Stream[] = [];
+  const empty: FetchPage = async (_id, stream) => {
+    calls.push(stream);
+    return { items: [], next: null };
+  };
+
+  const result = await reloadPages(fetched, previous, empty);
+
+  expect(calls).toEqual(['live', 'bin']);
+  expect(result[0].items).toEqual([]);
+  expect(result[0].itemsLoaded).toBe(true);
+});
+
+/**
+ * The bug this guards: a list opened before it had any items cached `itemsLoaded: true` with 0
+ * rows, and the old guard read that as "already caught up" forever — no later hydrate or realtime
+ * nudge ever asked again, so a list stayed empty on screen no matter how much was added elsewhere.
+ */
+it('picks up rows that arrived after the list was last seen empty', async () => {
+  const fetched = [bare('l1')];
+  const previous = [open('l1', [], [])];
+  const liveRows = rows('live', 1, 3);
+  const fetchPage: FetchPage = async (_id, stream) =>
+    stream === 'live' ? { items: liveRows, next: null } : { items: [], next: null };
 
   const result = await reloadPages(fetched, previous, fetchPage);
 
-  expect(calls).toEqual([]);
+  expect(result[0].items.map((item) => item.id)).toEqual(liveRows.map((item) => item.id));
   expect(result[0].itemsLoaded).toBe(true);
 });
 
@@ -104,10 +132,12 @@ it('re-reads, one page at a time starting from page 1, as many rows as were load
   const result = await reloadPages(fetched, previous, fetchPage);
 
   // Eight rows held before, three per page: the third page carries it past eight, so it stops there.
+  // The bin was empty before too, so it still gets one page asked of it — just none of it comes back.
   expect(calls.map(([, stream, after]) => [stream, after?.id ?? null])).toEqual([
     ['live', null],
     ['live', 'live-0003'],
     ['live', 'live-0006'],
+    ['bin', null],
   ]);
   expect(result[0].items.map((item) => item.id)).toEqual(rows('live', 1, 9).map((item) => item.id));
   expect(result[0].nextLive).toEqual(cursorAfter(rows('live', 7, 3)));
@@ -121,7 +151,8 @@ it('stops at a short page, since that is the last one', async () => {
 
   const result = await reloadPages(fetched, previous, fetchPage);
 
-  expect(calls).toHaveLength(2);
+  // Two live pages to exhaust the 5-row stream, plus one bin page for the (empty) bin.
+  expect(calls).toHaveLength(3);
   expect(result[0].items).toHaveLength(5);
   expect(result[0].nextLive).toBeNull();
   expect(result[0].itemsLoaded).toBe(true);
@@ -130,7 +161,7 @@ it('stops at a short page, since that is the last one', async () => {
 it('re-reads each stream on its own, from page 1 of each', async () => {
   const fetched = [bare('l1')];
   const previous = [open('l1', rows('live', 1, 2), rows('bin', 1, 4))];
-  const { calls, fetchPage } = pagesOf(6, 2);
+  const { calls, fetchPage } = pagesOf(6, 2, 6);
 
   const result = await reloadPages(fetched, previous, fetchPage);
 
@@ -153,7 +184,7 @@ it('does not count rows the database has not stamped', async () => {
 
   await reloadPages(fetched, previous, fetchPage);
 
-  expect(calls).toHaveLength(1);
+  expect(calls.filter(([, stream]) => stream === 'live')).toHaveLength(1);
 });
 
 /**

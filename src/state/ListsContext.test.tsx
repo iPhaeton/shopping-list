@@ -945,19 +945,20 @@ it('reloads only the list a nudge names, leaving another loaded list untouched',
     list: { ...GROCERIES, items: [], itemsLoaded: false, nextLive: null, nextBin: null },
     error: null,
   });
-  api.fetchItems.mockResolvedValueOnce({
-    items: [fetched('i1', 'Milk', 1)],
-    next: null,
-    error: null,
-  });
+  // GROCERIES was `itemsLoaded` with a live row and an empty bin — the reload asks after both
+  // streams, not only the one that held anything before.
+  api.fetchItems
+    .mockResolvedValueOnce({ items: [fetched('i1', 'Milk', 1)], next: null, error: null })
+    .mockResolvedValueOnce({ items: [], next: null, error: null });
 
   await act(async () => nudge('l1'));
   await act(async () => {
     jest.advanceTimersByTime(NUDGE_DEBOUNCE);
   });
 
-  await waitFor(() => expect(api.fetchItems).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(api.fetchItems).toHaveBeenCalledTimes(2));
   expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', null);
+  expect(api.fetchItems).toHaveBeenCalledWith('l1', 'bin', null);
   expect(api.fetchLists).toHaveBeenCalledTimes(1);
   expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen();
   expect(screen.getByText(/l2 Hardware: Nails/)).toBeOnTheScreen();
@@ -1433,18 +1434,25 @@ it('fetches the tombstone a blocked write landed on when the bin does not reach 
   await renderProbe();
 
   // `i1` was binned by somebody else and, with the bin longer than a page, the re-fetch after the
-  // block returns page 1 of the bin without it — and page 1 of the live rows shifted by one.
+  // block returns page 1 of the bin without it — and page 1 of the live rows shifted by one. A
+  // fresh `fetchLists` never carries items, so the catch-up itself comes through `fetchItems`.
   api.setItemDone.mockResolvedValue(BLOCKED);
   api.fetchLists.mockResolvedValue({
-    lists: [
-      {
-        ...PAGED,
-        items: [...PAGED.items.filter((item) => item.id !== 'i1'), fetched('i3', 'Eggs', 3)],
-      },
-    ],
+    lists: [{ ...PAGED, items: [], itemsLoaded: false, nextLive: null, nextBin: null }],
     error: null,
     truncated: false,
   });
+  api.fetchItems
+    .mockResolvedValueOnce({
+      items: [fetched('i2', 'Bread', 2), fetched('i3', 'Eggs', 3)],
+      next: AFTER_BREAD,
+      error: null,
+    })
+    .mockResolvedValueOnce({
+      items: [fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+      next: AFTER_JAM,
+      error: null,
+    });
   api.fetchItem.mockResolvedValue({ item: fetched('i1', 'Milk', 1, T(21)), error: null });
   await fireEvent.press(screen.getByLabelText('toggle'));
 

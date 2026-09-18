@@ -42,12 +42,17 @@ export async function reloadPages(
   for (const list of fetched) {
     const before = previous.find((candidate) => candidate.id === list.id);
     if (!before?.itemsLoaded) continue;
+    // `hydrateLists` leaves a list it was not asked about exactly as `previous` held it —
+    // `itemsLoaded` still `true` on that same object — rather than replacing it with a bare fetch.
+    // That is not "a fresh read with 0 rows so far", it is "nothing to catch up"; only a list this
+    // round actually re-read (`itemsLoaded: false`, the one shape every real `fetchLists`/`fetchList`
+    // row carries) needs the loop below at all.
+    if (list.itemsLoaded) continue;
 
     let failed = false;
 
     streams: for (const stream of ['live', 'bin'] as const) {
       const wanted = loadedRows(before, stream);
-      if (wanted <= loadedRows(list, stream)) continue;
 
       let current = lists.find((candidate) => candidate.id === list.id) ?? list;
       // Starts `null` — a fresh list carries no items at all now, so the first request is always
@@ -55,8 +60,14 @@ export async function reloadPages(
       // "haven't asked yet," not "stream ended".
       let next = cursorOf(current, stream);
       let exhausted = false;
-      while (!exhausted && loadedRows(current, stream) < wanted) {
+      let asked = false;
+      // At least one page always goes out, even when `wanted` is 0: a stream that was empty last
+      // time is not proof it still is, and skipping the fetch left a list opened before its first
+      // item existed permanently stuck empty — every later hydrate and realtime nudge saw "0
+      // wanted, 0 held" and called that already caught up.
+      while (!exhausted && (!asked || loadedRows(current, stream) < wanted)) {
         const page = await fetchPage(list.id, stream, next);
+        asked = true;
         if (page.items === null) {
           lists = replace(lists, list);
           failed = true;
