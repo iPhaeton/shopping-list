@@ -18,7 +18,7 @@ const CODE_LENGTH = 6;
  * swaps the whole stack when the session state changes, which unmounts this screen.
  */
 export function SignInScreen(_props: SignInScreenProps) {
-  const { requestCode, verifyCode } = useSession();
+  const { requestCode, verifyCode, signInWithGoogle } = useSession();
 
   const [phase, setPhase] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -72,6 +72,20 @@ export function SignInScreen(_props: SignInScreenProps) {
     }
   }
 
+  async function continueWithGoogle() {
+    if (pending) return;
+
+    setPending(true);
+    setError(null);
+
+    const { error: failure } = await signInWithGoogle();
+
+    // Unlike verify(), always cleared: a cancelled sheet returns `{ error: null }` with no state
+    // change, and success unmounts this screen anyway, so clearing here is a harmless no-op.
+    setPending(false);
+    if (failure) setError(failure);
+  }
+
   function startOver() {
     setPhase('email');
     setCode('');
@@ -105,6 +119,14 @@ export function SignInScreen(_props: SignInScreenProps) {
             />
 
             <PrimaryButton label="Send code" enabled={canSend} onPress={send} />
+
+            {Platform.OS !== 'web' && (
+              <PrimaryButton
+                label="Continue with Google"
+                enabled={!pending}
+                onPress={continueWithGoogle}
+              />
+            )}
           </>
         ) : (
           <>

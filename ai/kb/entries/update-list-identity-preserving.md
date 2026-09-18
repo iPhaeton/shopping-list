@@ -8,6 +8,7 @@ sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log
 last_verified: 2026-09-11
 verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && grep -q 'returns the same state object when the name is unchanged' src/state/listsReducer.test.ts && grep -q 'yields one row when a write the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'yields one item when an add the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'state.lists.some((candidate) => candidate.id === action.id)' src/state/listsReducer.ts && npx jest -t 'is a no-op|returns the same state object|yields one row|yields one item' --silent
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
+indexed: false
 ---
 
 The private `updateList` helper in

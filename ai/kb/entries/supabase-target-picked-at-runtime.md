@@ -4,9 +4,9 @@ title: The Supabase environment is chosen at runtime by platform, not compiled i
 type: decision
 status: current
 tags: [supabase, environment, expo, config, architecture]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
-last_verified: 2026-09-09
-verify: grep -q "Platform.OS === 'web'" src/lib/supabaseTarget.ts && grep -q "Device.isDevice ? 'cloud' : 'local'" src/lib/supabaseTarget.ts && test "$(grep -c 'process\.env\.EXPO_PUBLIC_SUPABASE_\(URL\|ANON_KEY\)_\(LOCAL\|CLOUD\)' src/lib/supabaseTarget.ts)" = 4 && test "$(grep -rl 'process\.env\.EXPO_PUBLIC_SUPABASE' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.')" = src/lib/supabaseTarget.ts && grep -q "from './supabaseTarget'" src/lib/supabase.ts
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
+last_verified: 2026-09-18
+verify: grep -q "Platform.OS === 'web'" src/lib/supabaseTarget.ts && grep -q "Device.isDevice ? 'cloud' : 'local'" src/lib/supabaseTarget.ts && test "$(grep -c 'process\.env\.EXPO_PUBLIC_SUPABASE_\(URL\|ANON_KEY\)_\(LOCAL\|CLOUD\)' src/lib/supabaseTarget.ts)" = 4 && test "$(grep -rl 'process\.env\.EXPO_PUBLIC_SUPABASE' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.')" = src/lib/supabaseTarget.ts && grep -q "from './supabaseTarget'" src/lib/supabase.ts && grep -q "10.0.2.2" src/lib/supabaseTarget.ts
 related: [supabase-local-stack, supabase-client-module-boundary, native-build-toolchain, supabase-config-push-sends-the-whole-root, expo-crypto-undefined-under-jest]
 ---
 
@@ -17,6 +17,7 @@ start, which Supabase the client talks to:
 |---|---|---|
 | web | local | Mailpit makes the code machine-readable; this is the verification path |
 | iOS simulator | local | it shares the host's loopback, so a disposable database costs nothing |
+| Android emulator | local | same target, a patched address — see below |
 | physical device | cloud | a phone cannot reach this machine's `127.0.0.1:54321` at all |
 
 `EXPO_PUBLIC_SUPABASE_TARGET=local|cloud` overrides all of it, which is how you put two clients on
@@ -50,6 +51,18 @@ Two properties of that flag are load-bearing and easy to break while tidying:
   browser goes to cloud.
 - **It is a native constant, so it can arrive `undefined`** under jest-style module mocking. The
   branch falls back to `local` — towards the disposable database — rather than defaulting to cloud.
+
+**`local` is not one address — the Android emulator needed a second patch, found only once a real
+network call was driven from it.** The iOS Simulator really does share the Mac's network stack, so
+`127.0.0.1:54321` reaches Docker as-is. The Android emulator runs its own network stack instead: a raw
+TCP connect to its own `127.0.0.1:54321` gets refused (confirmed with `adb shell`), and `10.0.2.2` is
+its fixed alias back to the host loopback. `localUrl()` in
+[supabaseTarget.ts](../../../src/lib/supabaseTarget.ts) rewrites
+`EXPO_PUBLIC_SUPABASE_URL_LOCAL`'s host to `10.0.2.2` only when `Platform.OS === 'android' &&
+!Device.isDevice`; every other target keeps the literal env value. This shipped wrong for a full task
+(13's phase 1 only ever booted the app on the emulator, never called Supabase from it) until phase 2's
+Google sign-in became the first thing to make a real network call from the emulator and surfaced
+"Network request failed".
 
 **The two env pairs are symmetric (`_LOCAL` / `_CLOUD`), and neither is a default.** Keeping the old
 unsuffixed `EXPO_PUBLIC_SUPABASE_URL` for local and adding only a `_CLOUD` pair would have been a

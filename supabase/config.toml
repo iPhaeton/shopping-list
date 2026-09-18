@@ -345,7 +345,11 @@ enabled = true
 client_id = "857897394234-sgkdm3k7p7qd5feo1vmetchp3hjkavsu.apps.googleusercontent.com"
 additional_client_ids = "857897394234-7k91redv8k4nfiqbm40m2ln2333btlli.apps.googleusercontent.com,857897394234-srril4mc96j97hn4jfmuktdvdg96i66e.apps.googleusercontent.com"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
-skip_nonce_check = false
+# The installed @react-native-google-signin/google-signin is the free "Original" module: its
+# SignInParams type carries only `loginHint`, no nonce option — custom nonce wiring is a paid
+# feature of that library's premium fork. With no way to pass a matching nonce, GoTrue's default
+# check has nothing to verify against.
+skip_nonce_check = true
 email_optional = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.

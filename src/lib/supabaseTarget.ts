@@ -2,6 +2,21 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 
 /**
+ * The local Supabase URL, patched for where "local" actually resolves on this platform.
+ *
+ * Only the Android emulator needs this: its own `127.0.0.1` is its own loopback, not the host
+ * machine's — confirmed with `adb shell`, where a raw TCP connect to `127.0.0.1:54321` gets
+ * "connection refused" while `10.0.2.2:54321` (the emulator's fixed alias back to the host
+ * loopback interface) connects fine. The iOS Simulator needs no such patch: unlike the Android
+ * emulator, it genuinely shares the Mac's network stack, so its `127.0.0.1` already is the host.
+ */
+function localUrl(): string | undefined {
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL_LOCAL;
+  if (!url || Platform.OS !== 'android' || Device.isDevice) return url;
+  return url.replace('127.0.0.1', '10.0.2.2').replace('localhost', '10.0.2.2');
+}
+
+/**
  * Which Supabase this build talks to.
  *
  * Metro substitutes `process.env.EXPO_PUBLIC_*` by **literal text match**, so both pairs are
@@ -10,7 +25,7 @@ import { Platform } from 'react-native';
  */
 export const targets = {
   local: {
-    url: process.env.EXPO_PUBLIC_SUPABASE_URL_LOCAL,
+    url: localUrl(),
     anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY_LOCAL,
   },
   cloud: {
@@ -29,7 +44,8 @@ export type TargetName = keyof typeof targets;
  *
  * - **web** → local. Mailpit makes the six-digit code machine-readable, which is what keeps the
  *   sign-in flow drivable end to end by Playwright. This is the verification path.
- * - **simulator** → local too. It shares the host's loopback, so it reaches the Docker stack.
+ * - **simulator or emulator** → local too. `localUrl()` below is what actually gets it there on
+ *   Android — the iOS Simulator reaches the Docker stack over the shared host loopback as-is.
  * - **physical device** → cloud. A phone cannot reach this machine's `127.0.0.1:54321` at all.
  *
  * `Device.isDevice` is a synchronous constant. It is `true` on web, which is harmless — the

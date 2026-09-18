@@ -4,8 +4,8 @@ title: Interactive components are queried by a11y label; static copy is queried 
 type: convention
 status: current
 tags: [testing, accessibility, components]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-11
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, 6ef87a2, d81a5ef]
+last_verified: 2026-09-18
 verify: for f in $(grep -rl '<Pressable' src --include='*.tsx' | grep -v '\.test\.'); do grep -q accessibilityRole "$f" && grep -q accessibilityLabel "$f" || exit 1; done; grep -q 'checked: done, disabled: !editable' src/components/ItemRow.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q 'Loading who has access' src/screens/SharingScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx && grep -q 'shared with you' src/components/ListRow.tsx && grep -q 'Show 1 deleted' src/components/ShowDeletedToggle.tsx && grep -q 'Restore it and keep your change?' src/components/BlockedBanner.tsx && grep -q "'Restore' : 'Delete'" src/components/ItemRow.tsx && grep -q "'Restore' : 'Delete'" src/components/ListRow.tsx
 related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, screens-take-navigation-props, writes-retry-from-an-outbox, deletion-is-a-tombstone]
 ---
@@ -15,10 +15,10 @@ load-bearing, not decoration:
 
 | component | props |
 |---|---|
-| [ListRow](../../../src/components/ListRow.tsx) | `accessibilityRole="button"`, label is the composed `` `${list.name}, ${summary}` `` — plus `, shared with you` when `list.role !== 'owner'` |
+| [ListRow](../../../src/components/ListRow.tsx) | `accessibilityRole="button"`, label is `list.name` — plus `, shared with you` when `list.role !== 'owner'`; no count or summary text since step 11 stopped fetching items with lists |
 | [ItemRow](../../../src/components/ItemRow.tsx) | `accessibilityRole="checkbox"`, `accessibilityState={{ checked: done, disabled: !editable }}` where `done` is `item.doneAt !== null`, label is the item title |
 | [AddBar](../../../src/components/AddBar.tsx) | label on the input is its `placeholder`; the button has `accessibilityRole="button"` and `accessibilityState={{ disabled: !canSubmit }}` |
-| [SignInScreen](../../../src/screens/SignInScreen.tsx) | inputs labelled `"Email address"` / `"Six-digit code"`; buttons `"Send code"`, `"Sign in"`, `"Resend code"`, `"Use a different email"`, each with `accessibilityState={{ disabled }}` where it can be disabled |
+| [SignInScreen](../../../src/screens/SignInScreen.tsx) | inputs labelled `"Email address"` / `"Six-digit code"`; buttons `"Send code"`, `"Sign in"`, `"Resend code"`, `"Use a different email"`, `"Continue with Google"` (native only, hidden on web), each with `accessibilityState={{ disabled }}` where it can be disabled |
 | [SignOutButton](../../../src/components/SignOutButton.tsx) | `accessibilityRole="button"`, label `"Sign out"`, `accessibilityState={{ disabled: pending }}` |
 | [HeaderButton](../../../src/components/HeaderButton.tsx) | same shape, label passed in — `"Rename list"` (owners) and `"Share list"` (every member) on `ListDetail` |
 | [RolePicker](../../../src/components/RolePicker.tsx) | three `accessibilityRole="radio"` pressables with `accessibilityState={{ checked }}`; the label comes from a `labelFor` prop so two pickers on one screen never collide — `"Share as reader"` in the invite form, `"Set bob@example.com to writer"` on a member row |
@@ -29,11 +29,11 @@ load-bearing, not decoration:
 | [BlockedBanner](../../../src/components/BlockedBanner.tsx) | `accessibilityRole="alert"` on the view, plus two buttons labelled `"Restore and keep my change"` and `"Discard my change"` — note the second's label is not its visible text, which reads just `Discard` |
 | the delete/restore action on a row | `` `${deleted ? 'Restore' : 'Delete'} ${item.title}` `` in `ItemRow`, the same over `list.name` in `ListRow` — so `"Delete Milk"` becomes `"Restore Milk"` when it is in the bin |
 
-**Why it matters:** `ListRow`'s label is *composed* — a test looking for the "Groceries" row asks for
-`"Groceries, 1 of 3 done"`, and for a list somebody shared with you,
-`"Groceries, 1 of 3 done, shared with you"`. Changing how that summary reads breaks the query, so
-change the tests with it. A list you *own* reads exactly as it did before sharing existed, which is
-why no pre-step-7 query moved.
+**Why it matters:** `ListRow`'s label used to be *composed* with an item-count summary — a test
+looked for `"Groceries, 1 of 3 done"` — until step 11's "Do not fetch items with lists" dropped the
+summary along with the eager items fetch it depended on; the label is now just `list.name`, plus
+`, shared with you`. A query written against the old composed string does not fail loudly: it just
+finds nothing, so match the label the component renders today, not this entry's history.
 
 **A label that names a row's subject is the escape hatch when one screen renders many of the same
 control.** `RolePicker`'s `labelFor` exists because the sharing screen has one picker per member plus

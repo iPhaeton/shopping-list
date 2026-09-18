@@ -4,8 +4,8 @@ title: expo-crypto's randomUUID() returns undefined under jest instead of throwi
 type: gotcha
 status: current
 tags: [testing, jest, expo, ids]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, jest.setup.ts, src/lib/ids.ts]
-last_verified: 2026-09-03
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, jest.setup.ts, src/lib/ids.ts]
+last_verified: 2026-09-18
 verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json && ! grep -q 'expo-device' jest.setup.ts && grep -q "jest.mock('expo-device'" src/lib/supabaseTarget.test.ts
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, supabase-target-picked-at-runtime]
 indexed: false

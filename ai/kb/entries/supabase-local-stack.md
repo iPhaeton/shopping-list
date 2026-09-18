@@ -4,7 +4,7 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md]
 last_verified: 2026-09-18
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && test -n "$(grep -rl "'.env', '.env.development', '.env.local', '.env.development.local'" node_modules/expo node_modules/@expo 2>/dev/null | head -1)"
 related: [cloud-auth-mail-goes-through-resend, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
@@ -14,11 +14,10 @@ related: [cloud-auth-mail-goes-through-resend, otp-email-templates-carry-the-cod
 
 | | where | what reaches it |
 |---|---|---|
-| **local** | Docker on this machine, `npx supabase start` | the browser (`npm run web`) and the iOS simulator (`npm run ios`) |
+| **local** | Docker on this machine, `npx supabase start` | the browser (`npm run web`), the iOS simulator, and the Android emulator (`npm run ios`/`npm run android`) |
 | **cloud** | project ref `gvosanjceygakbubjfkv`, eu-west-1 | a physical device in Expo Go (`npm start`) |
 
-The branch is made at runtime, not at build — [supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)
-has the rule and the `EXPO_PUBLIC_SUPABASE_TARGET` override that points either runtime at either environment.
+The branch is made at runtime, not at build — [supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md) has the rule and the `EXPO_PUBLIC_SUPABASE_TARGET` override that points either runtime at either environment.
 
 | local service | address |
 |---|---|
@@ -113,8 +112,9 @@ refuses an UPDATE or DELETE by matching zero rows rather than erroring
 ([supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)).
 
 **Verify anything that touches Supabase in the browser**, with `psql` against port 54322 as the check
-on what actually landed. `npm run web` is the only path driven end to end; no sign-in has been
-completed in the simulator ([native-build-toolchain](native-build-toolchain.md)). A physical device
-reaches cloud, whose SMTP and templates are live and have sent one real code — but no device has
-completed a sign-in against production, the only thing left that would prove it end to end
+on what actually landed. `npm run web` was the only path driven end to end until task 13 phase 2 added
+a real Android sign-in against local — the iOS simulator still hasn't
+([native-build-toolchain](native-build-toolchain.md)). A physical device reaches cloud, whose SMTP and
+templates are live and have sent one real code, but no device has completed a sign-in against
+production — the only thing left that would prove it end to end
 ([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).

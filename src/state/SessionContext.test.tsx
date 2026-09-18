@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 
+import { signInWithGoogle } from '../lib/googleSignIn';
 import { supabase } from '../lib/supabase';
 import { SessionProvider, useSession } from './SessionContext';
 
@@ -8,6 +9,9 @@ import { SessionProvider, useSession } from './SessionContext';
  * `src/lib/supabase.ts` is mocked at the module boundary — which is why the client lives in its
  * own file rather than inline in the provider. `@supabase/supabase-js` is never loaded here, so
  * jest's `transformIgnorePatterns` needs no entry for it.
+ *
+ * `../lib/googleSignIn` is mocked the same way, and for the same reason: the native module it wraps
+ * has no jest-safe implementation, so the real file must never load here.
  *
  * Note: `render`, `fireEvent` and `unmount` are async in React Native Testing Library 14 and must
  * be awaited. A transition pushed in from outside React — `emitAuthChange` below — additionally
@@ -24,6 +28,8 @@ jest.mock('../lib/supabase', () => ({
     },
   },
 }));
+
+jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
 
 const auth = supabase.auth as unknown as {
   getSession: jest.Mock;
@@ -50,7 +56,7 @@ beforeEach(() => {
 });
 
 function Probe() {
-  const { state, signOut } = useSession();
+  const { state, signOut, signInWithGoogle } = useSession();
 
   return (
     <>
@@ -62,6 +68,14 @@ function Probe() {
           void signOut();
         }}>
         <Text>Sign out</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Continue with Google"
+        onPress={() => {
+          void signInWithGoogle();
+        }}>
+        <Text>Continue with Google</Text>
       </Pressable>
     </>
   );
@@ -110,6 +124,19 @@ it('signs out this device only', async () => {
   await fireEvent.press(screen.getByLabelText('Sign out'));
 
   expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+});
+
+/** `signInWithGoogle` is a plain delegate to `../lib/googleSignIn` — the module boundary does the
+ * actual work, so this just checks the wiring holds. */
+it('delegates Google sign-in to the lib module', async () => {
+  jest.mocked(signInWithGoogle).mockResolvedValue({ error: null });
+
+  await renderProbe();
+  await screen.findByText('status: signedOut');
+
+  await fireEvent.press(screen.getByLabelText('Continue with Google'));
+
+  expect(signInWithGoogle).toHaveBeenCalledTimes(1);
 });
 
 it('unsubscribes from auth changes on unmount', async () => {

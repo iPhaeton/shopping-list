@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { clearCachedLists } from '../lib/listCache';
+import { signInWithGoogle as runGoogleSignIn } from '../lib/googleSignIn';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -35,6 +36,7 @@ type SessionContextValue = {
   requestCode: (email: string) => Promise<Result>;
   verifyCode: (email: string, code: string) => Promise<Result>;
   signOut: () => Promise<Result>;
+  signInWithGoogle: () => Promise<Result>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -102,9 +104,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   }, [state]);
 
+  // Delegates outright: `../lib/googleSignIn` is the one importer of the native module, same
+  // module-boundary shape as `supabase.ts`. Success flows through `onAuthStateChange` above like
+  // every other sign-in.
+  const signInWithGoogle = useCallback((): Promise<Result> => runGoogleSignIn(), []);
+
   const value = useMemo(
-    () => ({ state, requestCode, verifyCode, signOut }),
-    [state, requestCode, verifyCode, signOut]
+    () => ({ state, requestCode, verifyCode, signOut, signInWithGoogle }),
+    [state, requestCode, verifyCode, signOut, signInWithGoogle]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

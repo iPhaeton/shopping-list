@@ -4,14 +4,14 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, b78d16f]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, b78d16f]
 last_verified: 2026-09-18
-related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain]
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 13 phase 1:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 13 phase 2:
 
 | | |
 |---|---|
@@ -28,7 +28,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 10 | renaming an item, by an owner or writer — an inline editor on the row, sent through a `rename_item` RPC like every other item write |
 | step 11 | a list's items paged, fetched only once the list is opened — a first page of live rows and of the bin together, the rest read on scroll by keyset; lists themselves capped, not paged |
 | step 12 | the app is called **ShoppingLoop** wherever a person sees it — visible name only; `slug`, `scheme`, `package.json` and `project_id` stay `shopping-list` ([shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md)) |
-| step 13 phase 1 | Google added as a second sign-in method, server side only: `[auth.external.google]` enabled in the local stack and proven to validate a real token; no client library, no button, no production push |
+| step 13 phases 1-2 | Google added as a second sign-in method: `[auth.external.google]` enabled and proven server-side (phase 1), then a native "Continue with Google" button and `SessionContext.signInWithGoogle` added client-side, delegating to `src/lib/googleSignIn.ts` (phase 2); still no production push and no completed real-account sign-in on either device |
 
 **Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
 you do not own, showing an owner how widely a list is shared without opening it, passwords, and
@@ -100,17 +100,18 @@ Each of these is easy to assume and wrong:
   ([read-rooted-at-list-members](read-rooted-at-list-members.md),
   [max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md),
   [deletion-is-a-tombstone](deletion-is-a-tombstone.md)).
-- **step 13 phase 1, Google sign-in** — server side only, by design: the Google Cloud clients and
-  `config.toml`'s `[auth.external.google]` block exist and the local stack validates a real token,
-  but no `src/` file changed, no client library is installed, there is no sign-in button, and nothing
-  has been pushed to production. The registered Android client's SHA-1 is also fragile until a later
-  phase accounts for it — [native-build-toolchain](native-build-toolchain.md).
+- **step 13, Google sign-in (phases 1-2)** — server side (phase 1) and the client (phase 2) both
+  landed: `[auth.external.google]` validates a real token, and a native "Continue with Google" button
+  (`Platform.OS !== 'web'`, a product choice, not a crash workaround — see
+  [google-native-signin-library-gaps](google-native-signin-library-gaps.md)) now calls
+  `src/lib/googleSignIn.ts` on Android and iOS. Still not landed: any push to production, and a
+  completed real-account sign-in on either device — the auto-link check against that address's OTP
+  sign-in has not run.
 
 **Cloud is three migrations behind local.** The four migrations up to realtime are pushed and read
 back from the production project; step 9's two (`20260910000000_deletion.sql`,
 `20260910000001_purge_schedule.sql`) and step 10's `20260911000000_rename_item.sql` have not been
-pushed at all, and no client has ever connected to the cloud realtime socket. A pushed migration is
-schema-level proof, never behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
+pushed at all, and no client has ever connected to the cloud realtime socket. A pushed migration is schema-level proof, never behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
 absence as a gap worth flagging in a review. When a new task description lands, re-read this entry

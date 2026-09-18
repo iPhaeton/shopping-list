@@ -4,8 +4,8 @@ title: The product is ShoppingLoop wherever a person sees it — every machine i
 type: decision
 status: current
 tags: [product, naming, expo, config, deployment]
-sources: [ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/marketing/reconciled-naming-research.md, app.json, supabase/config.toml]
-last_verified: 2026-09-17
+sources: [ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/marketing/reconciled-naming-research.md, app.json, supabase/config.toml, ai/tasks/13-google-sign-in/implementation-log-step-2.md]
+last_verified: 2026-09-18
 verify: test "$(node -p "require(\"./app.json\").expo.name")" = ShoppingLoop && grep -q "title: 'ShoppingLoop'" src/navigation/RootNavigator.tsx && grep -q "^sender_name = \"ShoppingLoop\"$" supabase/config.toml && grep -q "in ShoppingLoop:" supabase/templates/otp-code.html && test "$(node -p "require(\"./app.json\").expo.slug")" = shopping-list && test "$(node -p "require(\"./package.json\").name")" = shopping-list && grep -q "^project_id = \"shopping-list\"$" supabase/config.toml && test "$(node -p "require(\"./app.json\").expo.scheme")" = "$(sed -n "s/^site_url = \"\(.*\):\/\/\"$/\1/p" supabase/config.toml)"
 related: [supabase-config-push-sends-the-whole-root, scope-boundaries, otp-email-templates-carry-the-code, supabase-local-stack, native-build-toolchain]
 ---

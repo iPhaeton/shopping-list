@@ -20,10 +20,10 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock it, or the query module above it (convention)
 - [Cloud auth mail goes through Resend](ai/kb/entries/cloud-auth-mail-goes-through-resend.md) — from `no-reply@mail.shopping-loop.com`, the one verified domain, so any address gets the code now; DNS resolving is not verification, a `403` from `POST /emails` is the only local signal and gates the push (environment)
+- [Google's free sign-in library has two gaps](ai/kb/entries/google-native-signin-library-gaps.md) — no nonce option anywhere in its API, so `skip_nonce_check = true` is deliberate; iOS also needs an explicit `iosClientId` beside `webClientId` or it crashes at launch (gotcha)
 
 **State and persistence**
 
-- [updateList preserves identity](ai/kb/entries/update-list-identity-preserving.md) — returns the original state object on a no-op (convention)
 - [Writes are queued on disk and retried](ai/kb/entries/writes-retry-from-an-outbox.md) — optimistic, never dropped, only a refusal re-fetches; seven write actions, three reads, and membership writes stay out (decision)
 - [A refused write comes back as zero rows](ai/kb/entries/refused-writes-return-zero-rows.md) — 204 and no error, so an UPDATE or DELETE must ask for the row back or it lies (gotcha)
 - [The list cache holds acknowledged rows](ai/kb/entries/list-cache-holds-acknowledged-rows.md) — never the replayed view, not only what a fetch returned, and every page a list had loaded; cache `VERSION` 5, outbox 1 (gotcha)

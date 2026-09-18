@@ -1,0 +1,1 @@
+Implement phase 2 "Client" from `ai/suggestions/social-sign-in.md`

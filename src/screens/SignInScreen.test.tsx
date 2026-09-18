@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 
+import { signInWithGoogle } from '../lib/googleSignIn';
 import { supabase } from '../lib/supabase';
 import type { SignInScreenProps } from '../navigation/types';
 import { SessionProvider } from '../state/SessionContext';
@@ -8,6 +10,9 @@ import { SignInScreen } from './SignInScreen';
 /**
  * The real `SessionProvider` is rendered against a mocked `src/lib/supabase.ts`, so these cover
  * the screen and the state machine together — the seam is the client module, not the context.
+ *
+ * `../lib/googleSignIn` is mocked for the same reason `supabase.ts` is: the native module it wraps
+ * has no jest-safe implementation.
  *
  * Note: `render` and `fireEvent` are async in React Native Testing Library 14 and must be awaited.
  */
@@ -23,6 +28,8 @@ jest.mock('../lib/supabase', () => ({
   },
 }));
 
+jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+
 const auth = supabase.auth as unknown as {
   getSession: jest.Mock;
   onAuthStateChange: jest.Mock;
@@ -31,6 +38,15 @@ const auth = supabase.auth as unknown as {
   signOut: jest.Mock;
 };
 
+const originalOS = Platform.OS;
+
+/** `Platform.OS` is a plain property on RN's module object; assigning through defineProperty keeps
+ * TypeScript out of the way of what is, at runtime, a mutable field. Same pattern as
+ * `supabaseTarget.test.ts`. */
+function runningOn(os: typeof Platform.OS) {
+  Object.defineProperty(Platform, 'OS', { value: os, configurable: true, writable: true });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 
@@ -38,6 +54,11 @@ beforeEach(() => {
   auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
   auth.signInWithOtp.mockResolvedValue({ error: null });
   auth.verifyOtp.mockResolvedValue({ error: null });
+  jest.mocked(signInWithGoogle).mockResolvedValue({ error: null });
+});
+
+afterEach(() => {
+  runningOn(originalOS);
 });
 
 async function renderScreen() {
@@ -144,4 +165,36 @@ it('goes back to the email phase to use a different address', async () => {
 
   expect(screen.getByLabelText('Email address')).toBeOnTheScreen();
   expect(screen.queryByLabelText('Six-digit code')).not.toBeOnTheScreen();
+});
+
+/** Web is permanently out of scope for this feature — email OTP stays the only door there. */
+it('hides the Google button on web', async () => {
+  runningOn('web');
+
+  await renderScreen();
+
+  expect(screen.queryByLabelText('Continue with Google')).not.toBeOnTheScreen();
+});
+
+it('offers the Google button on native platforms', async () => {
+  await renderScreen();
+
+  expect(screen.getByLabelText('Continue with Google')).toBeOnTheScreen();
+});
+
+it('starts native Google sign-in when its button is pressed', async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Continue with Google'));
+
+  expect(signInWithGoogle).toHaveBeenCalledTimes(1);
+});
+
+it('shows why Google sign-in failed', async () => {
+  jest.mocked(signInWithGoogle).mockResolvedValue({ error: 'Bad ID token' });
+
+  await renderScreen();
+  await fireEvent.press(screen.getByLabelText('Continue with Google'));
+
+  expect(await screen.findByText('Bad ID token')).toBeOnTheScreen();
 });
