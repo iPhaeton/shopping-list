@@ -56,7 +56,7 @@ beforeEach(() => {
 });
 
 function Probe() {
-  const { state, signOut, signInWithGoogle } = useSession();
+  const { state, signOut, signOutEverywhere, signInWithGoogle } = useSession();
 
   return (
     <>
@@ -68,6 +68,14 @@ function Probe() {
           void signOut();
         }}>
         <Text>Sign out</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Sign out everywhere"
+        onPress={() => {
+          void signOutEverywhere();
+        }}>
+        <Text>Sign out everywhere</Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -124,6 +132,18 @@ it('signs out this device only', async () => {
   await fireEvent.press(screen.getByLabelText('Sign out'));
 
   expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+});
+
+/**
+ * The confirmed action's scope is the point, mirroring the test above for the plain button.
+ */
+it('signs out every device on the confirmed action', async () => {
+  await renderProbe();
+  await screen.findByText('status: signedOut');
+
+  await fireEvent.press(screen.getByLabelText('Sign out everywhere'));
+
+  expect(auth.signOut).toHaveBeenCalledWith({ scope: 'global' });
 });
 
 /** `signInWithGoogle` is a plain delegate to `../lib/googleSignIn` — the module boundary does the

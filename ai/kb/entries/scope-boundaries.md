@@ -4,14 +4,14 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, b78d16f]
-last_verified: 2026-09-18
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, b78d16f]
+last_verified: 2026-09-20
 related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 13 phase 2:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 14:
 
 | | |
 |---|---|
@@ -29,6 +29,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 11 | a list's items paged, fetched only once the list is opened — a first page of live rows and of the bin together, the rest read on scroll by keyset; lists themselves capped, not paged |
 | step 12 | the app is called **ShoppingLoop** wherever a person sees it — visible name only; `slug`, `scheme`, `package.json` and `project_id` stay `shopping-list` ([shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md)) |
 | step 13 phases 1-2 | Google added as a second sign-in method: `[auth.external.google]` enabled and proven server-side (phase 1), then a native "Continue with Google" button and `SessionContext.signInWithGoogle` added client-side, delegating to `src/lib/googleSignIn.ts` (phase 2); still no production push and no completed real-account sign-in on either device |
+| step 14 | an Account screen: plain "Sign out" moved off the `Lists` header behind it, alongside a separately confirmed "Sign out of all devices" (`supabase.auth.signOut({ scope: 'global' })`) |
 
 **Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
 you do not own, showing an owner how widely a list is shared without opening it, passwords, and
@@ -50,11 +51,10 @@ Equally deliberate, and in the same family: a sole owner deleting their account 
 list nobody can see or clean up**, because the alternative was cascading and destroying lists other
 people are in ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)).
 
-**"The user can create a list" means *many* named lists, not one standing list.** The step-1
-description was singular and genuinely ambiguous; the question went to the user and the answer was
-many. That reading is why there are two list screens (`Lists` → `ListDetail`) and why the app depends
-on React Navigation at all. Treat it as settled: do not "simplify" the product back to one list, and
-do not re-litigate the ambiguity from the description alone.
+**"The user can create a list" means *many* named lists, not one standing list** — settled with the
+user against a genuinely ambiguous step-1 description, which is why there are two list screens
+(`Lists` → `ListDetail`) and why the app depends on React Navigation at all. Treat it as settled: do
+not "simplify" the product back to one list.
 
 ## What a landed step did *not* land
 

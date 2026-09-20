@@ -36,6 +36,8 @@ type SessionContextValue = {
   requestCode: (email: string) => Promise<Result>;
   verifyCode: (email: string, code: string) => Promise<Result>;
   signOut: () => Promise<Result>;
+  /** `scope: 'global'` — revokes every device the account is signed in on. */
+  signOutEverywhere: () => Promise<Result>;
   signInWithGoogle: () => Promise<Result>;
 };
 
@@ -89,20 +91,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   }, []);
 
-  const signOut = useCallback(async (): Promise<Result> => {
-    // Signing out has always discarded this account's lists along with the provider; leaving a
-    // readable copy of them on the device would quietly change that. The outbox is deliberately
-    // *not* cleared — those writes are still owed to the database, and they flush at the next
-    // sign-in. The residue is real and intended: unsent item titles stay on disk until they land.
-    if (state.status === 'signedIn') await clearCachedLists(state.session.user.id);
+  const performSignOut = useCallback(
+    async (scope: 'local' | 'global'): Promise<Result> => {
+      // Signing out has always discarded this account's lists along with the provider; leaving a
+      // readable copy of them on the device would quietly change that. The outbox is deliberately
+      // *not* cleared — those writes are still owed to the database, and they flush at the next
+      // sign-in. The residue is real and intended: unsent item titles stay on disk until they land.
+      // `scope: 'global'` also signs this device out, so the same reasoning applies to it.
+      if (state.status === 'signedIn') await clearCachedLists(state.session.user.id);
 
-    // `scope: 'local'` revokes this device's refresh token and nothing else. supabase-js defaults
-    // to 'global', which would revoke every device the account is signed in on — signing out in a
-    // browser would eventually sign out the phone too. That belongs behind a deliberate "sign out
-    // everywhere" action, not behind this button.
-    const { error } = await supabase.auth.signOut({ scope: 'local' });
-    return { error: error?.message ?? null };
-  }, [state]);
+      const { error } = await supabase.auth.signOut({ scope });
+      return { error: error?.message ?? null };
+    },
+    [state]
+  );
+
+  // `scope: 'local'` revokes this device's refresh token and nothing else. supabase-js defaults to
+  // `'global'`, which revokes every device the account is signed in on — signing out in a browser
+  // would eventually sign out the phone too, so the plain "Sign out" action pins `'local'` and the
+  // Account screen's separately confirmed "Sign out of all devices" is the only path to `'global'`.
+  const signOut = useCallback(() => performSignOut('local'), [performSignOut]);
+  const signOutEverywhere = useCallback(() => performSignOut('global'), [performSignOut]);
 
   // Delegates outright: `../lib/googleSignIn` is the one importer of the native module, same
   // module-boundary shape as `supabase.ts`. Success flows through `onAuthStateChange` above like
@@ -110,8 +119,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback((): Promise<Result> => runGoogleSignIn(), []);
 
   const value = useMemo(
-    () => ({ state, requestCode, verifyCode, signOut, signInWithGoogle }),
-    [state, requestCode, verifyCode, signOut, signInWithGoogle]
+    () => ({ state, requestCode, verifyCode, signOut, signOutEverywhere, signInWithGoogle }),
+    [state, requestCode, verifyCode, signOut, signOutEverywhere, signInWithGoogle]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

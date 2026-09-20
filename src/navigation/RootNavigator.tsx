@@ -2,7 +2,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { SignOutButton } from '../components/SignOutButton';
+import { HeaderButton } from '../components/HeaderButton';
+import { AccountScreen } from '../screens/AccountScreen';
 import { ListDetailScreen } from '../screens/ListDetailScreen';
 import { ListsScreen } from '../screens/ListsScreen';
 import { SharingScreen } from '../screens/SharingScreen';
@@ -60,10 +61,16 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
           <Stack.Screen
             name="Lists"
             component={ListsScreen}
-            options={{ title: 'My Lists', headerRight: () => <SignOutButton /> }}
+            options={({ navigation }) => ({
+              title: 'My Lists',
+              headerRight: () => (
+                <HeaderButton label="Account" onPress={() => navigation.navigate('Account')} />
+              ),
+            })}
           />
           <Stack.Screen name="ListDetail" component={ListDetailScreen} />
           <Stack.Screen name="Sharing" component={SharingScreen} options={{ title: 'Sharing' }} />
+          <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />
         </>
       );
   }

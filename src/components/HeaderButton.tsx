@@ -3,12 +3,9 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { colors, spacing } from '../theme';
 
 /**
- * A text button for a navigation header, wired up through `navigation.setOptions`.
- *
- * `SignOutButton` is the same shape and deliberately not refactored onto this: it carries its own
- * `accessibilityLabel`, and the knowledgebase entry covering a11y queries pins that with a `grep`
- * that `npm run kb:audit` runs. The duplication is ten lines of styles and is worth less than a
- * green audit; hand it to the librarian rather than fixing it here.
+ * A text button for a navigation header. Used both from inside a screen via
+ * `navigation.setOptions` (`ListDetailScreen`'s Rename/Share buttons) and from a static
+ * `Stack.Screen` `options` function (`RootNavigator`'s Account entry point on `Lists`).
  */
 export function HeaderButton({
   label,

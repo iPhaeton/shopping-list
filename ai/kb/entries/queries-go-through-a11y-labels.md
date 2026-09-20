@@ -4,8 +4,8 @@ title: Interactive components are queried by a11y label; static copy is queried 
 type: convention
 status: current
 tags: [testing, accessibility, components]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, 6ef87a2, d81a5ef]
-last_verified: 2026-09-18
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, 6ef87a2, d81a5ef]
+last_verified: 2026-09-20
 verify: for f in $(grep -rl '<Pressable' src --include='*.tsx' | grep -v '\.test\.'); do grep -q accessibilityRole "$f" && grep -q accessibilityLabel "$f" || exit 1; done; grep -q 'checked: done, disabled: !editable' src/components/ItemRow.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q 'Loading who has access' src/screens/SharingScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx && grep -q 'shared with you' src/components/ListRow.tsx && grep -q 'Show 1 deleted' src/components/ShowDeletedToggle.tsx && grep -q 'Restore it and keep your change?' src/components/BlockedBanner.tsx && grep -q "'Restore' : 'Delete'" src/components/ItemRow.tsx && grep -q "'Restore' : 'Delete'" src/components/ListRow.tsx
 related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, screens-take-navigation-props, writes-retry-from-an-outbox, deletion-is-a-tombstone]
 ---
@@ -19,8 +19,8 @@ load-bearing, not decoration:
 | [ItemRow](../../../src/components/ItemRow.tsx) | `accessibilityRole="checkbox"`, `accessibilityState={{ checked: done, disabled: !editable }}` where `done` is `item.doneAt !== null`, label is the item title |
 | [AddBar](../../../src/components/AddBar.tsx) | label on the input is its `placeholder`; the button has `accessibilityRole="button"` and `accessibilityState={{ disabled: !canSubmit }}` |
 | [SignInScreen](../../../src/screens/SignInScreen.tsx) | inputs labelled `"Email address"` / `"Six-digit code"`; buttons `"Send code"`, `"Sign in"`, `"Resend code"`, `"Use a different email"`, `"Continue with Google"` (native only, hidden on web), each with `accessibilityState={{ disabled }}` where it can be disabled |
-| [SignOutButton](../../../src/components/SignOutButton.tsx) | `accessibilityRole="button"`, label `"Sign out"`, `accessibilityState={{ disabled: pending }}` |
-| [HeaderButton](../../../src/components/HeaderButton.tsx) | same shape, label passed in — `"Rename list"` (owners) and `"Share list"` (every member) on `ListDetail` |
+| [AccountScreen](../../../src/screens/AccountScreen.tsx) | `"Sign out"` — `accessibilityRole="button"`, `accessibilityState={{ disabled: pending }}`; `"Sign out of all devices"` reveals a confirm row instead of firing — `"Cancel"` plus a fixed `"Confirm sign out of all devices"` label whose visible text toggles `"Yes, sign out everywhere"` / `"Signing out…"` |
+| [HeaderButton](../../../src/components/HeaderButton.tsx) | same shape, label passed in — `"Rename list"` (owners) and `"Share list"` (every member) on `ListDetail`, `"Account"` on `Lists` |
 | [RolePicker](../../../src/components/RolePicker.tsx) | three `accessibilityRole="radio"` pressables with `accessibilityState={{ checked }}`; the label comes from a `labelFor` prop so two pickers on one screen never collide — `"Share as reader"` in the invite form, `"Set bob@example.com to writer"` on a member row |
 | [SharingScreen](../../../src/screens/SharingScreen.tsx) | invite input `"Email address"`, buttons `"Share"` and `` `Remove ${email}` `` with `accessibilityState={{ disabled }}`, spinner `"Loading who has access"` |
 | [ListDetailScreen](../../../src/screens/ListDetailScreen.tsx) rename bar | an `AddBar` with placeholder/label `"List name"` and button `"Save"` |
@@ -108,10 +108,9 @@ whether an item is done is information they want.
 **The `verify:` command sweeps rather than naming files, and that is a deliberate change.** It finds
 every non-test `.tsx` under `src/` containing a `<Pressable` and requires an `accessibilityRole` and
 an `accessibilityLabel` in it, so a new interactive component cannot be added without them — the old
-command listed five specific files and covered nothing written after it. It also cost something real:
-step 7's `HeaderButton` is ten lines identical to `SignOutButton`, and was left duplicated because
-the old check grepped `SignOutButton.tsx` by name and only the librarian may edit an entry. **That
-constraint is gone** — merging the two is now a free refactor as far as the audit is concerned. The
+command listed five specific files and covered nothing written after it. **Step 14 finished the merge
+this paragraph used to wait on:** `SignOutButton` is gone, folded straight into `AccountScreen`'s own
+"Sign out" button, and `HeaderButton` now also carries the `Lists` header's "Account" entry point. The
 copy pins beside the sweep are separate and stay: `ErrorBanner`'s alert role, both spinner labels,
 `SyncBanner`'s sentence, `ListRow`'s shared suffix, the toggle's `Show 1 deleted`, the blocked
 banner's question, and the flipping `Restore`/`Delete` label on both row components.

@@ -1,6 +1,6 @@
 (1. Real database)
 (2. Real email service)
-3. Sign out every device
+(3. Sign out every device)
 4. Supabase limits: throughput, email rate limit
 (5. Offline support)
 6. Check that "Done At" time shown in the ui is in the device's timezone.

@@ -4,8 +4,8 @@ title: Deleting stamps `deleted_at` and leaves the row — the bin's first page 
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
-last_verified: 2026-09-13
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
+last_verified: 2026-09-20
 verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
 related: [writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack]
 ---
@@ -21,7 +21,10 @@ a row that is *visibly* deleted rather than being indistinguishable from a refus
 ([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)); there is nowhere to keep a
 user's typing because nothing was destroyed; sharing survives, since nothing cascades, so a restore is
 a real restore; and a reversible delete needs no confirmation modal, which sidesteps `Alert.alert`
-being a **no-op under react-native-web** (measured) — still true for any future destructive confirm.
+being a **no-op under react-native-web** (measured). Step 14's `AccountScreen` "Sign out of all
+devices" — genuinely irreversible, no tombstone — confirms the same way, no `Alert`: an inline
+`confirming` boolean swaps the button for a `Cancel`/confirm row, the confirm label fixed while its
+text toggles. Copy that shape for the next irreversible action.
 
 **No policy changed, and that is the fact worth carrying.** A tombstone is still a row, a member has
 to *see* it to restore it, and the client decides what to render. The read policies still say
