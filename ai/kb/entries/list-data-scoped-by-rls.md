@@ -5,9 +5,9 @@ type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence, sharing]
 sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-11
+last_verified: 2026-09-20
 verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && grep -q 'alter table public.list_members enable row level security;' supabase/migrations/20260907000000_list_sharing.sql && ! grep -rEA1 'create policy .* on public\.(lists|items)' supabase/migrations | grep -qi 'for delete' && ! grep -rqE "\.eq\('(owner_id|created_by|user_id)'" src && grep -q 'create policy "writers update items"' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql && test "$(cat supabase/migrations/2026091*.sql | grep -c 'create policy')" = 0
-related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, scope-boundaries, supabase-local-stack]
+related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, scope-boundaries, supabase-local-stack, session-still-valid-guards-writes]
 ---
 
 **Since step 7 the predicate is membership, not ownership, and this entry used to say the opposite** —
@@ -100,6 +100,13 @@ failed write is queued and retried forever; the outbox drops one only on a `perm
 is the 403 these policies return ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)).
 Until sharing, no user could provoke one; a `reader` provokes one by tapping Add. Tightening a policy
 does not merely block a write — it deletes it from that device, with one error banner to show for it.
+
+**Since step 15 there is a fourth gate, and it sits beside grants and policies rather than inside
+either.** Every write RPC now also raises `42501` when `public.session_still_valid()` is false — a
+device whose session was revoked elsewhere, still holding a JWT that has not yet expired. It appears
+in no policy and no grant, only as the first statement each of the nine write functions repeats; the
+read side (`list_members_of`, the SELECT policies) is deliberately untouched
+([session-still-valid-guards-writes](session-still-valid-guards-writes.md)).
 
 **What to do:** keep authorisation in the migration and out of the app, and add nothing to a policy
 without reading the two entries linked above first. The `verify:` command asserts RLS on all three

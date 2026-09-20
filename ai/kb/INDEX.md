@@ -21,6 +21,7 @@ Run `npm run kb:audit` to check every entry still holds.
 - [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock it, or the query module above it (convention)
 - [Cloud auth mail goes through Resend](ai/kb/entries/cloud-auth-mail-goes-through-resend.md) — from `no-reply@mail.shopping-loop.com`, the one verified domain, so any address gets the code now; DNS resolving is not verification, a `403` from `POST /emails` is the only local signal and gates the push (environment)
 - [Google's free sign-in library has two gaps](ai/kb/entries/google-native-signin-library-gaps.md) — no nonce option anywhere in its API, so `skip_nonce_check = true` is deliberate; iOS also needs an explicit `iosClientId` beside `webClientId` or it crashes at launch (gotcha)
+- [Signing out globally does not revoke a live access token](ai/kb/entries/session-still-valid-guards-writes.md) — the nine write RPCs now check `auth.sessions` fresh on every call and raise if it is gone; reads and list creation are deliberately still uncovered (decision)
 
 **State and persistence**
 
@@ -30,7 +31,6 @@ Run `npm run kb:audit` to check every entry still holds.
 - [The database stamps `done_at`](ai/kb/entries/server-stamps-done-at.md) — the client sends a boolean through `set_item_done`, which raises on refusal, and cannot update `items` at all (decision)
 - [RLS scopes list data by membership](ai/kb/entries/list-data-scoped-by-rls.md) — reader/writer/owner, the client never filters, grants are half the story; the one delete policy is on `list_members` (constraint)
 - [The list read starts at `list_members`](ai/kb/entries/read-rooted-at-list-members.md) — uncorrelated policy subqueries, no definer helper in a policy; the items read is keyset with a redundant `gte` that decides the plan (decision)
-- [`max_rows` is a silent ceiling on embeds too](ai/kb/entries/max-rows-is-a-silent-ceiling.md) — `MAX_ROWS` mirrors it by hand, `PAGE_SIZE` stays under it, never set it under `[remotes.production]` (gotcha)
 - [A SELECT policy gates UPDATE and DELETE too](ai/kb/entries/select-policy-gates-update-and-delete.md) — self-only visibility silently zeroes an owner policy, so member management is RPCs (gotcha)
 - [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, `from public` leaves `anon`, and a policy's helper must keep them (gotcha)
 - [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'`; it runs on every foreground and every nudge now, and the flush guard lives in `refresh` (gotcha)

@@ -4,10 +4,10 @@ title: The database stamps done_at — the client sends a boolean and holds no u
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260911000000_rename_item.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
-last_verified: 2026-09-11
-verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && D="$(grep -rl 'function public.set_item_done' supabase/migrations | sort | tail -1)" && grep -q 'done_at = case when p_done then now() else null end' "$D" && grep -A6 'create function public.set_item_done' "$D" | grep -q 'returns public.write_outcome' && grep -A50 'create function public.set_item_done' "$D" | grep -q "raise exception using errcode = '42501'" && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -rqE '^grant update[^;]*on public\.items' supabase/migrations && grep -q "rpc('rename_item'" src/lib/listsApi.ts && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
-related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state, writes-can-land-on-a-tombstone, deletion-is-a-tombstone]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-1.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260911000000_rename_item.sql, supabase/migrations/20260920000000_session_revocation.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
+last_verified: 2026-09-20
+verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && D="$(grep -rl 'function public.set_item_done' supabase/migrations | sort | tail -1)" && grep -q 'done_at = case when p_done then now() else null end' "$D" && grep -A6 'function public.set_item_done' "$D" | grep -q 'returns public.write_outcome' && grep -A50 'function public.set_item_done' "$D" | grep -q "raise exception using errcode = '42501'" && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -rqE '^grant update[^;]*on public\.items' supabase/migrations && grep -q "rpc('rename_item'" src/lib/listsApi.ts && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
+related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, session-still-valid-guards-writes]
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
@@ -15,14 +15,17 @@ Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
 [the function](../../../supabase/migrations/20260910000000_deletion.sql) writes
 `done_at = case when p_done then now() else null end`. `revoke update on public.items from anon,
 authenticated` means there is no other way in: a direct `PATCH` of `done_at` — or of `title` —
-returns 403. **The function has been rewritten twice and lives in the newest migration that names
-it** — step 7's sharing migration, then step 9's deletion migration; this entry's `verify:` finds it
-by sorting the migrations rather than naming one, and so should you. Step 9 could not use
-`create or replace`: the return type changed from `void`, which that statement refuses, so the
-function is **dropped and recreated** — which takes its grants with it, hence the re-issued
-`revoke`/`grant` pair below it, and hence the `notify pgrst, 'reload schema'` ending the migration,
-because a signature change is exactly when PostgREST answers "could not find the function in the
-schema cache".
+returns 403. **The function has been rewritten three times and lives in the newest migration that
+names it** — step 7's sharing migration, step 9's deletion migration, step 15's session-revocation
+migration; this entry's `verify:` finds it by sorting the migrations rather than naming one, and so
+should you. Step 9 could not use `create or replace`: the return type changed from `void`, which that
+statement refuses, so the function was **dropped and recreated** — which takes its grants with it,
+hence the re-issued `revoke`/`grant` pair below it, and hence the `notify pgrst, 'reload schema'`
+ending that migration, because a signature change is exactly when PostgREST answers "could not find
+the function in the schema cache". Step 15 changed no signature, so it **is** a `create or replace` —
+the anchor `grep -A6 'function public.set_item_done'` below deliberately does not include the word
+`create`, because a literal `create function` stopped matching the moment a same-signature patch used
+`create or replace function` instead; matching on the shorter phrase is what survives both shapes.
 
 **Decision: a device's clock does not get to say when an item was checked off.** `done_at` was
 minted on the device until a review asked what happens when a phone's clock is a year out. The row
@@ -89,6 +92,14 @@ column — and it repeats the same `role >= 'writer'` predicate, so two function
 that policy. See [supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)
 for why neither could be dodged, and [list-data-scoped-by-rls](list-data-scoped-by-rls.md) for the
 whole authorization picture.
+
+**Step 15 added a fourth reason to raise, checked before the role test above it.**
+`session_still_valid()` fails the whole call with the same `42501` when the device's session was
+revoked elsewhere — a separate concern from what this entry covers in detail; see
+[session-still-valid-guards-writes](session-still-valid-guards-writes.md). One wrinkle worth knowing
+here: its distinct message rarely reaches the user, because `humanize()` in
+[listsApi.ts](../../../src/lib/listsApi.ts) collapses every `42501` this function can raise — role
+refusal or revoked session alike — into the same generic banner text.
 
 **What to do:** a new write to `items` is a function in the migration plus a `supabase.rpc` call,
 never a `.update()`. Argument keys must match the parameter names exactly (`p_item_id`, `p_done`):

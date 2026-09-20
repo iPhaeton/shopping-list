@@ -5,9 +5,9 @@ type: gotcha
 status: current
 tags: [supabase, postgrest, rls, persistence, offline, security]
 sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts]
-last_verified: 2026-09-10
+last_verified: 2026-09-20
 verify: test "$(grep -c '\.update(\|\.delete(' src/lib/listsApi.ts)" = "$(grep -A4 '\.update(\|\.delete(' src/lib/listsApi.ts | grep -c '\.select(')" && grep -q "if (!error) return { error: null, verdict: 'ok' };" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts
-related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, writes-can-land-on-a-tombstone, supabase-local-stack]
+related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, writes-can-land-on-a-tombstone, supabase-local-stack, insert-returning-races-membership-trigger]
 ---
 
 A policy does not *reject* a client `UPDATE` or `DELETE` — it **filters it to zero rows**. Over
@@ -60,6 +60,13 @@ or a fourth RPC. The underlying reason the row is unreachable is in
 [select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md) — that entry is the
 `psql` half of this fact ("assert the row count, not the absence of an error"); this one is what it
 looks like from the client.
+
+**This rule is for `UPDATE`/`DELETE` only — do not reach for the same `.select()` fix on an `INSERT`
+whose visibility another trigger grants.** `insertList` stays a bare `.insert()` for a different
+reason than the ones above: adding `.select()` to it does not merely risk one more silent `204`, it
+actively misreports a *successful* create as refused, because the row's own membership grant has not
+taken effect yet when `RETURNING` re-checks it
+([insert-returning-races-membership-trigger](insert-returning-races-membership-trigger.md)).
 
 **What to do:** any `.update()` or `.delete()` the client sends asks for the row back and checks what
 came back; any new database *function* raises rather than returning void. The `verify:` command
