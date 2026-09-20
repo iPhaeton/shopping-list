@@ -57,10 +57,11 @@ beforeEach(() => {
 
 function Probe() {
   const { state, signOut, signOutEverywhere, signInWithGoogle } = useSession();
+  const reason = state.status === 'signedOut' && state.reason ? `, reason: ${state.reason}` : '';
 
   return (
     <>
-      <Text>{`status: ${state.status}`}</Text>
+      <Text>{`status: ${state.status}${reason}`}</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Sign out"
@@ -68,6 +69,14 @@ function Probe() {
           void signOut();
         }}>
         <Text>Sign out</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Sign out (revoked)"
+        onPress={() => {
+          void signOut('revoked');
+        }}>
+        <Text>Sign out (revoked)</Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -132,6 +141,33 @@ it('signs out this device only', async () => {
   await fireEvent.press(screen.getByLabelText('Sign out'));
 
   expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+});
+
+/**
+ * `onAuthStateChange`'s listener only ever sees the resulting session, never why it changed, so the
+ * reason is bridged across via a ref set just before `supabase.auth.signOut` is called and read back
+ * once the listener fires — this is what lets `SignInScreen` say why it was reached.
+ */
+it('carries a revoked reason through to the next auth transition', async () => {
+  await renderProbe();
+  await screen.findByText('status: signedOut');
+
+  await fireEvent.press(screen.getByLabelText('Sign out (revoked)'));
+  await act(async () => emitAuthChange(null));
+
+  expect(await screen.findByText('status: signedOut, reason: revoked')).toBeOnTheScreen();
+});
+
+/** An ordinary sign-out must never be mistaken for a kicked device. */
+it('carries no reason for an ordinary sign-out', async () => {
+  await renderProbe();
+  await screen.findByText('status: signedOut');
+
+  await fireEvent.press(screen.getByLabelText('Sign out'));
+  await act(async () => emitAuthChange(null));
+
+  expect(await screen.findByText('status: signedOut')).toBeOnTheScreen();
+  expect(screen.queryByText(/reason:/)).not.toBeOnTheScreen();
 });
 
 /**

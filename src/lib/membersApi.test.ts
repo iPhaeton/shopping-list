@@ -93,6 +93,7 @@ describe('the membership calls', () => {
     expect(await shareList('l1', 'nobody@example.com', 'reader')).toEqual({
       error: 'no account with that email yet',
       verdict: 'permanent',
+      sessionRevoked: false,
     });
   });
 
@@ -102,6 +103,24 @@ describe('the membership calls', () => {
     expect(await shareList('l1', 'bob@example.com', 'reader')).toEqual({
       error: 'upstream is down',
       verdict: 'retryable',
+      sessionRevoked: false,
+    });
+  });
+
+  /**
+   * These three keep the database's own words rather than `humanize()`'s, but the detection itself
+   * is shared with the outbox writes via `resultFor` — a kicked device's roster edit must redirect
+   * exactly like a queued write does.
+   */
+  it('flags a membership RPC refused for a revoked session the same way a write is', async () => {
+    respondToRpcWith({
+      data: null,
+      error: { message: 'this device has been signed out', code: '42501' },
+      status: 403,
+    });
+
+    expect(await shareList('l1', 'bob@example.com', 'reader')).toMatchObject({
+      sessionRevoked: true,
     });
   });
 });

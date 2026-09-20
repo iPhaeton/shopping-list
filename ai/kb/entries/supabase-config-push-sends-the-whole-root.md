@@ -8,6 +8,7 @@ sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-cus
 last_verified: 2026-09-17
 verify: grep -q '^\[remotes.production\]' supabase/config.toml && grep -q '^project_id = "gvosanjceygakbubjfkv"' supabase/config.toml && grep -q '^site_url = "shopping-list://"' supabase/config.toml && grep -q '^max_frequency = "60s"' supabase/config.toml && grep -q '^site_url = "http://127.0.0.1:3000"' supabase/config.toml && grep -q '^\[remotes.production.auth.rate_limit\]' supabase/config.toml && grep -q '^email_sent = 30' supabase/config.toml
 related: [cloud-auth-mail-goes-through-resend, otp-email-templates-carry-the-code, supabase-local-stack, supabase-target-picked-at-runtime, scope-boundaries, shoppingloop-is-the-visible-name-only]
+indexed: false
 ---
 
 `supabase/config.toml` holds the **local** stack at its root. `npx supabase config push` sends that
@@ -78,3 +79,11 @@ override it in the block in the same edit; a push is the moment the omission bec
 problem. The `verify:` command asserts the block still exists, still names the right project, and
 still shadows both of the local-only values it was built for — including that the root really does
 still carry the loopback `site_url` the override exists to hide.
+
+**Demoted out of `INDEX.md` at step 15** (`indexed: false`), not retired: still true, still checked
+every audit, still found by `/librarian ask`, and linked from
+[cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md) and
+[supabase-local-stack](supabase-local-stack.md), where anyone touching cloud auth config starts. It
+left the shortlist to make room for session-revocation facts while `config push` itself has not been
+run since step 6 — the command is rare enough that passive discovery matters less than for the state
+and auth facts every write path now touches.

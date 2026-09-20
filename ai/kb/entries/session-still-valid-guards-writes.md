@@ -4,10 +4,10 @@ title: Signing out globally does not revoke an already-issued access token — w
 type: decision
 status: current
 tags: [supabase, postgres, auth, security, rls]
-sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, supabase/migrations/20260920000000_session_revocation.sql, src/lib/listsApi.ts]
+sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, supabase/migrations/20260920000000_session_revocation.sql, src/lib/listsApi.ts]
 last_verified: 2026-09-20
-verify: grep -q "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql && grep -A6 "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql | grep -q "security definer" && grep -q "auth.jwt() ->> 'session_id'" supabase/migrations/20260920000000_session_revocation.sql && grep -q '^revoke execute on function public.session_still_valid() from public, anon;' supabase/migrations/20260920000000_session_revocation.sql && grep -q '^grant execute on function public.session_still_valid() to authenticated;' supabase/migrations/20260920000000_session_revocation.sql && test "$(grep -c 'if not public.session_still_valid() then' supabase/migrations/20260920000000_session_revocation.sql)" = 9 && test "$(grep -rl 'session_still_valid' supabase/migrations | wc -l | tr -d ' ')" = 1 && grep -A2 "case '42501':" src/lib/listsApi.ts | grep -q 'You no longer have permission' && grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts
-related: [server-stamps-done-at, list-data-scoped-by-rls, read-rooted-at-list-members, realtime-is-a-nudge-to-a-per-user-inbox, supabase-default-grants-defeat-revokes, writes-retry-from-an-outbox, insert-returning-races-membership-trigger]
+verify: grep -q "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql && grep -A6 "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql | grep -q "security definer" && grep -q "auth.jwt() ->> 'session_id'" supabase/migrations/20260920000000_session_revocation.sql && grep -q '^revoke execute on function public.session_still_valid() from public, anon;' supabase/migrations/20260920000000_session_revocation.sql && grep -q '^grant execute on function public.session_still_valid() to authenticated;' supabase/migrations/20260920000000_session_revocation.sql && test "$(grep -c 'if not public.session_still_valid() then' supabase/migrations/20260920000000_session_revocation.sql)" = 9 && test "$(grep -rl 'session_still_valid' supabase/migrations | wc -l | tr -d ' ')" = 1 && grep -A2 "case '42501':" src/lib/listsApi.ts | grep -q 'You no longer have permission' && grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts && grep -q "sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE" src/lib/listsApi.ts
+related: [server-stamps-done-at, list-data-scoped-by-rls, read-rooted-at-list-members, realtime-is-a-nudge-to-a-per-user-inbox, supabase-default-grants-defeat-revokes, writes-retry-from-an-outbox, insert-returning-races-membership-trigger, session-revoked-write-redirects]
 ---
 
 `auth.signOut({ scope: 'global' })` deletes the caller's row from `auth.sessions` and revokes its
@@ -54,12 +54,16 @@ migration, and the `lists` INSERT policy checks only `created_by = (select auth.
 device can still create new lists until its access token naturally expires.** Closing that gap, and
 folding the check into the read side, were both scoped out as separate work, not oversights.
 
-**The distinct message rarely reaches the user.** Six of the nine guarded RPCs are outbox writes;
-their `42501` goes through `writeResult` → `humanize()`, which maps *every* `42501` — a role refusal
-and a revoked session alike — to the same generic sentence, `'You no longer have permission to make
-that change.'` Only the three membership RPCs (`share_list`, `set_member_role`, `remove_member`),
-which skip `humanize`, would show `'this device has been signed out'` verbatim. Do not assume the
-banner tells revocation apart from an ordinary role refusal without checking `humanize` first.
+**The distinct message never reaches the user as text — step 2 reads it before `humanize` can erase
+it.** `writeResult` still maps every `42501` to the same generic sentence, `'You no longer have
+permission to make that change.'`, and the three membership RPCs still skip `humanize` and keep the
+database's own words. But `resultFor` — the function both paths call — now matches the exact string
+`'this device has been signed out'` into `Result.sessionRevoked` *before* either of those renderings
+happens, and both the outbox (`useOutbox.flush`) and `SharingScreen`'s `run()` check that flag first
+and redirect to sign-in instead of showing anything
+([session-revoked-write-redirects](session-revoked-write-redirects.md) has the client-side mechanism:
+the write is not dropped, and the reason reaches `SignInScreen`). Do not assume a plain `42501` refusal
+is the only shape a caller has to handle — check `sessionRevoked` on the `Result` first.
 
 **What to do:** a new write RPC that should not survive a global sign-out adds `if not
 public.session_still_valid() then raise exception using errcode = '42501', message = '...'; end if;`

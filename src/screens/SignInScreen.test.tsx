@@ -1,10 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Platform, Pressable, Text } from 'react-native';
 
 import { signInWithGoogle } from '../lib/googleSignIn';
 import { supabase } from '../lib/supabase';
 import type { SignInScreenProps } from '../navigation/types';
-import { SessionProvider } from '../state/SessionContext';
+import { SessionProvider, useSession } from '../state/SessionContext';
 import { SignInScreen } from './SignInScreen';
 
 /**
@@ -38,6 +38,9 @@ const auth = supabase.auth as unknown as {
   signOut: jest.Mock;
 };
 
+/** Captured so a test can deliver a sign-out the way Supabase would, mirroring `SessionContext.test.tsx`. */
+let emitAuthChange: (session: unknown) => void;
+
 const originalOS = Platform.OS;
 
 /** `Platform.OS` is a plain property on RN's module object; assigning through defineProperty keeps
@@ -51,7 +54,11 @@ beforeEach(() => {
   jest.clearAllMocks();
 
   auth.getSession.mockResolvedValue({ data: { session: null } });
-  auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  auth.onAuthStateChange.mockImplementation((callback: (event: string, session: unknown) => void) => {
+    emitAuthChange = (session) => callback('SIGNED_IN', session);
+    return { data: { subscription: { unsubscribe: jest.fn() } } };
+  });
+  auth.signOut.mockResolvedValue({ error: null });
   auth.signInWithOtp.mockResolvedValue({ error: null });
   auth.verifyOtp.mockResolvedValue({ error: null });
   jest.mocked(signInWithGoogle).mockResolvedValue({ error: null });
@@ -78,6 +85,23 @@ async function requestCode(email = 'shopper@example.com') {
   await fireEvent.changeText(screen.getByLabelText('Email address'), email);
   await fireEvent.press(screen.getByLabelText('Send code'));
   await screen.findByLabelText('Six-digit code');
+}
+
+/**
+ * Stands in for a write that got refused for a revoked session, which calls `signOut('revoked')`
+ * from outside this screen (`useOutbox`, `SharingScreen`) — nothing on `SignInScreen` itself can
+ * trigger it, so a probe rendered alongside it drives the same context method a real caller would.
+ */
+function ForceRevokedSignOut() {
+  const { signOut } = useSession();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="force revoked sign-out"
+      onPress={() => void signOut('revoked')}>
+      <Text>force</Text>
+    </Pressable>
+  );
 }
 
 it('will not send a code without an email address', async () => {
@@ -197,4 +221,33 @@ it('shows why Google sign-in failed', async () => {
   await fireEvent.press(screen.getByLabelText('Continue with Google'));
 
   expect(await screen.findByText('Bad ID token')).toBeOnTheScreen();
+});
+
+/**
+ * The whole point of carrying a reason through `SessionContext`: a device that lands here because
+ * `session_still_valid()` refused a write should say so, rather than looking like an ordinary,
+ * unexplained sign-out.
+ */
+it('shows why when reached after a write refused for a revoked session', async () => {
+  const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+
+  await render(
+    <SessionProvider>
+      <ForceRevokedSignOut />
+      <SignInScreen {...({ navigation } as unknown as SignInScreenProps)} />
+    </SessionProvider>
+  );
+  await screen.findByLabelText('Email address');
+
+  await fireEvent.press(screen.getByLabelText('force revoked sign-out'));
+  await act(async () => emitAuthChange(null));
+
+  expect(await screen.findByText('You were signed out on another device.')).toBeOnTheScreen();
+});
+
+/** An ordinary visit to the sign-in screen — nothing was ever revoked — shows no such line. */
+it('shows no reason on an ordinary visit', async () => {
+  await renderScreen();
+
+  expect(screen.queryByText(/signed out on another device/)).not.toBeOnTheScreen();
 });

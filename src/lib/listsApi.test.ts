@@ -432,6 +432,7 @@ describe('the writes that go through the outbox', () => {
     expect(await setItemDone('i1', true)).toEqual({
       error: 'You no longer have permission to make that change.',
       verdict: 'permanent',
+      sessionRevoked: false,
     });
   });
 
@@ -441,6 +442,28 @@ describe('the writes that go through the outbox', () => {
     expect(await renameList('l1', 'Weekly shop')).toEqual({
       error: 'JWT expired',
       verdict: 'retryable',
+      sessionRevoked: false,
     });
+  });
+
+  /**
+   * The signal a kicked device's write is told apart from an ordinary refusal by: both raise
+   * `42501`, so the message text is the only thing that distinguishes `session_still_valid()`
+   * failing from any other permission check. Matched exactly, not as a substring.
+   */
+  it('flags the exact message session_still_valid() raises, and nothing that merely shares its code', async () => {
+    respondToRpcWith({
+      data: null,
+      error: { message: 'this device has been signed out', code: '42501' },
+      status: 403,
+    });
+    expect(await setItemDone('i1', true)).toMatchObject({ sessionRevoked: true });
+
+    respondToRpcWith({
+      data: null,
+      error: { message: 'only an owner can delete or restore this list', code: '42501' },
+      status: 403,
+    });
+    expect(await setListDeleted('l1', true)).toMatchObject({ sessionRevoked: false });
   });
 });

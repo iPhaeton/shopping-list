@@ -18,7 +18,8 @@ const CODE_LENGTH = 6;
  * swaps the whole stack when the session state changes, which unmounts this screen.
  */
 export function SignInScreen(_props: SignInScreenProps) {
-  const { requestCode, verifyCode, signInWithGoogle } = useSession();
+  const { requestCode, verifyCode, signInWithGoogle, state } = useSession();
+  const revoked = state.status === 'signedOut' && state.reason === 'revoked';
 
   const [phase, setPhase] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -98,6 +99,8 @@ export function SignInScreen(_props: SignInScreenProps) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.card}>
+        {revoked && <Text style={styles.hint}>You were signed out on another device.</Text>}
+
         {phase === 'email' ? (
           <>
             <Text style={styles.title}>Sign in</Text>

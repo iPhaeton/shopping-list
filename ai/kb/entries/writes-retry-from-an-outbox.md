@@ -4,10 +4,10 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
-last_verified: 2026-09-13
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts
-related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest]
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
+last_verified: 2026-09-20
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
+related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects]
 ---
 
 Every reducer-owned write dispatches first — the row is on screen before any request — and is then
@@ -22,7 +22,10 @@ itself, which is what minting ids up front buys); `retryable` (status 0 = a fail
 `permanent` (403/4xx). Anything unrecognised is `retryable`, deliberately: a doomed retry costs a
 spin, a dropped write costs the user their data. Only a `permanent` verdict re-fetches; a retryable
 failure must **not** — offline, the fetch fails too, and the repair would take the failed write's row
-off the screen. A refused write vanishes: gone from database and outbox both, nothing replays it.
+off the screen. A refused write vanishes: gone from database and outbox both, nothing replays it —
+**except a `sessionRevoked` one**, intercepted in `useOutbox.flush` before this branch runs: the write
+was never wrong, only the device's credentials were, so it stays queued and replays at the next
+sign-in instead ([session-revoked-write-redirects](session-revoked-write-redirects.md)).
 
 **The SQLSTATE beats the status, and two rules do it.** `23505` is one; `P0002` is the other:
 PostgREST answers it with **500** — measured — and a 500 otherwise means "send it again", but the
@@ -59,19 +62,18 @@ restore in front of the write it unblocks ([writes-can-land-on-a-tombstone](writ
 `removeMember` are called straight from `SharingScreen`, which holds its roster in `useState`. The
 sufficient reason: `share_list` resolves the email **server-side**, so "no account with that email
 yet" must be answered while the user is looking at the field — queued, it arrives an hour later as an
-error about a stranger. Also: the reducer models no members, so `replay` has nothing to preserve, and
-the roster is an uncached RPC, so that screen is online-only regardless. The boundary is "a write the
-reducer describes", not "any request" — do not widen the outbox to a screen it cannot replay.
+error about a stranger. The reducer models no members either, so `replay` has nothing to preserve, and
+the roster is an uncached, online-only RPC. The boundary is "a write the reducer describes", not "any
+request" — do not widen the outbox to a screen it cannot replay.
 
 **Serial, and never overlapping a fetch.** `items.list_id` is a foreign key, so an item insert must
 not overtake the list insert it depends on: one request in flight, and a retryable failure stops the
 loop rather than skipping ahead. A `fetching` ref keeps the loop and `refresh` apart — overlapped, a
-write that completed during a fetch would be missing from both the response and the queue, and its
-row would vanish. Two smaller properties are load-bearing for the same reason and easy to "simplify"
-away: the loop dequeues **by identity** (`filter(c => c !== op)`), because a toggle coalesced into
-the head while that head was in flight is a newer write that `shift()` would drop unsent; and a
-permanent failure drops its dependents (`dropDependents`) so one refusal is one error rather than a
-burst of foreign-key complaints.
+write completing mid-fetch would be missing from both the response and the queue, and its row would
+vanish. Two smaller properties are load-bearing and easy to "simplify" away: the loop dequeues **by
+identity** (`filter(c => c !== op)`), since a toggle coalesced into the head mid-flight is a newer
+write `shift()` would drop unsent; and a permanent failure drops its dependents (`dropDependents`) so
+one refusal is one error, not a burst of foreign-key complaints.
 
 **Per account, on a shared disk.** The provider is mounted only while signed in and takes `userId`
 as a **prop** — outbox and cache keys are per account, so a probe that reads "the" outbox has to name
@@ -80,10 +82,8 @@ the account. Do not reach for `useSession()` inside `ListsContext` for the id: t
 
 **What to do, and what not to.**
 
-- Do not add a connectivity library. `expo-network` works in Expo Go and on web, but "the OS says
-  there is Wi-Fi" and "the request will succeed" are different claims, and only a failed request
-  cannot lie. It could decorate the UI; it must never gate the flush.
-- Do not cap attempts, and do not add a compensating action per write. Both were considered.
+- Do not add a connectivity library (`expo-network` says "the OS has Wi-Fi", not "the request will
+  succeed" — only a failed request doesn't lie), cap attempts, or add a compensating action per write.
 - Do not clear the outbox on sign-out. `signOut` clears the cached rows only; unsent writes flush at
   that account's next sign-in. The residue is deliberate: keeping the promise means keeping the data.
 - New AsyncStorage writes go through `inOrder` in [storageQueue](../../../src/lib/storageQueue.ts):
@@ -91,10 +91,10 @@ the account. Do not reach for `useSession()` inside `ListsContext` for the id: t
 - `SyncBanner` (muted, `pending > 0`) means *not saved yet*; the red `ErrorBanner` is reserved for
   a `permanent` verdict. Crying wolf every time a lift loses signal is what the split prevents.
 - **Do not drop a queued write because a fetch says you may no longer make it.** A `role` in a fetch
-  is a snapshot that can be seconds old and move in both directions; the database is the authority
-  and answers with a status the outbox already classifies. Being removed from a list is the same
-  shape: the list leaves the fetch, `replay` drops those ops from the *view*, and they still flush
-  and earn one honest refusal. Realtime made this common and changed nothing else here
+  is a snapshot that can be seconds old and move either way; the database is the authority and answers
+  with a status the outbox already classifies. Being removed from a list is the same shape: `replay`
+  drops those ops from the *view*, not the queue, and they still flush and earn one honest refusal —
+  realtime made this common and changed nothing else here
   ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
 
 **Any new write path must fail loudly or not at all.** Since sharing, a refusal is a normal thing

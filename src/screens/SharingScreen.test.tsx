@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import type { ReactNode } from 'react';
 
 import { fetchLists } from '../lib/listsApi';
 import { fetchMembers, removeMember, setMemberRole, shareList, type Member } from '../lib/membersApi';
+import { supabase } from '../lib/supabase';
 import type { SharingScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
+import { SessionProvider } from '../state/SessionContext';
 import type { Role } from '../state/types';
 import { SharingScreen } from './SharingScreen';
 
@@ -37,6 +40,31 @@ jest.mock('../lib/membersApi', () => ({
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
 jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
 
+/**
+ * The screen now reads `useSession()` too, for the sign-out a revoked-session refusal triggers — so
+ * this needs the same `src/lib/supabase.ts` mock the auth suites use, not just `listsApi`.
+ */
+jest.mock('../lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn(),
+      onAuthStateChange: jest.fn(),
+      signInWithOtp: jest.fn(),
+      verifyOtp: jest.fn(),
+      signOut: jest.fn(),
+    },
+  },
+}));
+
+const auth = supabase.auth as unknown as {
+  getSession: jest.Mock;
+  onAuthStateChange: jest.Mock;
+  signOut: jest.Mock;
+};
+
+/** `SessionContext` imports this at the module boundary; the native module has no jest-safe stand-in. */
+jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+
 /** The signed-in account, matching the `userId` the provider is given below. */
 const ALICE: Member = { userId: 'u1', email: 'alice@example.com', role: 'owner' };
 const BOB: Member = { userId: 'u2', email: 'bob@example.com', role: 'reader' };
@@ -55,7 +83,22 @@ beforeEach(async () => {
   jest.mocked(setMemberRole).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(removeMember).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(fetchMembers).mockResolvedValue({ members: [ALICE, BOB], error: null });
+
+  auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
+  auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  auth.signOut.mockResolvedValue({ error: null });
 });
+
+/** What every test renders under: the real session and list providers, over the mocked API seams. */
+function withProviders(children: ReactNode) {
+  return (
+    <SessionProvider>
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+        {children}
+      </ListsProvider>
+    </SessionProvider>
+  );
+}
 
 /** Renders the screen for a list the signed-in account holds `role` on. */
 async function renderScreen(role: Role = 'owner') {
@@ -65,11 +108,7 @@ async function renderScreen(role: Role = 'owner') {
     truncated: false,
   });
 
-  await render(
-    <ListsProvider userId="u1">
-      <SharingScreen {...sharingProps('l1')} />
-    </ListsProvider>
-  );
+  await render(withProviders(<SharingScreen {...sharingProps('l1')} />));
 
   // The roster arrives a microtask after the list does.
   await screen.findByText('bob@example.com');
@@ -91,21 +130,13 @@ it('says the roster is on its way before it arrives', async () => {
     truncated: false,
   });
 
-  await render(
-    <ListsProvider userId="u1">
-      <SharingScreen {...sharingProps('l1')} />
-    </ListsProvider>
-  );
+  await render(withProviders(<SharingScreen {...sharingProps('l1')} />));
 
   expect(screen.getByLabelText('Loading who has access')).toBeOnTheScreen();
 });
 
 it('falls back to a not-found state for an unknown list', async () => {
-  await render(
-    <ListsProvider userId="u1">
-      <SharingScreen {...sharingProps('does-not-exist')} />
-    </ListsProvider>
-  );
+  await render(withProviders(<SharingScreen {...sharingProps('does-not-exist')} />));
 
   expect(screen.getByText('List not found')).toBeOnTheScreen();
 });
@@ -193,6 +224,26 @@ it('renders the database refusal for an address with no account', async () => {
   expect(await screen.findByText('no account with that email yet')).toBeOnTheScreen();
   // The address stays in the field, because it is the thing that needs correcting.
   expect(screen.getByLabelText('Email address')).toHaveDisplayValue('nobody@example.com');
+});
+
+/**
+ * A membership write can be refused for the same reason a queued write is: this device's own
+ * session was revoked elsewhere. It must hand off to sign-out rather than show a roster refusal the
+ * screen is about to be replaced anyway.
+ */
+it('signs out this device instead of showing a refusal for a revoked session', async () => {
+  jest.mocked(removeMember).mockResolvedValue({
+    error: 'this device has been signed out',
+    verdict: 'permanent',
+    sessionRevoked: true,
+  });
+
+  await renderScreen();
+  await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+
+  await act(async () => {});
+  expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  expect(screen.queryByText('this device has been signed out')).not.toBeOnTheScreen();
 });
 
 /** The one screen in the app that cannot work offline, so it says so rather than queueing. */

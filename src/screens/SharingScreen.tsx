@@ -23,6 +23,7 @@ import {
 import type { SharingScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { canManageList } from '../state/roles';
+import { useSession } from '../state/SessionContext';
 import type { Role } from '../state/types';
 import { colors, radius, spacing } from '../theme';
 
@@ -42,6 +43,7 @@ const LAST_OWNER = 'A list must keep at least one owner.';
 export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const { listId } = route.params;
   const { lists, userId, refresh } = useLists();
+  const { signOut } = useSession();
   const list = lists.find((candidate) => candidate.id === listId);
 
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -79,9 +81,17 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
     setPending(true);
     setError(null);
 
-    const { error: failure, verdict } = await call();
+    const { error: failure, verdict, sessionRevoked } = await call();
 
     if (failure) {
+      // This device's own session was revoked elsewhere — hand off to the sign-in screen rather than
+      // showing a refusal the roster will just repeat on the next attempt. Pending is left as-is,
+      // matching `SignInScreen.verifyCode`'s pattern for a path that's about to unmount.
+      if (sessionRevoked) {
+        void signOut('revoked');
+        return;
+      }
+
       // `verdict` rather than the status: `P0002` — "no account with that email yet" — arrives as a
       // 500 and is classified by its SQLSTATE, so a user's typo does not read as an outage.
       setError(verdict === 'retryable' ? 'You need a connection to change who has access.' : failure);

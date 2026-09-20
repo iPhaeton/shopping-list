@@ -29,13 +29,13 @@ export default function App() {
  * and two accounts share one device's disk.
  */
 function ListsForSignedInUser({ children }: { children: ReactNode }) {
-  const { state } = useSession();
+  const { state, signOut } = useSession();
 
   if (state.status !== 'signedIn') return <>{children}</>;
 
   const userId = state.session.user.id;
   return (
-    <ListsProvider key={userId} userId={userId}>
+    <ListsProvider key={userId} userId={userId} onSessionRevoked={() => void signOut('revoked')}>
       {children}
     </ListsProvider>
   );

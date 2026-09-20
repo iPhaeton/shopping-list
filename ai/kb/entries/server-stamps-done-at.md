@@ -4,10 +4,10 @@ title: The database stamps done_at — the client sends a boolean and holds no u
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, security]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-1.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260911000000_rename_item.sql, supabase/migrations/20260920000000_session_revocation.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260911000000_rename_item.sql, supabase/migrations/20260920000000_session_revocation.sql, src/lib/listsApi.ts, src/state/ListsContext.tsx]
 last_verified: 2026-09-20
 verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && D="$(grep -rl 'function public.set_item_done' supabase/migrations | sort | tail -1)" && grep -q 'done_at = case when p_done then now() else null end' "$D" && grep -A6 'function public.set_item_done' "$D" | grep -q 'returns public.write_outcome' && grep -A50 'function public.set_item_done' "$D" | grep -q "raise exception using errcode = '42501'" && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -rqE '^grant update[^;]*on public\.items' supabase/migrations && grep -q "rpc('rename_item'" src/lib/listsApi.ts && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
-related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, session-still-valid-guards-writes]
+related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, session-still-valid-guards-writes, session-revoked-write-redirects]
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
@@ -96,10 +96,10 @@ whole authorization picture.
 **Step 15 added a fourth reason to raise, checked before the role test above it.**
 `session_still_valid()` fails the whole call with the same `42501` when the device's session was
 revoked elsewhere — a separate concern from what this entry covers in detail; see
-[session-still-valid-guards-writes](session-still-valid-guards-writes.md). One wrinkle worth knowing
-here: its distinct message rarely reaches the user, because `humanize()` in
-[listsApi.ts](../../../src/lib/listsApi.ts) collapses every `42501` this function can raise — role
-refusal or revoked session alike — into the same generic banner text.
+[session-still-valid-guards-writes](session-still-valid-guards-writes.md). `humanize()` still collapses
+every `42501` this function can raise into one generic sentence, but a revoked-session caller never
+sees it — `resultFor` flags it first, and the outbox redirects to sign-in instead
+([session-revoked-write-redirects](session-revoked-write-redirects.md)).
 
 **What to do:** a new write to `items` is a function in the migration plus a `supabase.rpc` call,
 never a `.update()`. Argument keys must match the parameter names exactly (`p_item_id`, `p_done`):

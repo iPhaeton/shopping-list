@@ -9,7 +9,6 @@ Run `npm run kb:audit` to check every entry still holds.
 - [A native dev build now works end to end](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` build and install it, not Expo Go (`expo start --go` still reaches Expo Go); CocoaPods, both bundle identifiers, and `expo-dev-client` are set; only `eas` and the Apple Developer account remain absent (environment)
 - [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; verify in the browser (environment)
 - [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
-- [`config push` sends the whole root config](ai/kb/entries/supabase-config-push-sends-the-whole-root.md) — `[remotes.production]` holds only what differs, unset keys inherit, there is no dry run and no read-back, and the `[Y/n]` prompt defaults to Y under automation (gotcha)
 
 **Scope**
 
@@ -22,6 +21,7 @@ Run `npm run kb:audit` to check every entry still holds.
 - [Cloud auth mail goes through Resend](ai/kb/entries/cloud-auth-mail-goes-through-resend.md) — from `no-reply@mail.shopping-loop.com`, the one verified domain, so any address gets the code now; DNS resolving is not verification, a `403` from `POST /emails` is the only local signal and gates the push (environment)
 - [Google's free sign-in library has two gaps](ai/kb/entries/google-native-signin-library-gaps.md) — no nonce option anywhere in its API, so `skip_nonce_check = true` is deliberate; iOS also needs an explicit `iosClientId` beside `webClientId` or it crashes at launch (gotcha)
 - [Signing out globally does not revoke a live access token](ai/kb/entries/session-still-valid-guards-writes.md) — the nine write RPCs now check `auth.sessions` fresh on every call and raise if it is gone; reads and list creation are deliberately still uncovered (decision)
+- [A revoked-session write redirects, it does not error](ai/kb/entries/session-revoked-write-redirects.md) — `resultFor` flags it before `humanize()` erases the message; the outbox leaves it queued to replay at the next sign-in instead of dropping it, and `SharingScreen` does the same for the 3 membership RPCs (decision)
 
 **State and persistence**
 

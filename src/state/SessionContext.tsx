@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -20,7 +21,7 @@ import { supabase } from '../lib/supabase';
  */
 export type AuthState =
   | { status: 'loading' }
-  | { status: 'signedOut' }
+  | { status: 'signedOut'; reason?: 'revoked' }
   | { status: 'signedIn'; session: Session };
 
 /**
@@ -35,7 +36,9 @@ type SessionContextValue = {
   /** Emails a six-digit code, creating the account if the address is new. */
   requestCode: (email: string) => Promise<Result>;
   verifyCode: (email: string, code: string) => Promise<Result>;
-  signOut: () => Promise<Result>;
+  /** `reason: 'revoked'` marks a sign-out forced by a write refused for a session revoked elsewhere,
+   * so `SignInScreen` can say why. Omitted for a sign-out the user chose themselves. */
+  signOut: (reason?: 'revoked') => Promise<Result>;
   /** `scope: 'global'` — revokes every device the account is signed in on. */
   signOutEverywhere: () => Promise<Result>;
   signInWithGoogle: () => Promise<Result>;
@@ -43,8 +46,8 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-function stateFor(session: Session | null): AuthState {
-  return session ? { status: 'signedIn', session } : { status: 'signedOut' };
+function stateFor(session: Session | null, reason?: 'revoked'): AuthState {
+  return session ? { status: 'signedIn', session } : { status: 'signedOut', reason };
 }
 
 /**
@@ -53,6 +56,11 @@ function stateFor(session: Session | null): AuthState {
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: 'loading' });
+
+  // `onAuthStateChange`'s listener only ever sees the resulting session, never why it changed — so a
+  // reason set just before `signOut('revoked')` calls `supabase.auth.signOut` is bridged across to the
+  // listener here, then cleared, rather than threaded through the SDK's own event.
+  const signOutReason = useRef<'revoked' | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
@@ -64,7 +72,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState(stateFor(session));
+      const reason = session ? undefined : signOutReason.current;
+      signOutReason.current = undefined;
+      setState(stateFor(session, reason));
     });
 
     return () => {
@@ -92,7 +102,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const performSignOut = useCallback(
-    async (scope: 'local' | 'global'): Promise<Result> => {
+    async (scope: 'local' | 'global', reason?: 'revoked'): Promise<Result> => {
       // Signing out has always discarded this account's lists along with the provider; leaving a
       // readable copy of them on the device would quietly change that. The outbox is deliberately
       // *not* cleared — those writes are still owed to the database, and they flush at the next
@@ -100,6 +110,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // `scope: 'global'` also signs this device out, so the same reasoning applies to it.
       if (state.status === 'signedIn') await clearCachedLists(state.session.user.id);
 
+      if (reason) signOutReason.current = reason;
       const { error } = await supabase.auth.signOut({ scope });
       return { error: error?.message ?? null };
     },
@@ -110,7 +121,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // `'global'`, which revokes every device the account is signed in on — signing out in a browser
   // would eventually sign out the phone too, so the plain "Sign out" action pins `'local'` and the
   // Account screen's separately confirmed "Sign out of all devices" is the only path to `'global'`.
-  const signOut = useCallback(() => performSignOut('local'), [performSignOut]);
+  // A write refused for a revoked session is also `'local'`: that device's own credentials are what
+  // are stale, and the account may still be validly signed in elsewhere.
+  const signOut = useCallback(
+    (reason?: 'revoked') => performSignOut('local', reason),
+    [performSignOut]
+  );
   const signOutEverywhere = useCallback(() => performSignOut('global'), [performSignOut]);
 
   // Delegates outright: `../lib/googleSignIn` is the one importer of the native module, same

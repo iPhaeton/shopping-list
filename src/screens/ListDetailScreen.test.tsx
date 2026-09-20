@@ -66,7 +66,7 @@ function Harness({ listName }: { listName: string }) {
  */
 async function renderScreen(listName = 'Groceries') {
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <Harness listName={listName} />
     </ListsProvider>
   );
@@ -135,7 +135,7 @@ async function renderAs(role: Role) {
   jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...SHARED, role }], error: null, truncated: false });
 
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <Chrome listId="l1" />
     </ListsProvider>
   );
@@ -234,7 +234,7 @@ it('keeps an item added offline and says it is waiting to sync', async () => {
 
 it('falls back to a not-found state for an unknown list', async () => {
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <ListDetailScreen {...detailProps('does-not-exist')} />
     </ListsProvider>
   );
@@ -277,7 +277,7 @@ describe('loading a list on entry', () => {
       .mockImplementationOnce(async () => ({ items: [], next: null, error: null }));
 
     await render(
-      <ListsProvider userId="u1">
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
         <Chrome listId="l1" />
       </ListsProvider>
     );
@@ -302,7 +302,7 @@ describe('loading a list on entry', () => {
     jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...BARE, itemsLoaded: true }], error: null, truncated: false });
 
     await render(
-      <ListsProvider userId="u1">
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
         <Chrome listId="l1" />
       </ListsProvider>
     );
@@ -346,7 +346,7 @@ describe('a reader', () => {
     });
 
     await render(
-      <ListsProvider userId="u1">
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
         <Chrome listId="l1" />
       </ListsProvider>
     );
@@ -521,7 +521,7 @@ async function renderWithBin(role: Role = 'owner') {
   });
 
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <Chrome listId="l1" />
     </ListsProvider>
   );
@@ -606,7 +606,7 @@ it('says the list is empty when every live item has been deleted', async () => {
   });
 
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <Chrome listId="l1" />
     </ListsProvider>
   );
@@ -623,7 +623,7 @@ describe('a list opened from the bin', () => {
     });
 
     await render(
-      <ListsProvider userId="u1">
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
         <Chrome listId="l1" />
       </ListsProvider>
     );
@@ -708,7 +708,7 @@ async function renderPaged() {
   });
 
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <Chrome listId="l1" />
     </ListsProvider>
   );

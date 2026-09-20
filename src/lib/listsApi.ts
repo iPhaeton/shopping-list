@@ -8,7 +8,17 @@ import { supabase } from './supabase';
  * Errors are returned rather than thrown, matching `SessionContext`: the provider turns them into
  * something the screen can render.
  */
-export type Result = { error: string | null; verdict: Verdict; outcome?: WriteOutcome };
+export type Result = {
+  error: string | null;
+  verdict: Verdict;
+  outcome?: WriteOutcome;
+  /**
+   * True exactly when `session_still_valid()` refused this write because the device's session was
+   * revoked elsewhere — distinguished from an ordinary `42501` by message text, since both share the
+   * errcode. Set before `writeResult` calls `humanize()`, which would otherwise erase the distinction.
+   */
+  sessionRevoked?: boolean;
+};
 
 /**
  * How the outbox is meant to read a failure.
@@ -296,8 +306,15 @@ export async function setItemDone(itemId: string, done: boolean): Promise<Result
  */
 export function resultFor(error: Failure, status: number): Result {
   if (!error) return { error: null, verdict: 'ok' };
-  return { error: error.message, verdict: verdictFor(error.code ?? '', status) };
+  return {
+    error: error.message,
+    verdict: verdictFor(error.code ?? '', status),
+    sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE,
+  };
 }
+
+/** The exact message `session_still_valid()` raises in `20260920000000_session_revocation.sql`. */
+const SESSION_REVOKED_MESSAGE = 'this device has been signed out';
 
 /**
  * `resultFor` for the seven writes that go through the outbox, which differ from the rest in two ways:

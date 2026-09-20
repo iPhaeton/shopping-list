@@ -4,9 +4,9 @@ title: The free @react-native-google-signin/google-signin module has no nonce op
 type: gotcha
 status: current
 tags: [auth, google-sign-in, ios, android]
-sources: [ai/tasks/13-google-sign-in/implementation-log-step-2.md, src/lib/googleSignIn.ts, supabase/config.toml]
-last_verified: 2026-09-18
-verify: grep -q "skip_nonce_check = true" supabase/config.toml && grep -q "iosClientId:" src/lib/googleSignIn.ts
+sources: [ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, src/lib/googleSignIn.ts, supabase/config.toml]
+last_verified: 2026-09-20
+verify: grep -q "skip_nonce_check = true" supabase/config.toml && grep -q "iosClientId:" src/lib/googleSignIn.ts && for f in $(grep -rl 'SessionProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/googleSignIn'" "$f" || exit 1; done
 related: [supabase-client-module-boundary, native-build-toolchain, scope-boundaries]
 ---
 
@@ -33,9 +33,19 @@ determine clientID — GoogleService-Info.plist was not found and iosClientId wa
 only by running `npm run ios` to a booted simulator — nothing in the JS types catches it, and Android
 needs no such thing.
 
+**Under jest, the module has no stand-in and throws at import time.** `TurboModuleRegistry.getEnforcing`
+fires the instant anything requires `@react-native-google-signin/google-signin`, and `SessionContext.tsx`
+imports `googleSignIn.ts` unconditionally — so every suite that renders `SessionProvider`, directly or
+via a screen that calls `useSession()`, needs
+`jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }))` beside its
+`jest.mock('../lib/supabase', ...)`. Giving an existing screen a new `useSession()` call breaks every
+render call site in that screen's own suite the same way — reading the diff does not show it, only
+running the suite does (`SharingScreen.test.tsx`, step 15).
+
 **What to do:** `GoogleSignin.configure()` in `googleSignIn.ts` must always carry both `webClientId`
 and `iosClientId`, and `skip_nonce_check` must stay `true` for as long as this library is installed.
 The three Google Cloud client ids live in `supabase/config.toml`'s `client_id` /
 `additional_client_ids`; which of the two `additional_client_ids` values is iOS is on record now —
 the one also passed as `iosClientId` here and reversed into `app.json`'s `iosUrlScheme` plugin option
-— so it never again needs a human to check Google Cloud Console.
+— so it never again needs a human to check Google Cloud Console. A screen or provider gaining
+`useSession()` needs both jest mocks added to its suite in the same change.

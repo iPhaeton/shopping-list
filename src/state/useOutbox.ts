@@ -35,6 +35,7 @@ export function useOutbox({
   setError,
   setBlocked,
   setPending,
+  onSessionRevoked,
 }: {
   userId: string;
   dispatch: Dispatch<Action>;
@@ -50,6 +51,8 @@ export function useOutbox({
   setError: (message: string | null) => void;
   setBlocked: (blocked: Blocked | null) => void;
   setPending: (pending: number) => void;
+  /** This device's session was revoked elsewhere; sign it out locally instead of banner-ing the write. */
+  onSessionRevoked: () => void;
 }) {
   const persist = useCallback(async () => {
     setPending(queue.current.length);
@@ -101,8 +104,17 @@ export function useOutbox({
       try {
         while (live.current && queue.current.length > 0) {
           const op = queue.current[0];
-          const { error: message, verdict, outcome } = await sendWrite(op);
+          const { error: message, verdict, outcome, sessionRevoked } = await sendWrite(op);
           if (!live.current) return;
+
+          // The write itself is fine; only this device's credentials are stale. Leave it queued —
+          // signing back in reloads the outbox from disk and retries it, same as any other unsent
+          // write across a sign-out — and let the redirect happen instead of banner-ing a message
+          // nobody will be looking at the screen to read.
+          if (sessionRevoked) {
+            onSessionRevoked();
+            return;
+          }
 
           // The write was accepted and the caller was allowed to make it — there was just nothing
           // live left for it to land on, because somebody put the list or the item in the bin.
@@ -172,7 +184,7 @@ export function useOutbox({
         drainDirty();
       }
     },
-    [persist, hydrate, fetchMissingTarget, drainDirty]
+    [persist, hydrate, fetchMissingTarget, drainDirty, onSessionRevoked]
   );
 
   const enqueueOp = useCallback(

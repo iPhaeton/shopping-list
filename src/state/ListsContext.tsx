@@ -94,7 +94,17 @@ const ListsContext = createContext<ListsContextValue | null>(null);
  * each ref's readers and writers cross hook boundaries in different directions — see each hook's own
  * comment for which.
  */
-export function ListsProvider({ userId, children }: { userId: string; children: ReactNode }) {
+export function ListsProvider({
+  userId,
+  onSessionRevoked,
+  children,
+}: {
+  userId: string;
+  /** A write was refused because this device's session was revoked elsewhere — hand off to the
+   * caller, which owns `useSession()`; this provider stays session-agnostic (see the comment above). */
+  onSessionRevoked: () => void;
+  children: ReactNode;
+}) {
   const [state, dispatch] = useReducer(listsReducer, initialState);
   const [status, setStatus] = useState<'loading' | 'ready'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +179,7 @@ export function ListsProvider({ userId, children }: { userId: string; children: 
     setError,
     setBlocked,
     setPending,
+    onSessionRevoked,
   });
 
   useEffect(() => {

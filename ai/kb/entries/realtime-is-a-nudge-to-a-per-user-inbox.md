@@ -5,7 +5,7 @@ type: decision
 status: current
 tags: [supabase, realtime, rls, security, state, architecture]
 sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-5.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
-last_verified: 2026-09-13
+last_verified: 2026-09-20
 verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'return subscribeToChanges(userId, refreshSoon, refreshSoon);' src/state/ListsContext.tsx && grep -q 'let connected = false;' src/lib/listsChannel.ts && grep -q 'if (connected) onResubscribe();' src/lib/listsChannel.ts
 related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, deletion-is-a-tombstone, supabase-local-stack, scope-boundaries]
 ---

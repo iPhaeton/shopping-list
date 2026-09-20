@@ -42,7 +42,7 @@ async function renderScreen() {
   const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <ListsScreen {...({ navigation } as unknown as ListsScreenProps)} />
     </ListsProvider>
   );
@@ -109,7 +109,7 @@ it('shows a spinner instead of the empty state while loading', async () => {
   );
 
   await render(
-    <ListsProvider userId="u1">
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
       <ListsScreen {...({ navigation: { navigate: jest.fn() } } as unknown as ListsScreenProps)} />
     </ListsProvider>
   );

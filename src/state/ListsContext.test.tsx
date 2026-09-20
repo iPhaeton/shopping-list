@@ -92,6 +92,12 @@ const OK: Result = { error: null, verdict: 'ok' };
 /** What a write looks like with no signal: postgrest-js reports a failed fetch as status 0. */
 const OFFLINE: Result = { error: 'TypeError: Failed to fetch', verdict: 'retryable' };
 const REFUSED: Result = { error: 'permission denied', verdict: 'permanent' };
+/** What `session_still_valid()` raises once this device's session is gone. */
+const REVOKED: Result = {
+  error: 'this device has been signed out',
+  verdict: 'permanent',
+  sessionRevoked: true,
+};
 /**
  * The write was accepted and the caller was allowed to make it — there was just nothing live left
  * for it to land on. Note `verdict: 'ok'`: this is not a failure, and classifying it as one is the
@@ -204,7 +210,7 @@ function Button({ label, onPress }: { label: string; onPress: () => void }) {
 
 async function renderProbe() {
   await render(
-    <ListsProvider userId={USER}>
+    <ListsProvider userId={USER} onSessionRevoked={() => {}}>
       <Probe />
     </ListsProvider>
   );
@@ -513,6 +519,34 @@ it('surfaces a refused write and falls back to what the database holds', async (
   expect(await screen.findByText('error: permission denied')).toBeOnTheScreen();
   await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
   expect(screen.queryByText(/Groceries/)).not.toBeOnTheScreen();
+});
+
+/**
+ * A refused write for a revoked session is not an ordinary refusal: nothing is wrong with the write
+ * itself, only this device's own credentials are stale. The provider hands off to
+ * `onSessionRevoked` instead of banner-ing a message on a screen that is about to be replaced, and
+ * leaves the write queued rather than dropping it — signing back in reloads the outbox from disk
+ * and retries it.
+ */
+it('hands off to onSessionRevoked instead of banner-ing a write refused for a revoked session', async () => {
+  api.fetchLists.mockResolvedValue({ lists: [], error: null, truncated: false });
+  api.insertList.mockResolvedValue(REVOKED);
+  const onSessionRevoked = jest.fn();
+
+  await render(
+    <ListsProvider userId={USER} onSessionRevoked={onSessionRevoked}>
+      <Probe />
+    </ListsProvider>
+  );
+  await screen.findByText('status: ready');
+
+  await fireEvent.press(screen.getByLabelText('create'));
+
+  await waitFor(() => expect(onSessionRevoked).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('error: none')).toBeOnTheScreen();
+  expect(screen.getByText('pending: 1')).toBeOnTheScreen();
+  // No rollback re-fetch: the provider is about to unmount once the caller signs this device out.
+  expect(api.fetchLists).toHaveBeenCalledTimes(1);
 });
 
 // --- Offline -------------------------------------------------------------------------------
