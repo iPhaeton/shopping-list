@@ -4,10 +4,10 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
-last_verified: 2026-09-20
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/state/types.ts]
+last_verified: 2026-09-21
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
-related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects]
+related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects, sync-banner-mount-is-unconditional]
 ---
 
 Every reducer-owned write dispatches first — the row is on screen before any request — and is then
@@ -89,7 +89,8 @@ the account. Do not reach for `useSession()` inside `ListsContext` for the id: t
 - New AsyncStorage writes go through `inOrder` in [storageQueue](../../../src/lib/storageQueue.ts):
   the outbox is serialised whole on every change, and two racing writes tear it — a lost row.
 - `SyncBanner` (muted, `pending > 0`) means *not saved yet*; the red `ErrorBanner` is reserved for
-  a `permanent` verdict. Crying wolf every time a lift loses signal is what the split prevents.
+  a `permanent` verdict. Crying wolf every time a lift loses signal is what the split prevents. It
+  also debounces its own paint since step 16 — [sync-banner-mount-is-unconditional](sync-banner-mount-is-unconditional.md).
 - **Do not drop a queued write because a fetch says you may no longer make it.** A `role` in a fetch
   is a snapshot that can be seconds old and move either way; the database is the authority and answers
   with a status the outbox already classifies. Being removed from a list is the same shape: `replay`
@@ -110,11 +111,10 @@ banner minutes or days after the tap; the membership RPCs keep the raw message.
 (PowerSync if this ever needs real convergence), no warning when signing out with writes pending.
 
 The `verify:` command asserts shape, not plumbing: one `useReducer` caller; dispatch and enqueue
-counts equal, now summed over `ListsContext.tsx` and `useListWrites.ts` (**a write that skips the
+counts equal, summed over `ListsContext.tsx` and `useListWrites.ts` (**a write that skips the
 outbox fails** — it counts the literal `dispatch(op);`, so a loop over already-queued ops must name
 its variable differently, as `foldPage` does); both verdict branches; the `P0002` rule; no attempt
-cap (a heuristic); no connectivity library; no `…/removed` action (case-insensitive — a
-case-sensitive grep once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer;
-exactly **ten** `Action` members (counted by `type:` line, since `items/pageLoaded` and
-`items/firstPageLoaded` each span several) and `WriteAction` excluding exactly the three reads — so
-the next write cannot be added without revisiting this entry.
+cap; no connectivity library; no `…/removed` action (case-insensitive, since a case-sensitive grep
+once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer; exactly **ten** `Action`
+members (`type:` line count) and `WriteAction` excluding exactly the three reads — so the next write
+cannot be added without revisiting this entry.

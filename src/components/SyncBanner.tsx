@@ -1,6 +1,14 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '../theme';
+
+/**
+ * A write that lands within one normal online round trip should never paint at all — only one
+ * still unacknowledged after this long is worth interrupting the screen for. Without the delay,
+ * `pending` ticking 0 → 1 → 0 across a fast, healthy request flashes this banner on every write.
+ */
+const SHOW_AFTER_MS = 400;
 
 /**
  * "Not saved *yet*" — which is what almost every failure means now that writes are queued and
@@ -10,6 +18,21 @@ import { colors, radius, spacing } from '../theme';
  * `ErrorBanner` is for the other kind: a write the database refused, which is gone.
  */
 export function SyncBanner({ pending }: { pending: number }) {
+  const [visible, setVisible] = useState(false);
+  const waiting = pending > 0;
+
+  useEffect(() => {
+    if (!waiting) {
+      setVisible(false);
+      return;
+    }
+
+    const timer = setTimeout(() => setVisible(true), SHOW_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+
+  if (!visible) return null;
+
   const changes = pending === 1 ? '1 change' : `${pending} changes`;
 
   return (

@@ -49,7 +49,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
           onDiscard={discardBlocked}
         />
       ) : null}
-      {pending > 0 ? <SyncBanner pending={pending} /> : null}
+      <SyncBanner pending={pending} />
       <AddBar
         placeholder="New list name"
         buttonLabel="Create"

@@ -4,10 +4,10 @@ title: Interactive components are queried by a11y label; static copy is queried 
 type: convention
 status: current
 tags: [testing, accessibility, components]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, 6ef87a2, d81a5ef]
-last_verified: 2026-09-20
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, 6ef87a2, d81a5ef]
+last_verified: 2026-09-21
 verify: for f in $(grep -rl '<Pressable' src --include='*.tsx' | grep -v '\.test\.'); do grep -q accessibilityRole "$f" && grep -q accessibilityLabel "$f" || exit 1; done; grep -q 'checked: done, disabled: !editable' src/components/ItemRow.tsx && grep -q 'accessibilityRole="alert"' src/components/ErrorBanner.tsx && grep -q 'Loading your lists' src/screens/ListsScreen.tsx && grep -q 'Loading who has access' src/screens/SharingScreen.tsx && grep -q "will sync when you're back online" src/components/SyncBanner.tsx && grep -q 'shared with you' src/components/ListRow.tsx && grep -q 'Show 1 deleted' src/components/ShowDeletedToggle.tsx && grep -q 'Restore it and keep your change?' src/components/BlockedBanner.tsx && grep -q "'Restore' : 'Delete'" src/components/ItemRow.tsx && grep -q "'Restore' : 'Delete'" src/components/ListRow.tsx
-related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, screens-take-navigation-props, writes-retry-from-an-outbox, deletion-is-a-tombstone]
+related: [rntl-14-api-changes, theme-tokens-only, first-fetch-replaces-list-state, screens-take-navigation-props, writes-retry-from-an-outbox, deletion-is-a-tombstone, sync-banner-mount-is-unconditional]
 ---
 
 Every **interactive** element is reached through its accessibility props, so those props are
@@ -54,7 +54,9 @@ else: the message comes from the database, so tests assert the string they arran
 **[SyncBanner](../../../src/components/SyncBanner.tsx) is the same case with a count in it.** It
 carries `accessibilityLiveRegion="polite"` and no label, and three suites assert its sentence
 verbatim — `"1 change will sync when you're back online"`, `"2 changes …"`. The singular/plural
-split and that wording are load-bearing; the `verify:` command pins the phrase.
+split and that wording are load-bearing; the `verify:` command pins the phrase. Its mount pattern is
+a separate, unrelated gotcha —
+[sync-banner-mount-is-unconditional](sync-banner-mount-is-unconditional.md).
 
 **Static copy is queried by its visible text instead.**
 [EmptyState](../../../src/components/EmptyState.tsx) carries no accessibility props at all, and the

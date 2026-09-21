@@ -145,7 +145,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           onDiscard={discardBlocked}
         />
       ) : null}
-      {pending > 0 ? <SyncBanner pending={pending} /> : null}
+      <SyncBanner pending={pending} />
       {binned ? (
         <View style={styles.binned}>
           {/*
