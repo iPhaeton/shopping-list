@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { fetchLists } from '../lib/listsApi';
 import { fetchMembers, removeMember, setMemberRole, shareList, type Member } from '../lib/membersApi';
+import { fetchProfile } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { SharingScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
@@ -65,9 +66,16 @@ const auth = supabase.auth as unknown as {
 /** `SessionContext` imports this at the module boundary; the native module has no jest-safe stand-in. */
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
 
-/** The signed-in account, matching the `userId` the provider is given below. */
-const ALICE: Member = { userId: 'u1', email: 'alice@example.com', role: 'owner' };
-const BOB: Member = { userId: 'u2', email: 'bob@example.com', role: 'reader' };
+/** `SessionProvider` resolves the account's own name on every sign-in now; unmocked, the real module
+ * reaches for the real Supabase client. This screen never reads it directly, so the default value
+ * doesn't matter — only that it resolves. */
+jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.fn() }));
+
+/** The signed-in account, matching the `userId` the provider is given below. `name: null` — neither
+ * has cleared the name gate yet — so the roster falls back to email, exactly like a pre-migration
+ * row; every label below keeps asserting on the email for that reason. */
+const ALICE: Member = { userId: 'u1', email: 'alice@example.com', name: null, role: 'owner' };
+const BOB: Member = { userId: 'u2', email: 'bob@example.com', name: null, role: 'reader' };
 
 const navigation = { navigate: jest.fn(), popToTop: jest.fn(), setOptions: jest.fn() };
 
@@ -83,6 +91,7 @@ beforeEach(async () => {
   jest.mocked(setMemberRole).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(removeMember).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(fetchMembers).mockResolvedValue({ members: [ALICE, BOB], error: null });
+  jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
 
   auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
   auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
@@ -120,6 +129,24 @@ it('shows everyone with access, and which one is you', async () => {
   expect(screen.getByText('alice@example.com (you)')).toBeOnTheScreen();
   expect(screen.getByText('bob@example.com')).toBeOnTheScreen();
   expect(fetchMembers).toHaveBeenCalledWith('l1');
+});
+
+it("shows a member's name instead of their email once they have one", async () => {
+  jest
+    .mocked(fetchMembers)
+    .mockResolvedValue({ members: [ALICE, { ...BOB, name: 'Bob' }], error: null });
+  jest.mocked(fetchLists).mockResolvedValue({
+    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
+    error: null,
+    truncated: false,
+  });
+
+  await render(withProviders(<SharingScreen {...sharingProps('l1')} />));
+
+  expect(await screen.findByText('Bob')).toBeOnTheScreen();
+  expect(screen.queryByText('bob@example.com')).not.toBeOnTheScreen();
+  // Every label built from the member switches to the name too, matching what's now on screen.
+  expect(screen.getByLabelText('Remove Bob')).toBeOnTheScreen();
 });
 
 it('says the roster is on its way before it arrives', async () => {

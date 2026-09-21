@@ -8,6 +8,7 @@ sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-
 last_verified: 2026-09-08
 verify: grep -A1 'create policy "read your own memberships" on public.list_members' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'for select using (user_id = (select auth.uid()));' && grep -A3 'create function public.set_member_role' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer' && grep -A3 'create function public.remove_member' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer'
 related: [list-data-scoped-by-rls, read-rooted-at-list-members, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows]
+indexed: false
 ---
 
 For `UPDATE` and `DELETE` Postgres must first **read** the row the `WHERE` clause names, so the

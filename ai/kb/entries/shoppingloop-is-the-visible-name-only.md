@@ -8,6 +8,7 @@ sources: [ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-ren
 last_verified: 2026-09-18
 verify: test "$(node -p "require(\"./app.json\").expo.name")" = ShoppingLoop && grep -q "title: 'ShoppingLoop'" src/navigation/RootNavigator.tsx && grep -q "^sender_name = \"ShoppingLoop\"$" supabase/config.toml && grep -q "in ShoppingLoop:" supabase/templates/otp-code.html && test "$(node -p "require(\"./app.json\").expo.slug")" = shopping-list && test "$(node -p "require(\"./package.json\").name")" = shopping-list && grep -q "^project_id = \"shopping-list\"$" supabase/config.toml && test "$(node -p "require(\"./app.json\").expo.scheme")" = "$(sed -n "s/^site_url = \"\(.*\):\/\/\"$/\1/p" supabase/config.toml)"
 related: [supabase-config-push-sends-the-whole-root, scope-boundaries, otp-email-templates-carry-the-code, supabase-local-stack, native-build-toolchain]
+indexed: false
 ---
 
 Step 12 renamed the app to **ShoppingLoop** — the name came out of

@@ -30,6 +30,12 @@ import { colors, radius, spacing } from '../theme';
 /** The wording the `keep_last_owner` trigger raises, so the app and the database agree on one. */
 const LAST_OWNER = 'A list must keep at least one owner.';
 
+/** A member's name, falling back to their email for an account that hasn't cleared the name gate
+ * yet (pre-migration rows) — never the reverse. */
+function displayNameFor(member: Member): string {
+  return member.name ?? member.email;
+}
+
 /**
  * Who else has access, and — for an owner — how to change it.
  *
@@ -133,19 +139,21 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
 
           return (
             <View key={member.userId} style={styles.member}>
-              <Text style={styles.email}>{you ? `${member.email} (you)` : member.email}</Text>
+              <Text style={styles.email}>
+                {you ? `${displayNameFor(member)} (you)` : displayNameFor(member)}
+              </Text>
 
               {manageable ? (
                 <View style={styles.controls}>
                   <RolePicker
                     value={member.role}
-                    labelFor={(role) => `Set ${member.email} to ${role}`}
+                    labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
                     disabled={locked}
                     onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
                   />
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${member.email}`}
+                    accessibilityLabel={`Remove ${displayNameFor(member)}`}
                     accessibilityState={{ disabled: locked }}
                     disabled={locked}
                     onPress={() => void run(() => removeMember(listId, member.userId))}

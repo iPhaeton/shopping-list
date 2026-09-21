@@ -2,14 +2,17 @@ import type { Role } from '../state/types';
 import { resultFor, type Result } from './listsApi';
 import { supabase } from './supabase';
 
-type MemberRow = { user_id: string; email: string; role: Role };
+type MemberRow = { user_id: string; email: string; name: string | null; role: Role };
 
 /**
  * Somebody who has access to a list. Not part of `State`: the roster is not cached, the reducer
  * models no members, and there is nothing for `replay` to fold — so it lives here with `Result`,
  * as an API shape, and the sharing screen holds it in `useState`.
+ *
+ * `name` is `null` for an account that hasn't cleared the name gate yet (pre-migration rows) — the
+ * sharing screen falls back to `email` for those, never the reverse.
  */
-export type Member = { userId: string; email: string; role: Role };
+export type Member = { userId: string; email: string; name: string | null; role: Role };
 
 /**
  * The roster, and the three ways to change it.
@@ -61,5 +64,5 @@ export async function removeMember(listId: string, userId: string): Promise<Resu
 }
 
 function toMember(row: MemberRow): Member {
-  return { userId: row.user_id, email: row.email, role: row.role };
+  return { userId: row.user_id, email: row.email, name: row.name, role: row.role };
 }

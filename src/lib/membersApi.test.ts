@@ -25,19 +25,20 @@ beforeEach(() => {
  * DELETE may touch.
  */
 describe('the membership calls', () => {
-  it('maps the roster onto the client shape', async () => {
+  it('maps the roster onto the client shape, name included', async () => {
     respondToRpcWith({
       data: [
-        { user_id: 'u1', email: 'alice@example.com', role: 'owner' },
-        { user_id: 'u2', email: 'bob@example.com', role: 'reader' },
+        { user_id: 'u1', email: 'alice@example.com', name: 'Alice', role: 'owner' },
+        // A row that hasn't cleared the name gate yet — null, not dropped from the response.
+        { user_id: 'u2', email: 'bob@example.com', name: null, role: 'reader' },
       ],
       error: null,
     });
 
     expect(await fetchMembers('l1')).toEqual({
       members: [
-        { userId: 'u1', email: 'alice@example.com', role: 'owner' },
-        { userId: 'u2', email: 'bob@example.com', role: 'reader' },
+        { userId: 'u1', email: 'alice@example.com', name: 'Alice', role: 'owner' },
+        { userId: 'u2', email: 'bob@example.com', name: null, role: 'reader' },
       ],
       error: null,
     });

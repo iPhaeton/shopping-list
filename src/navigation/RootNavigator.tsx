@@ -6,6 +6,7 @@ import { HeaderButton } from '../components/HeaderButton';
 import { AccountScreen } from '../screens/AccountScreen';
 import { ListDetailScreen } from '../screens/ListDetailScreen';
 import { ListsScreen } from '../screens/ListsScreen';
+import { SetNameScreen } from '../screens/SetNameScreen';
 import { SharingScreen } from '../screens/SharingScreen';
 import { SignInScreen } from '../screens/SignInScreen';
 import { useSession, type AuthState } from '../state/SessionContext';
@@ -54,6 +55,10 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
           component={SignInScreen}
           options={{ title: 'ShoppingLoop' }}
         />
+      );
+    case 'nameRequired':
+      return (
+        <Stack.Screen name="SetName" component={SetNameScreen} options={{ title: 'Choose a name' }} />
       );
     case 'signedIn':
       return (

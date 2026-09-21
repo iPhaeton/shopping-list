@@ -12,16 +12,17 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion and paged items in; invites, leaving a list and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
-- [ShoppingLoop is the visible name only](ai/kb/entries/shoppingloop-is-the-visible-name-only.md) — `expo.name`, the sign-in title, the mail sender and template say it; `slug`, `scheme`, `package.json` and `project_id` stay `shopping-list`, and the scheme is chained to production `site_url` (decision)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and required unique names in; invites, leaving a list and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
 
 **Auth**
 
 - [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock it, or the query module above it (convention)
 - [Cloud auth mail goes through Resend](ai/kb/entries/cloud-auth-mail-goes-through-resend.md) — from `no-reply@mail.shopping-loop.com`, the one verified domain, so any address gets the code now; DNS resolving is not verification, a `403` from `POST /emails` is the only local signal and gates the push (environment)
 - [Google's free sign-in library has two gaps](ai/kb/entries/google-native-signin-library-gaps.md) — no nonce option anywhere in its API, so `skip_nonce_check = true` is deliberate; iOS also needs an explicit `iosClientId` beside `webClientId` or it crashes at launch (gotcha)
-- [Signing out globally does not revoke a live access token](ai/kb/entries/session-still-valid-guards-writes.md) — the nine write RPCs now check `auth.sessions` fresh on every call and raise if it is gone; reads and list creation are deliberately still uncovered (decision)
-- [A revoked-session write redirects, it does not error](ai/kb/entries/session-revoked-write-redirects.md) — `resultFor` flags it before `humanize()` erases the message; the outbox leaves it queued to replay at the next sign-in instead of dropping it, and `SharingScreen` does the same for the 3 membership RPCs (decision)
+- [`onAuthStateChange`'s `'SIGNED_IN'` fires on restore too](ai/kb/entries/signed-in-event-fires-on-restore-too.md) — a cold-start session restore broadcasts the same event a live sign-in does; `SessionContext`'s `hasResolvedOnce` ref is what tells them apart (gotcha)
+- [A restored session waits for evidence](ai/kb/entries/restored-session-state-waits-for-evidence.md) — `AuthState` stays `loading`, mounting nothing, until a name-cache read or fetch actually decides `signedIn` vs. `nameRequired`; setting `signedIn` before either answered flashed the full app on every cold start (gotcha)
+- [Signing out globally does not revoke a live access token](ai/kb/entries/session-still-valid-guards-writes.md) — the ten write RPCs now check `auth.sessions` fresh on every call and raise if it is gone; reads and list creation are deliberately still uncovered (decision)
+- [A revoked-session write redirects, it does not error](ai/kb/entries/session-revoked-write-redirects.md) — `resultFor` flags it before `humanize()` erases the message; the outbox leaves it queued to replay at the next sign-in, and every synchronous RPC caller (`SharingScreen`, `AccountScreen`, `SetNameScreen`) checks the same flag inline (decision)
 
 **State and persistence**
 
@@ -31,7 +32,6 @@ Run `npm run kb:audit` to check every entry still holds.
 - [The database stamps `done_at`](ai/kb/entries/server-stamps-done-at.md) — the client sends a boolean through `set_item_done`, which raises on refusal, and cannot update `items` at all (decision)
 - [RLS scopes list data by membership](ai/kb/entries/list-data-scoped-by-rls.md) — reader/writer/owner, the client never filters, grants are half the story; the one delete policy is on `list_members` (constraint)
 - [The list read starts at `list_members`](ai/kb/entries/read-rooted-at-list-members.md) — uncorrelated policy subqueries, no definer helper in a policy; the items read is keyset with a redundant `gte` that decides the plan (decision)
-- [A SELECT policy gates UPDATE and DELETE too](ai/kb/entries/select-policy-gates-update-and-delete.md) — self-only visibility silently zeroes an owner policy, so member management is RPCs (gotcha)
 - [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, `from public` leaves `anon`, and a policy's helper must keep them (gotcha)
 - [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'`; it runs on every foreground and every nudge now, and the flush guard lives in `refresh` (gotcha)
 - [Realtime is a nudge to a per-user inbox](ai/kb/entries/realtime-is-a-nudge-to-a-per-user-inbox.md) — the database fans out `user:<uid>` broadcasts, the client answers with the fetch it already had; never a delta, never `postgres_changes` (decision)
