@@ -12,6 +12,6 @@
 11. Pagination for list members, users
 12. Push notifications on list/item completed/created/deleted
 (13. Rename item)
-14. Refactor authentication. Users should have names
+(14. Refactor authentication. Users should have names)
 (15. Split ListContext)
 16. Limit the cache
