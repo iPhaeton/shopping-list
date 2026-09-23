@@ -54,6 +54,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const [selected, setSelected] = useState<UserSuggestion | null>(null);
   const [inviteRole, setInviteRole] = useState<Role>('writer');
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const [confirmingRemoveUserId, setConfirmingRemoveUserId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { members: rows, error: failure } = await fetchMembers(listId);
@@ -155,23 +156,63 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
               </Text>
 
               {manageable ? (
-                <View style={styles.controls}>
-                  <RolePicker
-                    value={member.role}
-                    labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
-                    disabled={locked}
-                    onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${displayNameFor(member)}`}
-                    accessibilityState={{ disabled: locked }}
-                    disabled={locked}
-                    onPress={() => void run(() => removeMember(listId, member.userId))}
-                    style={styles.remove}>
-                    <Text style={[styles.removeText, locked && styles.mutedText]}>Remove</Text>
-                  </Pressable>
-                </View>
+                confirmingRemoveUserId === member.userId ? (
+                  <View style={styles.confirm}>
+                    <Text style={styles.confirmText}>
+                      {you
+                        ? "You'll lose access to this list until someone shares it with you again."
+                        : `${displayNameFor(member)} will lose access to this list until someone shares it with them again.`}
+                    </Text>
+                    <View style={styles.confirmActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel"
+                        accessibilityState={{ disabled: pending }}
+                        disabled={pending}
+                        onPress={() => setConfirmingRemoveUserId(null)}
+                        style={styles.cancelButton}>
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Confirm remove ${displayNameFor(member)}`}
+                        accessibilityState={{ disabled: pending }}
+                        disabled={pending}
+                        onPress={() => {
+                          // Cleared either way, not just on refusal: on success this member's row
+                          // is simply gone next render, but the id would otherwise sit in state
+                          // and wrongly re-open the confirm view if the same account is re-invited
+                          // later and lands back on the same userId.
+                          void run(() => removeMember(listId, member.userId)).then(() => {
+                            setConfirmingRemoveUserId(null);
+                          });
+                        }}
+                        style={styles.dangerButton}>
+                        <Text style={styles.dangerButtonText}>
+                          {pending ? 'Removing…' : 'Remove'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.controls}>
+                    <RolePicker
+                      value={member.role}
+                      labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
+                      disabled={locked}
+                      onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${displayNameFor(member)}`}
+                      accessibilityState={{ disabled: locked }}
+                      disabled={locked}
+                      onPress={() => setConfirmingRemoveUserId(member.userId)}
+                      style={styles.remove}>
+                      <Text style={[styles.removeText, locked && styles.mutedText]}>Remove</Text>
+                    </Pressable>
+                  </View>
+                )
               ) : you ? (
                 !confirmingLeave ? (
                   <Pressable

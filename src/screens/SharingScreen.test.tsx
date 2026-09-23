@@ -343,16 +343,78 @@ describe('an owner', () => {
     expect(setMemberRole).toHaveBeenCalledWith('l1', 'u2', 'writer');
   });
 
-  it('removes somebody', async () => {
+  it('removes somebody, after confirming', async () => {
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+    expect(removeMember).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
+    expect(removeMember).toHaveBeenCalledWith('l1', 'u2');
+  });
+
+  /**
+   * `confirmingRemoveUserId` used to only clear on a refusal. A successful removal left the id
+   * sitting in state — invisible while that row was gone, but if the same account was re-invited
+   * and landed back on the same `userId`, its new row matched the stale id and opened straight into
+   * the confirm view nobody had pressed "Remove" on.
+   */
+  it('does not reopen the confirm view for an account re-invited after being removed', async () => {
+    jest
+      .mocked(fetchMembers)
+      .mockResolvedValueOnce({ members: [ALICE, BOB], error: null })
+      .mockResolvedValueOnce({ members: [ALICE], error: null })
+      .mockResolvedValueOnce({ members: [ALICE, BOB], error: null });
+
+    jest.useFakeTimers();
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+    await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
+
+    await pickSuggestion({ userId: 'u2', name: 'Bob' });
+    await fireEvent.press(screen.getByLabelText('Share'));
+
+    expect(shareList).toHaveBeenCalledWith('l1', 'u2', 'writer');
+    expect(await screen.findByLabelText('Remove bob@example.com')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Confirm remove bob@example.com')).not.toBeOnTheScreen();
+  });
+
+  it('does not remove until the confirm step is pressed', async () => {
     await renderScreen();
 
     await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
 
-    expect(removeMember).toHaveBeenCalledWith('l1', 'u2');
+    expect(removeMember).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Confirm remove bob@example.com')).toBeOnTheScreen();
   });
 
-  /** `leaveList` is a reader/writer's path — an owner still removes themselves the way they already
-   * could, through `remove_member`, not the new confirm-step control. */
+  it('cancels out of the confirm step without removing', async () => {
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+
+    expect(removeMember).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Remove bob@example.com')).toBeOnTheScreen();
+  });
+
+  it('collapses back to the plain button and shows why when a removal is refused', async () => {
+    jest
+      .mocked(removeMember)
+      .mockResolvedValue({ error: 'that person is not a member of this list', verdict: 'permanent' });
+
+    await renderScreen();
+    await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+    await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
+
+    expect(await screen.findByText('that person is not a member of this list')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Remove bob@example.com')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Confirm remove bob@example.com')).not.toBeOnTheScreen();
+  });
+
+  /** `leaveList` is a reader/writer's path — an owner still removes themselves through the same
+   * `Remove`-then-confirm control used on every row, not the reader/writer `Leave list` control. */
   it("still uses Remove on their own row, not the reader/writer 'Leave list' control", async () => {
     await renderScreen();
 
@@ -399,6 +461,7 @@ it('signs out this device instead of showing a refusal for a revoked session', a
 
   await renderScreen();
   await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+  await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
 
   await act(async () => {});
   expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
@@ -431,9 +494,10 @@ it('disables the controls while a request is in flight', async () => {
 
   await renderScreen();
   await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+  await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
 
-  expect(screen.getByLabelText('Remove bob@example.com')).toBeDisabled();
-  expect(screen.getByLabelText('Set bob@example.com to writer')).toBeDisabled();
+  expect(screen.getByLabelText('Confirm remove bob@example.com')).toBeDisabled();
+  expect(screen.getByLabelText('Cancel')).toBeDisabled();
 
   await act(async () => settle({ error: null, verdict: 'ok' }));
 });
@@ -484,6 +548,7 @@ it('leaves the screen when your own membership is gone', async () => {
 
   await renderScreen();
   await fireEvent.press(screen.getByLabelText('Remove alice@example.com'));
+  await fireEvent.press(screen.getByLabelText('Confirm remove alice@example.com'));
 
   expect(removeMember).toHaveBeenCalledWith('l1', 'u1');
   expect(navigation.popToTop).toHaveBeenCalled();
@@ -497,6 +562,7 @@ it('stays put when somebody else is removed', async () => {
 
   await renderScreen();
   await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+  await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
 
   expect(navigation.popToTop).not.toHaveBeenCalled();
 });

@@ -7,7 +7,7 @@
     - when a deleted list is updated
 (7. Unsaved changes message flickering)
 (8. Item and list deletion)
-9. Removing oneself from list
+(9. Removing oneself from list)
 10. Push notifications on list/item completed/created/deleted
 (11. Rename item)
 (12. Refactor authentication. Users should have names)

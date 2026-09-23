@@ -4,7 +4,7 @@ title: A second subscribeToChanges call for the same user shares, and can tear d
 type: gotcha
 status: current
 tags: [supabase, realtime, state]
-sources: [ai/tasks/19-remove-oneself/implementation-log-step-2.md, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/screens/SharingScreen.tsx]
+sources: [ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/screens/SharingScreen.tsx]
 last_verified: 2026-09-23
 verify: test "$(grep -rn 'subscribeToChanges(userId' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.' | wc -l | tr -d ' ')" = 1 && grep -q 'return subscribeToChanges(userId, onNudge, onNudge);' src/state/ListsContext.tsx && grep -q 'lastNudge: { listId: string | undefined } | null;' src/state/ListsContext.tsx && grep -q 'const { lists, userId, refresh, lastNudge } = useLists();' src/screens/SharingScreen.tsx && ! grep -q 'subscribeToChanges' src/screens/SharingScreen.tsx
 related: [realtime-is-a-nudge-to-a-per-user-inbox, writes-retry-from-an-outbox, queries-go-through-a11y-labels]

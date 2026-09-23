@@ -12,7 +12,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and required unique names in; invites, leaving a list and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, and leaving a list in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
 
 **Auth**
 
