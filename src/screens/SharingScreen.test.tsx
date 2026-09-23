@@ -13,6 +13,7 @@ import {
   type Member,
   type UserSuggestion,
 } from '../lib/membersApi';
+import { subscribeToChanges } from '../lib/listsChannel';
 import { fetchProfile } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { SharingScreenProps } from '../navigation/types';
@@ -49,8 +50,11 @@ jest.mock('../lib/membersApi', () => ({
   leaveList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
-/** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
-jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
+/** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved.
+ * The mock is also the handle: it captures `onNudge` (`ListsContext`'s combined onChange/
+ * onResubscribe wrapper) so a test can deliver a nudge by hand, the same technique
+ * `ListsContext.test.tsx` uses. */
+jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn() }));
 
 /**
  * The screen now reads `useSession()` too, for the sign-out a revoked-session refusal triggers — so
@@ -94,6 +98,11 @@ function sharingProps(listId: string) {
   return { navigation, route: { params: { listId } } } as unknown as SharingScreenProps;
 }
 
+/** Captured from `subscribeToChanges` in `beforeEach` below — delivers a realtime nudge the way
+ * `ListsContext`'s own subscription effect would, `listId` omitted for a resubscribe/malformed
+ * payload. */
+let nudge: (listId?: string) => void = () => {};
+
 afterEach(() => {
   jest.useRealTimers();
 });
@@ -113,6 +122,11 @@ beforeEach(async () => {
   auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
   auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
   auth.signOut.mockResolvedValue({ error: null });
+
+  jest.mocked(subscribeToChanges).mockImplementation((_userId, onChange) => {
+    nudge = onChange;
+    return () => {};
+  });
 });
 
 /** What every test renders under: the real session and list providers, over the mocked API seams. */
@@ -485,4 +499,45 @@ it('stays put when somebody else is removed', async () => {
   await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
 
   expect(navigation.popToTop).not.toHaveBeenCalled();
+});
+
+// --- Realtime ------------------------------------------------------------------------------
+
+/**
+ * The roster isn't in `ListsContext`'s reducer state, so it doesn't get a live update "for free"
+ * the way a list's items do — `ListsContext` exposes `lastNudge` instead, and this screen reacts
+ * to it directly with its own `load()`, not through `run()`: nobody here made a write.
+ */
+it('re-reads the roster when a nudge names this list', async () => {
+  await renderScreen();
+  expect(fetchMembers).toHaveBeenCalledTimes(1);
+
+  jest
+    .mocked(fetchMembers)
+    .mockResolvedValueOnce({ members: [ALICE, BOB, { ...BOB, userId: 'u3', email: 'carol@example.com' }], error: null });
+
+  await act(async () => nudge('l1'));
+
+  expect(fetchMembers).toHaveBeenCalledTimes(2);
+  expect(await screen.findByText('carol@example.com')).toBeOnTheScreen();
+});
+
+it('ignores a nudge naming a different list', async () => {
+  await renderScreen();
+  expect(fetchMembers).toHaveBeenCalledTimes(1);
+
+  await act(async () => nudge('some-other-list'));
+
+  expect(fetchMembers).toHaveBeenCalledTimes(1);
+});
+
+/** No `listId` is a resubscribe or a malformed payload — "not sure what changed," so this list's
+ * roster is re-read too, the same call `refreshSoon` answers with `dirty = 'all'`. */
+it('re-reads the roster on a nudge naming no particular list', async () => {
+  await renderScreen();
+  expect(fetchMembers).toHaveBeenCalledTimes(1);
+
+  await act(async () => nudge());
+
+  expect(fetchMembers).toHaveBeenCalledTimes(2);
 });

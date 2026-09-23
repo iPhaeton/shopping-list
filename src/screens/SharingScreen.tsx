@@ -43,7 +43,7 @@ function displayNameFor(member: Member): string {
  */
 export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const { listId } = route.params;
-  const { lists, userId, refresh } = useLists();
+  const { lists, userId, refresh, lastNudge } = useLists();
   const { signOut } = useSession();
   const list = lists.find((candidate) => candidate.id === listId);
 
@@ -69,6 +69,16 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A realtime nudge for this list — someone else joined, left, or changed role — reaches the
+  // roster this way rather than through `ListsContext`'s own reducer state, which this screen
+  // deliberately isn't part of. `listId === undefined` is a resubscribe or malformed payload, the
+  // same "not sure what changed, re-check" case `refreshSoon` treats as `dirty = 'all'`.
+  useEffect(() => {
+    if (!lastNudge) return;
+    if (lastNudge.listId !== undefined && lastNudge.listId !== listId) return;
+    void load();
+  }, [lastNudge, listId, load]);
 
   const manageable = list ? canManageList(list.role) : false;
   const owners = members?.filter((member) => member.role === 'owner') ?? [];

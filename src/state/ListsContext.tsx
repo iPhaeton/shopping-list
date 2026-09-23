@@ -41,6 +41,12 @@ type ListsContextValue = {
    * will move it. The flush loop is stopped while this is set.
    */
   blocked: Blocked | null;
+  /** The most recent realtime nudge, for a screen with its own un-cached state (only
+   * `SharingScreen`'s roster, today) to know when to re-read. `listId` is undefined for a
+   * resubscribe or malformed payload — the same "might have missed something, re-check everything"
+   * signal `refreshSoon()` already treats as `dirty = 'all'`. A fresh object every time, even for the
+   * same listId twice in a row, so an effect keyed on it always re-fires. */
+  lastNudge: { listId: string | undefined } | null;
   /** Returns the id of the new list, or null when `name` was blank. */
   createList: (name: string) => string | null;
   renameList: (listId: string, name: string) => void;
@@ -110,6 +116,7 @@ export function ListsProvider({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
   const [blocked, setBlocked] = useState<Blocked | null>(null);
+  const [lastNudge, setLastNudge] = useState<{ listId: string | undefined } | null>(null);
 
   // The outbox in memory, and the flush loop's own bookkeeping. Refs rather than state because the
   // loop reads them between awaits and has to see what was enqueued while it was waiting.
@@ -295,7 +302,11 @@ export function ListsProvider({
    */
   useEffect(() => {
     if (status !== 'ready') return;
-    return subscribeToChanges(userId, refreshSoon, refreshSoon);
+    const onNudge = (listId?: string) => {
+      refreshSoon(listId);
+      setLastNudge({ listId });
+    };
+    return subscribeToChanges(userId, onNudge, onNudge);
   }, [userId, status, refreshSoon]);
 
   const value = useMemo(
@@ -306,6 +317,7 @@ export function ListsProvider({
       error,
       pending,
       blocked,
+      lastNudge,
       createList,
       renameList,
       addItem,
@@ -326,6 +338,7 @@ export function ListsProvider({
       error,
       pending,
       blocked,
+      lastNudge,
       createList,
       renameList,
       addItem,

@@ -143,6 +143,7 @@ function Probe() {
     error,
     pending,
     blocked,
+    lastNudge,
     createList,
     renameList,
     addItem,
@@ -162,6 +163,7 @@ function Probe() {
       <Text>{`error: ${error ?? 'none'}`}</Text>
       <Text>{`pending: ${pending}`}</Text>
       <Text>{`blocked: ${blocked ? blocked.op.type : 'none'}`}</Text>
+      <Text>{`lastNudge: ${lastNudge ? (lastNudge.listId ?? 'all') : 'none'}`}</Text>
       {lists.map((list) => (
         <Text key={list.id}>
           {`${list.id} ${list.name}${list.deletedAt === null ? '' : ' [binned]'}${
@@ -753,6 +755,27 @@ it('re-reads when the socket comes back', async () => {
   });
 
   expect(api.fetchLists).toHaveBeenCalledTimes(2);
+});
+
+/**
+ * `lastNudge` is for a screen with state outside this reducer (only `SharingScreen`'s roster,
+ * today) — it updates immediately, not behind the debounce that gates `fetchLists`, since nothing
+ * about it triggers a fetch of its own.
+ */
+it('records the list a nudge named, for a screen outside this state to read', async () => {
+  await renderProbe();
+
+  await act(async () => nudge('l7'));
+
+  expect(screen.getByText('lastNudge: l7')).toBeOnTheScreen();
+});
+
+it('records a nudge with no list as "all", the same case a resubscribe is', async () => {
+  await renderProbe();
+
+  await act(async () => resubscribe());
+
+  expect(screen.getByText('lastNudge: all')).toBeOnTheScreen();
 });
 
 /**
