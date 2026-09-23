@@ -28,6 +28,8 @@ export function AccountScreen(_props: AccountScreenProps) {
   // `state.session`/`state.name` for everything below instead of an `!` on each use.
   if (state.status !== 'signedIn') return null;
 
+  const canSaveName = nameDraft.trim().length >= 3 && !namePending;
+
   function startEditingName() {
     if (state.status !== 'signedIn') return;
     setNameDraft(state.name ?? '');
@@ -126,12 +128,12 @@ export function AccountScreen(_props: AccountScreenProps) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Save name"
-                accessibilityState={{ disabled: namePending || nameDraft.trim().length === 0 }}
-                disabled={namePending || nameDraft.trim().length === 0}
+                accessibilityState={{ disabled: !canSaveName }}
+                disabled={!canSaveName}
                 onPress={() => void saveName()}
                 style={({ pressed }) => [
                   styles.saveButton,
-                  (namePending || nameDraft.trim().length === 0) && styles.saveButtonDisabled,
+                  !canSaveName && styles.saveButtonDisabled,
                   pressed && styles.buttonPressed,
                 ]}>
                 <Text style={styles.saveButtonText}>{namePending ? 'Saving…' : 'Save name'}</Text>

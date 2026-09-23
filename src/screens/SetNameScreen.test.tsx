@@ -75,6 +75,22 @@ it('renders the gate once a name is confirmed missing', async () => {
   expect(screen.getByLabelText('Continue')).toBeDisabled();
 });
 
+it('disables Continue below 3 trimmed characters', async () => {
+  await renderScreen();
+
+  await fireEvent.changeText(screen.getByLabelText('Your name'), 'Al');
+
+  expect(screen.getByLabelText('Continue')).toBeDisabled();
+});
+
+it('enables Continue at exactly 3 trimmed characters', async () => {
+  await renderScreen();
+
+  await fireEvent.changeText(screen.getByLabelText('Your name'), 'Ali');
+
+  expect(screen.getByLabelText('Continue')).not.toBeDisabled();
+});
+
 it("prefills from Google's OAuth name claim when present", async () => {
   auth.getSession.mockResolvedValue({
     data: { session: { user: { id: 'u1', user_metadata: { full_name: 'Googled Gary' } } } },

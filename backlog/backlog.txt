@@ -3,15 +3,13 @@
 (3. Sign out every device)
 4. Supabase limits: throughput, email rate limit
 (5. Offline support)
-6. Check that "Done At" time shown in the ui is in the device's timezone.
-7. Human readable errors: 
+6. Human readable errors: 
     - when a deleted list is updated
-(8. Unsaved changes message flickering)
-(9. Item and list deletion)
-10. Removing oneself from list
-11. Pagination for list members, users
-12. Push notifications on list/item completed/created/deleted
-(13. Rename item)
-(14. Refactor authentication. Users should have names)
-(15. Split ListContext)
-16. Limit the cache
+(7. Unsaved changes message flickering)
+(8. Item and list deletion)
+9. Removing oneself from list
+10. Push notifications on list/item completed/created/deleted
+(11. Rename item)
+(12. Refactor authentication. Users should have names)
+(13. Split ListContext)
+14. Limit the cache

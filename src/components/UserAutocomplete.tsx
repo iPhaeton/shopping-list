@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { searchUsers, type UserSuggestion } from '../lib/membersApi';
 import { colors, radius, spacing } from '../theme';
 
-const MIN_QUERY_LENGTH = 2;
+const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 300;
 
 type Props = {

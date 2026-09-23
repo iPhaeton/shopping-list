@@ -46,11 +46,11 @@ async function advanceDebounce() {
   });
 }
 
-it('does not search under 2 trimmed characters', async () => {
+it('does not search under 3 trimmed characters', async () => {
   jest.useFakeTimers();
   await render(<Harness />);
 
-  await fireEvent.changeText(screen.getByLabelText('Name'), 'a');
+  await fireEvent.changeText(screen.getByLabelText('Name'), 'al');
   await advanceDebounce();
 
   expect(searchUsers).not.toHaveBeenCalled();
@@ -70,14 +70,14 @@ it('collapses a burst of keystrokes into one debounced search', async () => {
   expect(searchUsers).toHaveBeenCalledWith('ali');
 });
 
-it('searches once the debounce settles at 2 or more characters', async () => {
+it('searches once the debounce settles at 3 or more characters', async () => {
   jest.useFakeTimers();
   await render(<Harness />);
 
-  await fireEvent.changeText(screen.getByLabelText('Name'), 'al');
+  await fireEvent.changeText(screen.getByLabelText('Name'), 'ali');
   await advanceDebounce();
 
-  expect(searchUsers).toHaveBeenCalledWith('al');
+  expect(searchUsers).toHaveBeenCalledWith('ali');
 });
 
 it('renders whatever the server returns, up to 5, as labelled rows', async () => {
@@ -95,7 +95,7 @@ it('renders whatever the server returns, up to 5, as labelled rows', async () =>
   jest.useFakeTimers();
   await render(<Harness />);
 
-  await fireEvent.changeText(screen.getByLabelText('Name'), 'al');
+  await fireEvent.changeText(screen.getByLabelText('Name'), 'ali');
   await advanceDebounce();
 
   expect(await screen.findByLabelText('Share with Alice')).toBeOnTheScreen();

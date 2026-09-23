@@ -4,8 +4,8 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, b78d16f]
-last_verified: 2026-09-22
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, b78d16f]
+last_verified: 2026-09-23
 related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters]
 ---
 
@@ -84,8 +84,7 @@ Each of these is easy to assume and wrong:
   ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
 - **step 9, deletion** — no policy change, no realtime migration, no restore of a list's items when
   the list itself is restored, and no happens-before: the rule is who you are, not whose change came
-  first ([deletion-is-a-tombstone](deletion-is-a-tombstone.md),
-  [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
+  first ([deletion-is-a-tombstone](deletion-is-a-tombstone.md), [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
 - **step 10, item rename** — no re-granted `title` column: the write is a `security definer` RPC
   because the client still holds no UPDATE on `items` at all
   ([server-stamps-done-at](server-stamps-done-at.md)). No realtime migration either.
@@ -94,18 +93,19 @@ Each of these is easy to assume and wrong:
   an item added past a loaded page surfaces one scroll away, by design
   ([read-rooted-at-list-members](read-rooted-at-list-members.md),
   [max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md)).
-- **step 13, Google sign-in (phases 1-2)** — server side and client both landed:
-  `[auth.external.google]` validates a real token, and a native "Continue with Google" button
-  (`Platform.OS !== 'web'`, a product choice — see
-  [google-native-signin-library-gaps](google-native-signin-library-gaps.md)) calls
-  `src/lib/googleSignIn.ts`. Still not landed: any push to production, or a completed real-account
-  sign-in on either device.
+- **step 13, Google sign-in (phases 1-2)** — server and client both landed: `[auth.external.google]`
+  validates a real token, and a native, `Platform.OS !== 'web'` "Continue with Google" button in
+  `src/lib/googleSignIn.ts` (see [google-native-signin-library-gaps](google-native-signin-library-gaps.md)).
+  Still not landed: any push to production, or a completed real-account sign-in on either device.
 - **step 17, user names** — no backfill migration and no forced re-gate of an existing account before
   its next sign-in; every pre-step-17 row hits the same one-time gate as a brand-new account. No
-  seeding from Google's `full_name` claim and no length/character-set constraint on `name`.
+  seeding from Google's `full_name` claim. (No length floor yet here — step 18 added one, below.)
 - **step 18, share by name** — no scoping to co-members: `search_users_by_name` is an open search
   over every named account, resolved that way deliberately (`ai/suggestions/share-by-name.md`'s
-  tradeoff). No client-side cap either — 5 rows is enforced once, server-side.
+  tradeoff). No client-side cap either — 5 rows is enforced once, server-side. Its second half added
+  the length floor step 17 lacked: `set_name` now rejects under 3 characters, DB-enforced, no
+  backfill needed — [trigram-index-needs-three-characters](trigram-index-needs-three-characters.md)
+  has why. Still no character-set constraint.
 
 **Cloud is six migrations behind local, not pushed at all** — deletion, purge scheduling, item
 rename, session revocation, user names and share-by-name (steps 9, 10, 15, 17, 18, every

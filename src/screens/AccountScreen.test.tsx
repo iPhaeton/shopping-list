@@ -136,6 +136,16 @@ describe('the account row', () => {
     expect(screen.queryByLabelText('Your name')).toBeNull();
   });
 
+  it('disables Save name below 3 trimmed characters', async () => {
+    await renderScreen();
+    await screen.findByText('Alice');
+
+    await fireEvent.press(screen.getByLabelText('Edit name'));
+    await fireEvent.changeText(screen.getByLabelText('Your name'), 'Al');
+
+    expect(screen.getByLabelText('Save name')).toBeDisabled();
+  });
+
   it('shows a refusal without leaving edit mode', async () => {
     jest.mocked(setNameApi).mockResolvedValue({
       error: 'that name is taken',

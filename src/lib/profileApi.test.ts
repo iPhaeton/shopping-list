@@ -84,6 +84,20 @@ describe('setName', () => {
     });
   });
 
+  it("keeps the database's own refusal text for a name that is too short", async () => {
+    respondToRpcWith({
+      data: null,
+      error: { message: 'please enter at least 3 characters', code: '22023' },
+      status: 400,
+    });
+
+    expect(await setName('Al')).toEqual({
+      error: 'please enter at least 3 characters',
+      verdict: 'permanent',
+      sessionRevoked: false,
+    });
+  });
+
   it('flags a refusal for a revoked session the same way a write is', async () => {
     respondToRpcWith({
       data: null,

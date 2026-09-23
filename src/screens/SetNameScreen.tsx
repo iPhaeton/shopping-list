@@ -32,7 +32,7 @@ export function SetNameScreen(_props: SetNameScreenProps) {
 
   if (!session) return null; // unreachable: RootNavigator only mounts this screen in `nameRequired`
 
-  const canSubmit = name.trim().length > 0 && !pending;
+  const canSubmit = name.trim().length >= 3 && !pending;
 
   async function submit() {
     if (!canSubmit) return;

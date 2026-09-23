@@ -4,9 +4,9 @@ title: Signing out globally does not revoke an already-issued access token — w
 type: decision
 status: current
 tags: [supabase, postgres, auth, security, rls]
-sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, supabase/migrations/20260920000000_session_revocation.sql, supabase/migrations/20260921000000_user_names.sql, supabase/migrations/20260922000000_share_by_name.sql, src/lib/listsApi.ts]
-last_verified: 2026-09-22
-verify: grep -q "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql && grep -A6 "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql | grep -q "security definer" && grep -q "auth.jwt() ->> 'session_id'" supabase/migrations/20260920000000_session_revocation.sql && grep -q '^revoke execute on function public.session_still_valid() from public, anon;' supabase/migrations/20260920000000_session_revocation.sql && grep -q '^grant execute on function public.session_still_valid() to authenticated;' supabase/migrations/20260920000000_session_revocation.sql && test "$(grep -rh 'if not public.session_still_valid() then' supabase/migrations | wc -l | tr -d ' ')" = 11 && test "$(grep -rl 'session_still_valid' supabase/migrations | wc -l | tr -d ' ')" = 3 && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260921000000_user_names.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260922000000_share_by_name.sql && grep -A2 "case '42501':" src/lib/listsApi.ts | grep -q 'You no longer have permission' && grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts && grep -q "sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE" src/lib/listsApi.ts
+sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, supabase/migrations/20260920000000_session_revocation.sql, supabase/migrations/20260921000000_user_names.sql, supabase/migrations/20260922000000_share_by_name.sql, supabase/migrations/20260923000000_set_name_min_length.sql, src/lib/listsApi.ts]
+last_verified: 2026-09-23
+verify: grep -q "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql && grep -A6 "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql | grep -q "security definer" && grep -q "auth.jwt() ->> 'session_id'" supabase/migrations/20260920000000_session_revocation.sql && grep -q '^revoke execute on function public.session_still_valid() from public, anon;' supabase/migrations/20260920000000_session_revocation.sql && grep -q '^grant execute on function public.session_still_valid() to authenticated;' supabase/migrations/20260920000000_session_revocation.sql && test "$(grep -rh 'if not public.session_still_valid() then' supabase/migrations | wc -l | tr -d ' ')" = 12 && test "$(grep -rl 'session_still_valid' supabase/migrations | wc -l | tr -d ' ')" = 4 && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260921000000_user_names.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260922000000_share_by_name.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260923000000_set_name_min_length.sql && grep -A2 "case '42501':" src/lib/listsApi.ts | grep -q 'You no longer have permission' && grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts && grep -q "sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE" src/lib/listsApi.ts
 related: [server-stamps-done-at, list-data-scoped-by-rls, read-rooted-at-list-members, realtime-is-a-nudge-to-a-per-user-inbox, supabase-default-grants-defeat-revokes, writes-retry-from-an-outbox, insert-returning-races-membership-trigger, session-revoked-write-redirects]
 ---
 
@@ -32,14 +32,20 @@ in this schema already raises, so `verdictFor` in [listsApi.ts](../../../src/lib
 classifies it `permanent` with no client change needed
 ([server-stamps-done-at](server-stamps-done-at.md)).
 
-**The `verify:` grep counts 11 occurrences across 3 files, not 10 across 2 — and that is migration
-history accumulating, not an eleventh RPC.** Step 18 dropped and recreated `share_list` with a new
-signature (`uuid, uuid, list_role`, id instead of email) to take an id a name search already
-resolved; the guard was carried over into the new function body verbatim. Migrations are
+**The `verify:` grep counts 12 occurrences across 4 files, not 10 across 2 — and that is migration
+history accumulating, not a twelfth RPC.** Step 18's first half dropped and recreated `share_list`
+with a new signature (`uuid, uuid, list_role`, id instead of email) to take an id a name search
+already resolved; the guard was carried over into the new function body verbatim. Migrations are
 append-only, so `20260920000000_session_revocation.sql` still holds the original `share_list`
-definition's copy of the check, and `20260922000000_share_by_name.sql` now holds a second one for the
-same RPC under its new signature. The set of **currently active** write RPCs is still exactly ten;
-count files, not just occurrences, before assuming a grep count change means a new call site.
+definition's copy of the check, and `20260922000000_share_by_name.sql` holds a second one for the
+same RPC under its new signature. Step 18's second half then `create or replace`d `set_name` in
+[20260923000000_set_name_min_length.sql](../../../supabase/migrations/20260923000000_set_name_min_length.sql)
+to add a 3-character floor — same signature, so the whole body (guard included) was copied forward
+again rather than patched in place, the same append-only mechanics as the `share_list` case one
+migration earlier. The set of **currently active** write RPCs is still exactly ten; count files, not
+just occurrences, before assuming a grep count change means a new call site. Expect this count to
+keep climbing every time an existing guarded RPC gets a same-signature `create or replace` — it is
+not evidence of scope creep.
 
 **A realtime "kick" was considered and rejected.** Delivery on the per-user nudge channel is
 at-most-once ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)):
