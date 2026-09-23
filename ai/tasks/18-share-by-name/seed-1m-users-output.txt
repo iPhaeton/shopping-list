@@ -1,0 +1,161 @@
+Timing is on.
+DO
+Time: 868.608 ms
+DO
+Time: 58.658 ms
+BEGIN
+Time: 0.460 ms
+SET
+Time: 6.072 ms
+INSERT 0 1000000
+Time: 21691.751 ms (00:21.692)
+INSERT 0 1000000
+Time: 8921.552 ms (00:08.922)
+COMMIT
+Time: 5.064 ms
+ auth_rows | public_rows 
+-----------+-------------
+   1000000 |     1000000
+(1 row)
+
+Time: 1028.256 ms (00:01.028)
+BEGIN
+Time: 0.941 ms
+SET
+Time: 0.616 ms
+CREATE INDEX
+Time: 1741.036 ms (00:01.741)
+CREATE INDEX
+Time: 5563.366 ms (00:05.563)
+COMMIT
+Time: 7.240 ms
+ANALYZE
+Time: 400.803 ms
+BEGIN
+Time: 0.270 ms
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=20016.84..20016.85 rows=5 width=36) (actual time=230.200..230.202 rows=5 loops=1)
+   Buffers: shared hit=708 read=10532 written=9176
+   ->  Sort  (cost=20016.84..20042.09 rows=10101 width=36) (actual time=230.196..230.198 rows=5 loops=1)
+         Sort Key: name
+         Sort Method: top-N heapsort  Memory: 25kB
+         Buffers: shared hit=708 read=10532 written=9176
+         ->  Bitmap Heap Scan on users u  (cost=73.97..19849.06 rows=10101 width=36) (actual time=3.163..221.680 rows=20001 loops=1)
+               Recheck Cond: (lower(name) ~~ '%ann%'::text)
+               Filter: (id <> '00000000-1eed-1eed-1eed-000000000001'::uuid)
+               Heap Blocks: exact=11232
+               Buffers: shared hit=708 read=10532 written=9176
+               ->  Bitmap Index Scan on users_name_trgm_gin  (cost=0.00..71.44 rows=10101 width=0) (actual time=2.091..2.091 rows=20001 loops=1)
+                     Index Cond: (lower(name) ~~ '%ann%'::text)
+                     Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=35 read=9
+ Planning Time: 2.213 ms
+ Execution Time: 230.241 ms
+(18 rows)
+
+Time: 235.224 ms
+                                                                 QUERY PLAN                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=528.94..528.96 rows=5 width=36) (actual time=1.930..1.931 rows=5 loops=1)
+   Buffers: shared hit=148 read=9 written=7
+   ->  Sort  (cost=528.94..529.19 rows=100 width=36) (actual time=1.929..1.930 rows=5 loops=1)
+         Sort Key: name
+         Sort Method: top-N heapsort  Memory: 25kB
+         Buffers: shared hit=148 read=9 written=7
+         ->  Bitmap Heap Scan on users u  (cost=143.90..527.28 rows=100 width=36) (actual time=1.781..1.911 rows=44 loops=1)
+               Recheck Cond: (lower(name) ~~ '%olivia smith%'::text)
+               Filter: (id <> '00000000-1eed-1eed-1eed-000000000001'::uuid)
+               Rows Removed by Filter: 1
+               Heap Blocks: exact=45
+               Buffers: shared hit=148 read=9 written=7
+               ->  Bitmap Index Scan on users_name_trgm_gin  (cost=0.00..143.88 rows=100 width=0) (actual time=1.749..1.749 rows=45 loops=1)
+                     Index Cond: (lower(name) ~~ '%olivia smith%'::text)
+                     Buffers: shared hit=108 read=4 written=3
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.215 ms
+ Execution Time: 1.953 ms
+(19 rows)
+
+Time: 2.748 ms
+                                                                 QUERY PLAN                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=36720.35..36720.93 rows=5 width=36) (actual time=266.194..270.348 rows=5 loops=1)
+   Buffers: shared hit=11820 read=14935 written=94
+   ->  Gather Merge  (cost=36720.35..61273.16 rows=210438 width=36) (actual time=266.193..270.346 rows=5 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=11820 read=14935 written=94
+         ->  Sort  (cost=35720.32..35983.37 rows=105219 width=36) (actual time=252.169..252.170 rows=4 loops=3)
+               Sort Key: name
+               Sort Method: top-N heapsort  Memory: 25kB
+               Buffers: shared hit=11820 read=14935 written=94
+               Worker 0:  Sort Method: top-N heapsort  Memory: 25kB
+               Worker 1:  Sort Method: top-N heapsort  Memory: 25kB
+               ->  Parallel Seq Scan on users u  (cost=0.00..33972.67 rows=105219 width=36) (actual time=19.282..234.589 rows=89452 loops=3)
+                     Filter: ((name IS NOT NULL) AND (id <> '00000000-1eed-1eed-1eed-000000000001'::uuid) AND (lower(name) ~~ '%an%'::text))
+                     Rows Removed by Filter: 243882
+                     Buffers: shared hit=11752 read=14929 written=91
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.045 ms
+ Execution Time: 270.366 ms
+(20 rows)
+
+Time: 271.277 ms
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=20016.84..20016.85 rows=5 width=36) (actual time=42.453..42.454 rows=5 loops=1)
+   Buffers: shared hit=10935 read=305 written=107
+   ->  Sort  (cost=20016.84..20042.09 rows=10101 width=36) (actual time=42.452..42.453 rows=5 loops=1)
+         Sort Key: name
+         Sort Method: top-N heapsort  Memory: 25kB
+         Buffers: shared hit=10935 read=305 written=107
+         ->  Bitmap Heap Scan on users u  (cost=73.97..19849.06 rows=10101 width=36) (actual time=3.006..37.335 rows=20001 loops=1)
+               Recheck Cond: (lower(name) ~~ '%ann%'::text)
+               Filter: (id <> '00000000-1eed-1eed-1eed-000000000001'::uuid)
+               Heap Blocks: exact=11232
+               Buffers: shared hit=10935 read=305 written=107
+               ->  Bitmap Index Scan on users_name_trgm_gin  (cost=0.00..71.44 rows=10101 width=0) (actual time=1.783..1.784 rows=20001 loops=1)
+                     Index Cond: (lower(name) ~~ '%ann%'::text)
+                     Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.129 ms
+ Execution Time: 42.490 ms
+(18 rows)
+
+Time: 43.501 ms
+SET
+Time: 0.901 ms
+SET
+Time: 0.255 ms
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=35042.61..35043.19 rows=5 width=36) (actual time=185.870..189.359 rows=5 loops=1)
+   Buffers: shared hit=12230 read=14525 written=99
+   ->  Gather Merge  (cost=35042.61..36024.78 rows=8418 width=36) (actual time=185.870..189.357 rows=5 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=12230 read=14525 written=99
+         ->  Sort  (cost=34042.58..34053.11 rows=4209 width=36) (actual time=180.771..180.772 rows=4 loops=3)
+               Sort Key: name
+               Sort Method: top-N heapsort  Memory: 25kB
+               Buffers: shared hit=12230 read=14525 written=99
+               Worker 0:  Sort Method: top-N heapsort  Memory: 25kB
+               Worker 1:  Sort Method: top-N heapsort  Memory: 25kB
+               ->  Parallel Seq Scan on users u  (cost=0.00..33972.67 rows=4209 width=36) (actual time=22.331..178.702 rows=6667 loops=3)
+                     Filter: ((name IS NOT NULL) AND (id <> '00000000-1eed-1eed-1eed-000000000001'::uuid) AND (lower(name) ~~ '%ann%'::text))
+                     Rows Removed by Filter: 326667
+                     Buffers: shared hit=12156 read=14525 written=99
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.087 ms
+ Execution Time: 189.378 ms
+(20 rows)
+
+Time: 190.080 ms
+ROLLBACK
+Time: 0.498 ms

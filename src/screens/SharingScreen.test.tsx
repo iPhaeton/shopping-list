@@ -3,7 +3,15 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import { fetchLists } from '../lib/listsApi';
-import { fetchMembers, removeMember, setMemberRole, shareList, type Member } from '../lib/membersApi';
+import {
+  fetchMembers,
+  removeMember,
+  searchUsers,
+  setMemberRole,
+  shareList,
+  type Member,
+  type UserSuggestion,
+} from '../lib/membersApi';
 import { fetchProfile } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { SharingScreenProps } from '../navigation/types';
@@ -33,6 +41,7 @@ jest.mock('../lib/listsApi', () => ({
 
 jest.mock('../lib/membersApi', () => ({
   fetchMembers: jest.fn(),
+  searchUsers: jest.fn(),
   shareList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setMemberRole: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   removeMember: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -83,6 +92,10 @@ function sharingProps(listId: string) {
   return { navigation, route: { params: { listId } } } as unknown as SharingScreenProps;
 }
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
@@ -92,6 +105,7 @@ beforeEach(async () => {
   jest.mocked(removeMember).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(fetchMembers).mockResolvedValue({ members: [ALICE, BOB], error: null });
   jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
+  jest.mocked(searchUsers).mockResolvedValue({ users: [], error: null });
 
   auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
   auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
@@ -121,6 +135,20 @@ async function renderScreen(role: Role = 'owner') {
 
   // The roster arrives a microtask after the list does.
   await screen.findByText('bob@example.com');
+}
+
+/**
+ * Types a name, advances `UserAutocomplete`'s 300ms debounce, and taps the suggestion that comes
+ * back — now the only way to reach a `selected` state, since typed text alone is no longer enough to
+ * invite. Callers must have `jest.useFakeTimers()` active already.
+ */
+async function pickSuggestion(user: UserSuggestion) {
+  jest.mocked(searchUsers).mockResolvedValue({ users: [user], error: null });
+  await fireEvent.changeText(screen.getByLabelText('Name'), user.name);
+  await act(async () => {
+    jest.advanceTimersByTime(300);
+  });
+  await fireEvent.press(await screen.findByLabelText(`Share with ${user.name}`));
 }
 
 it('shows everyone with access, and which one is you', async () => {
@@ -179,25 +207,26 @@ describe('somebody who is not an owner', () => {
 
     expect(screen.getByText('bob@example.com')).toBeOnTheScreen();
     expect(screen.getByText('Only an owner can change who has access.')).toBeOnTheScreen();
-    expect(screen.queryByLabelText('Email address')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Name')).not.toBeOnTheScreen();
     expect(screen.queryByLabelText('Remove bob@example.com')).not.toBeOnTheScreen();
   });
 });
 
 describe('an owner', () => {
-  it('shares the list with the address and role that were picked', async () => {
+  it('shares the list with the account and role that were picked', async () => {
+    jest.useFakeTimers();
     await renderScreen();
 
-    await fireEvent.changeText(screen.getByLabelText('Email address'), 'carol@example.com');
+    await pickSuggestion({ userId: 'u3', name: 'Carol' });
     await fireEvent.press(screen.getByLabelText('Share as owner'));
     await fireEvent.press(screen.getByLabelText('Share'));
 
-    expect(shareList).toHaveBeenCalledWith('l1', 'carol@example.com', 'owner');
+    expect(shareList).toHaveBeenCalledWith('l1', 'u3', 'owner');
     // The roster is re-read rather than patched in memory: the database is what decides.
     expect(fetchMembers).toHaveBeenCalledTimes(2);
   });
 
-  it('will not share a blank address', async () => {
+  it('will not share without picking a suggestion', async () => {
     await renderScreen();
 
     expect(screen.getByLabelText('Share')).toBeDisabled();
@@ -207,12 +236,13 @@ describe('an owner', () => {
   });
 
   it('clears the invite field once the share lands', async () => {
+    jest.useFakeTimers();
     await renderScreen();
 
-    await fireEvent.changeText(screen.getByLabelText('Email address'), 'carol@example.com');
+    await pickSuggestion({ userId: 'u3', name: 'Carol' });
     await fireEvent.press(screen.getByLabelText('Share'));
 
-    expect(screen.getByLabelText('Email address')).toHaveDisplayValue('');
+    expect(screen.getByLabelText('Name')).toHaveDisplayValue('');
   });
 
   it('changes somebody else role', async () => {
@@ -235,22 +265,25 @@ describe('an owner', () => {
 // --- When it goes wrong -------------------------------------------------------------------------
 
 /**
- * The most likely thing to go wrong on this screen, and the reason `verdictFor` classifies `P0002`
- * by its SQLSTATE: PostgREST answers it with a 500, and a 500 otherwise means "try again". Rendered
- * as an outage, a typo in the invite field would look like the app being broken.
+ * A search suggestion can go stale between being shown and being tapped: `verdictFor` classifies
+ * `P0002` by its SQLSTATE (PostgREST answers it with a 500, and a 500 otherwise means "try again"),
+ * because the target account existed a moment ago and no longer does. Picking a name is no longer a
+ * typo path the way an unresolved email address once was — a suggestion only ever names a real
+ * account at search time.
  */
-it('renders the database refusal for an address with no account', async () => {
+it('renders the database refusal for a suggestion whose account is gone', async () => {
   jest
     .mocked(shareList)
-    .mockResolvedValue({ error: 'no account with that email yet', verdict: 'permanent' });
+    .mockResolvedValue({ error: 'that account no longer exists', verdict: 'permanent' });
 
+  jest.useFakeTimers();
   await renderScreen();
-  await fireEvent.changeText(screen.getByLabelText('Email address'), 'nobody@example.com');
+  await pickSuggestion({ userId: 'u3', name: 'Carol' });
   await fireEvent.press(screen.getByLabelText('Share'));
 
-  expect(await screen.findByText('no account with that email yet')).toBeOnTheScreen();
-  // The address stays in the field, because it is the thing that needs correcting.
-  expect(screen.getByLabelText('Email address')).toHaveDisplayValue('nobody@example.com');
+  expect(await screen.findByText('that account no longer exists')).toBeOnTheScreen();
+  // The name stays in the field, since `run()` never clears it on failure.
+  expect(screen.getByLabelText('Name')).toHaveDisplayValue('Carol');
 });
 
 /**
@@ -279,8 +312,9 @@ it('says a connection is needed when the request never arrives', async () => {
     .mocked(shareList)
     .mockResolvedValue({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
 
+  jest.useFakeTimers();
   await renderScreen();
-  await fireEvent.changeText(screen.getByLabelText('Email address'), 'carol@example.com');
+  await pickSuggestion({ userId: 'u3', name: 'Carol' });
   await fireEvent.press(screen.getByLabelText('Share'));
 
   expect(

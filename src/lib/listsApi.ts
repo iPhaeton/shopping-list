@@ -322,8 +322,8 @@ const SESSION_REVOKED_MESSAGE = 'this device has been signed out';
  * that caused them.
  *
  * **Only these are rephrased.** The membership RPCs keep the database's own words and must: they are
- * answered while the user is still looking at the screen that caused them, and `share_list`'s "no
- * account with that email yet" is already the right sentence at the right moment. Rewriting those
+ * answered while the user is still looking at the screen that caused them, and `share_list`'s "that
+ * account no longer exists" is already the right sentence at the right moment. Rewriting those
  * would replace a specific, useful message with a vague one.
  */
 function writeResult(error: Failure, status: number, data?: unknown): Result {

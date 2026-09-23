@@ -22,9 +22,9 @@ export type Member = { userId: string; email: string; name: string | null; role:
  * else has to go through a `security definer` function. `list_members_of` is gated on the caller's
  * own membership, so a reader gets the full roster and a stranger gets nothing.
  *
- * None of these go through the outbox. `share_list` resolves the address server-side, so "no account
- * with that email yet" has to be answered while the user is still looking at the field they typed it
- * into — queued, it would arrive an hour later as an error about a stranger.
+ * None of these go through the outbox. `shareList` takes an id a `searchUsers` suggestion already
+ * resolved, so there is nothing left to answer while the user is looking at the screen — but the
+ * roster it changes is still uncached and online-only, like the rest of this file.
  */
 export async function fetchMembers(
   listId: string
@@ -37,10 +37,29 @@ export async function fetchMembers(
   return { members: ((data ?? []) as MemberRow[]).map(toMember), error: null };
 }
 
-export async function shareList(listId: string, email: string, role: Role): Promise<Result> {
+/** Somebody a search-by-name turned up — enough to show and to share with, nothing else. */
+export type UserSuggestion = { userId: string; name: string };
+
+type UserSuggestionRow = { user_id: string; name: string };
+
+/**
+ * At most 5 other named accounts whose name contains `query`, for `UserAutocomplete`'s live search.
+ * A failure here resolves quietly to `null` rather than throwing: a search that comes up empty is
+ * not something worth an error banner mid-keystroke.
+ */
+export async function searchUsers(
+  query: string
+): Promise<{ users: UserSuggestion[] | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('search_users_by_name', { p_query: query });
+
+  if (error) return { users: null, error: error.message };
+  return { users: ((data ?? []) as UserSuggestionRow[]).map(toSuggestion), error: null };
+}
+
+export async function shareList(listId: string, userId: string, role: Role): Promise<Result> {
   const { error, status } = await supabase.rpc('share_list', {
     p_list_id: listId,
-    p_email: email.trim(),
+    p_user_id: userId,
     p_role: role,
   });
   return resultFor(error, status);
@@ -65,4 +84,8 @@ export async function removeMember(listId: string, userId: string): Promise<Resu
 
 function toMember(row: MemberRow): Member {
   return { userId: row.user_id, email: row.email, name: row.name, role: row.role };
+}
+
+function toSuggestion(row: UserSuggestionRow): UserSuggestion {
+  return { userId: row.user_id, name: row.name };
 }

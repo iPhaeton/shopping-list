@@ -1,13 +1,13 @@
 ---
 id: suggestions-are-proposals
-title: ai/suggestions/*.md are proposals, not scope — and eight of their designs have turned out wrong
+title: ai/suggestions/*.md are proposals, not scope — and nine of their designs have turned out wrong
 type: constraint
 status: current
 tags: [scope, process, suggestions]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md]
-last_verified: 2026-09-17
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md]
+last_verified: 2026-09-22
 verify: grep -q 'deleted_at < cutoff' ai/suggestions/deletion.md && grep -q 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql && grep -q 'coalesce(new.list_id, old.list_id)' ai/suggestions/realtime-sync.md && grep -q 'tg_op' supabase/migrations/20260909000000_realtime.sql && grep -q 'pickTarget()' src/lib/supabase.ts
-related: [scope-boundaries, supabase-target-picked-at-runtime, read-rooted-at-list-members, select-policy-gates-update-and-delete, list-data-scoped-by-rls, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-retry-from-an-outbox, native-build-toolchain]
+related: [scope-boundaries, supabase-target-picked-at-runtime, read-rooted-at-list-members, select-policy-gates-update-and-delete, list-data-scoped-by-rls, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-retry-from-an-outbox, native-build-toolchain, session-still-valid-guards-writes]
 indexed: false
 ---
 
@@ -26,9 +26,11 @@ the rest of it** ([scope-boundaries](scope-boundaries.md)). What has been promot
 | `list-sharing-ui.md` | step 7 step 2 — all of it, covering that document's staging steps 2 and 3 | — |
 | `realtime-sync.md` | step 8 — staging steps 1 and 2, plus idempotent replay from its optional step 3 | echo suppression and the `SyncBanner`, offered to the user and declined |
 | `deletion.md` | step 9 — all six staging steps at once, the only time a suggestion has landed complete in one step | — |
+| `share-by-name.md` | step 18 — all of it, same day it was written | — |
 
-**A suggestion can also be plain wrong, and eight catalogued errors across four documents say how
-often.** None is a typo: each reads correctly and fails only when run.
+**A suggestion can also be plain wrong, and nine catalogued errors across five documents say how
+often.** None is a typo: each reads correctly and fails only when run — or, for the ninth, only when
+checked against migration history the document's author did not re-read.
 
 - `list-sharing.md`, three — its "owners remove members" policy cannot remove anyone
   ([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md)); its last-owner
@@ -59,6 +61,15 @@ often.** None is a typo: each reads correctly and fails only when run.
 audit would go green over a claim that had stopped being true, and it had —
 [writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) held a case-sensitive grep that let
 `'item/setDeleted'` through.
+
+- `share-by-name.md`, two — its `share_list` code block was drafted from the pre-session-revocation
+  version of that function (`20260907000000_list_sharing.sql`), missing the
+  `session_still_valid()` guard every write RPC has carried since step 15
+  ([session-still-valid-guards-writes](session-still-valid-guards-writes.md)); caught by diffing
+  against migration history before writing any SQL, not by running anything. And it mis-stated
+  `RolePicker`'s prop shape as `{ value, onChangeText, onSelect, disabled }` — the real shape is
+  `{ value, labelFor, disabled?, onChange }` — which cost nothing because `UserAutocomplete` was
+  designed with its own props rather than copied from the (wrong) description.
 
 **And a suggestion can be *overruled* by the very step that implements the rest of it.**
 `production-supabase.md`'s "Environment selection" section argued against runtime target-switching;

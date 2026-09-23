@@ -4,8 +4,8 @@ title: A queued write can land on something in the bin — `target_deleted` is n
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, deletion, architecture]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
-last_verified: 2026-09-20
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
+last_verified: 2026-09-22
 verify: grep -q "create type public.write_outcome as enum ('applied', 'target_deleted');" supabase/migrations/20260910000000_deletion.sql && grep -q "verdict === 'ok' && outcome === 'target_deleted'" src/state/useOutbox.ts && grep -B6 'setBlocked({ op' src/state/useOutbox.ts | grep -q 'await hydrate();' && grep -q 'queueFirst(queue.current, restore)' src/state/useBlockedWrites.ts && grep -q 'restorePlan(lists, blocked).length > 0' src/state/useBlockedWrites.ts && grep -q "rpc('add_item'" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts && awk '/create function public.set_item_done/,/^\$\$;/' supabase/migrations/20260910000000_deletion.sql | grep -E "raise exception|return 'target_deleted'" | tail -2 | head -1 | grep -q 'raise exception'
 related: [deletion-is-a-tombstone, writes-retry-from-an-outbox, refused-writes-return-zero-rows, server-stamps-done-at, first-fetch-replaces-list-state, list-data-scoped-by-rls, queries-go-through-a11y-labels, session-revoked-write-redirects]
 ---

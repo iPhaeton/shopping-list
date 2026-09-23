@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { RolePicker } from '../components/RolePicker';
+import { UserAutocomplete } from '../components/UserAutocomplete';
 import type { Result } from '../lib/listsApi';
 import {
   fetchMembers,
@@ -19,6 +12,7 @@ import {
   setMemberRole,
   shareList,
   type Member,
+  type UserSuggestion,
 } from '../lib/membersApi';
 import type { SharingScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
@@ -42,9 +36,9 @@ function displayNameFor(member: Member): string {
  * **The only online-only screen in the app.** The roster comes from an RPC, it is not in `State`, and
  * it is not cached, so there is nothing to show offline and nothing to queue. Its state is local
  * `useState` the way `SignInScreen` holds its phases, and its writes go straight to `listsApi`
- * rather than through the outbox: `share_list` resolves the email server-side, and "no account with
- * that email yet" has to be answered while the user is still looking at the field they typed it
- * into. Queued, it would arrive an hour later as an error about a stranger.
+ * rather than through the outbox: `shareList` takes an id `UserAutocomplete` already resolved via a
+ * search result, so there is nothing left to look up, and the roster it changes has to stay live
+ * rather than queued.
  */
 export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const { listId } = route.params;
@@ -55,7 +49,8 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [email, setEmail] = useState('');
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<UserSuggestion | null>(null);
   const [inviteRole, setInviteRole] = useState<Role>('writer');
 
   const load = useCallback(async () => {
@@ -98,8 +93,8 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
         return;
       }
 
-      // `verdict` rather than the status: `P0002` — "no account with that email yet" — arrives as a
-      // 500 and is classified by its SQLSTATE, so a user's typo does not read as an outage.
+      // `verdict` rather than the status: `P0002` — "that account no longer exists" — arrives as a
+      // 500 and is classified by its SQLSTATE, so a vanished target does not read as an outage.
       setError(verdict === 'retryable' ? 'You need a connection to change who has access.' : failure);
       setPending(false);
       return;
@@ -122,7 +117,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
     );
   }
 
-  const canInvite = email.trim().length > 0 && !pending;
+  const canInvite = selected !== null && !pending;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -174,20 +169,21 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
       {manageable ? (
         <>
           <Text style={styles.heading}>Invite someone</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Email address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
+          <UserAutocomplete
+            value={query}
+            onChangeText={(text) => {
+              setQuery(text);
+              setSelected(null);
+            }}
+            onSelect={(user) => {
+              setSelected(user);
+              setQuery(user.name);
+            }}
+            selected={selected}
+            disabled={pending}
           />
-          {/* Re-sharing an address that is already a member is an upsert in `share_list`, so this
-              form doubles as a promote and there is nothing extra to build for it. */}
+          {/* Re-sharing someone who is already a member is an upsert in `share_list`, so this form
+              doubles as a promote and there is nothing extra to build for it. */}
           <View style={styles.invite}>
             <RolePicker
               value={inviteRole}
@@ -200,13 +196,17 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
               accessibilityLabel="Share"
               accessibilityState={{ disabled: !canInvite }}
               disabled={!canInvite}
-              onPress={() =>
+              onPress={() => {
+                if (!selected) return;
                 void run(async () => {
-                  const result = await shareList(listId, email, inviteRole);
-                  if (!result.error) setEmail('');
+                  const result = await shareList(listId, selected.userId, inviteRole);
+                  if (!result.error) {
+                    setQuery('');
+                    setSelected(null);
+                  }
                   return result;
-                })
-              }
+                });
+              }}
               style={[styles.button, !canInvite && styles.buttonDisabled]}>
               <Text style={styles.buttonText}>Share</Text>
             </Pressable>
@@ -268,16 +268,6 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 15,
     color: colors.textMuted,
-  },
-  input: {
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    fontSize: 16,
   },
   invite: {
     flexDirection: 'row',

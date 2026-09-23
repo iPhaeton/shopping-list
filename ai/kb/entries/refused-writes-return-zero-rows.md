@@ -4,8 +4,8 @@ title: Row-level security refuses a client UPDATE or DELETE with zero rows, whic
 type: gotcha
 status: current
 tags: [supabase, postgrest, rls, persistence, offline, security]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts]
-last_verified: 2026-09-20
+sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts]
+last_verified: 2026-09-22
 verify: test "$(grep -c '\.update(\|\.delete(' src/lib/listsApi.ts)" = "$(grep -A4 '\.update(\|\.delete(' src/lib/listsApi.ts | grep -c '\.select(')" && grep -q "if (!error) return { error: null, verdict: 'ok' };" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts
 related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, writes-can-land-on-a-tombstone, supabase-local-stack, insert-returning-races-membership-trigger]
 ---

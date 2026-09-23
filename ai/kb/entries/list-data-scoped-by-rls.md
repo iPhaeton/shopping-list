@@ -4,8 +4,8 @@ title: Row-level security scopes list data to your membership row — the client
 type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence, sharing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-20
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
+last_verified: 2026-09-22
 verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && grep -q 'alter table public.list_members enable row level security;' supabase/migrations/20260907000000_list_sharing.sql && ! grep -rEA1 'create policy .* on public\.(lists|items)' supabase/migrations | grep -qi 'for delete' && ! grep -rqE "\.eq\('(owner_id|created_by|user_id)'" src && grep -q 'create policy "writers update items"' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql && test "$(cat supabase/migrations/2026091*.sql | grep -c 'create policy')" = 0
 related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, scope-boundaries, supabase-local-stack, session-still-valid-guards-writes]
 ---
@@ -104,7 +104,8 @@ does not merely block a write — it deletes it from that device, with one error
 **Since step 15 there is a fourth gate, and it sits beside grants and policies rather than inside
 either.** Every write RPC now also raises `42501` when `public.session_still_valid()` is false — a
 device whose session was revoked elsewhere, still holding a JWT that has not yet expired. It appears
-in no policy and no grant, only as the first statement each of the nine write functions repeats; the
+in no policy and no grant, only as the first statement each of the ten write functions repeats (nine
+plus step 17's `set_name`; step 18's `search_users_by_name` is a read and does not carry it); the
 read side (`list_members_of`, the SELECT policies) is deliberately untouched
 ([session-still-valid-guards-writes](session-still-valid-guards-writes.md)).
 

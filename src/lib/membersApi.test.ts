@@ -1,4 +1,4 @@
-import { fetchMembers, removeMember, setMemberRole, shareList } from './membersApi';
+import { fetchMembers, removeMember, searchUsers, setMemberRole, shareList } from './membersApi';
 import { supabase } from './supabase';
 
 /**
@@ -52,7 +52,7 @@ describe('the membership calls', () => {
 
   /**
    * PostgREST resolves an RPC by argument *name*, so a typo here reads as "function not found"
-   * rather than as a bad argument. These four assertions are the only thing that would catch it.
+   * rather than as a bad argument. These five assertions are the only thing that would catch it.
    */
   it('names every RPC argument the way the function declares it', async () => {
     const rpc = respondToRpcWith({ data: null, error: null, status: 204 });
@@ -60,11 +60,13 @@ describe('the membership calls', () => {
     await fetchMembers('l1');
     expect(rpc).toHaveBeenLastCalledWith('list_members_of', { p_list_id: 'l1' });
 
-    await shareList('l1', '  bob@example.com  ', 'writer');
+    await searchUsers('bob');
+    expect(rpc).toHaveBeenLastCalledWith('search_users_by_name', { p_query: 'bob' });
+
+    await shareList('l1', 'u3', 'writer');
     expect(rpc).toHaveBeenLastCalledWith('share_list', {
       p_list_id: 'l1',
-      // Trimmed here rather than in the database: the address is what the user typed.
-      p_email: 'bob@example.com',
+      p_user_id: 'u3',
       p_role: 'writer',
     });
 
@@ -79,20 +81,46 @@ describe('the membership calls', () => {
     expect(rpc).toHaveBeenLastCalledWith('remove_member', { p_list_id: 'l1', p_user_id: 'u2' });
   });
 
+  it('maps search results onto the client shape', async () => {
+    respondToRpcWith({
+      data: [
+        { user_id: 'u3', name: 'Carol' },
+        { user_id: 'u4', name: 'Caroline' },
+      ],
+      error: null,
+    });
+
+    expect(await searchUsers('car')).toEqual({
+      users: [
+        { userId: 'u3', name: 'Carol' },
+        { userId: 'u4', name: 'Caroline' },
+      ],
+      error: null,
+    });
+  });
+
+  it('returns a failed search rather than throwing it', async () => {
+    respondToRpcWith({ data: null, error: { message: 'JWT expired' } });
+
+    expect(await searchUsers('car')).toEqual({ users: null, error: 'JWT expired' });
+  });
+
   /**
-   * "No account with that email yet" is a user error, and it arrives as an HTTP 500 — which for
-   * every other code means "the server is having a moment, send it again". The SQLSTATE has to win,
-   * or a typo in the invite field is reported as an outage and retried forever.
+   * "That account no longer exists" is a user error, and it arrives as an HTTP 500 — which for
+   * every other code means "the server is having a moment, send it again". The SQLSTATE has to win.
+   * This is a race the UI only reaches if the target account vanishes between a search suggestion
+   * and the tap on Share — `canInvite` requires a `selected` suggestion, so there is no longer a
+   * typo path into this refusal the way an unresolved email address once was.
    */
   it('classifies P0002 as a refusal despite its 500', async () => {
     respondToRpcWith({
       data: null,
-      error: { message: 'no account with that email yet', code: 'P0002' },
+      error: { message: 'that account no longer exists', code: 'P0002' },
       status: 500,
     });
 
-    expect(await shareList('l1', 'nobody@example.com', 'reader')).toEqual({
-      error: 'no account with that email yet',
+    expect(await shareList('l1', 'deleted-user-id', 'reader')).toEqual({
+      error: 'that account no longer exists',
       verdict: 'permanent',
       sessionRevoked: false,
     });
@@ -101,7 +129,7 @@ describe('the membership calls', () => {
   it('still classifies a plain 500 as worth retrying', async () => {
     respondToRpcWith({ data: null, error: { message: 'upstream is down' }, status: 500 });
 
-    expect(await shareList('l1', 'bob@example.com', 'reader')).toEqual({
+    expect(await shareList('l1', 'u2', 'reader')).toEqual({
       error: 'upstream is down',
       verdict: 'retryable',
       sessionRevoked: false,
@@ -120,7 +148,7 @@ describe('the membership calls', () => {
       status: 403,
     });
 
-    expect(await shareList('l1', 'bob@example.com', 'reader')).toMatchObject({
+    expect(await shareList('l1', 'u2', 'reader')).toMatchObject({
       sessionRevoked: true,
     });
   });

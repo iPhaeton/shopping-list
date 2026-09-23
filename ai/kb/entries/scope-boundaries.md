@@ -4,14 +4,14 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, b78d16f]
-last_verified: 2026-09-21
-related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, b78d16f]
+last_verified: 2026-09-22
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 17:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 18:
 
 | | |
 |---|---|
@@ -31,15 +31,19 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 13 phases 1-2 | Google added as a second sign-in method: `[auth.external.google]` enabled and proven server-side (phase 1), then a native "Continue with Google" button and `SessionContext.signInWithGoogle` added client-side, delegating to `src/lib/googleSignIn.ts` (phase 2); still no production push and no completed real-account sign-in on either device |
 | step 14 | an Account screen: plain "Sign out" moved off the `Lists` header behind it, alongside a separately confirmed "Sign out of all devices" (`supabase.auth.signOut({ scope: 'global' })`) |
 | step 17 | every account gets a required, unique (case-insensitive), editable display name — a blocking `SetNameScreen` gate between sign-in and the rest of the app, an `Account` screen edit, and the sharing roster showing names instead of emails |
+| step 18 | inviting is by name, not email: a live, debounced autocomplete (`search_users_by_name`, trigram-indexed, self-excluded, capped at 5) replaces the free-typed address field, and `share_list` now takes an id the search already resolved instead of resolving an email server-side |
 
-**Still deliberately out: inviting an address that has no account (`list_invites`), leaving a list
-you do not own, showing an owner how widely a list is shared without opening it, passwords, and
-conflict resolution beyond last-write-wins.**
+**Still deliberately out: inviting someone with no account (`list_invites`), leaving a list you do
+not own, showing an owner how widely a list is shared without opening it, passwords, and conflict
+resolution beyond last-write-wins.**
 
 **Three of those are database limits, not backlog laziness** — none is an afternoon of UI work:
 
-- `share_list` raises `P0002` for an address with no account, so a stranger cannot be invited until a
-  `list_invites` table claimed at sign-up exists.
+- **Since step 18 this is enforced structurally, not just by a refusal.** There is no free-text field
+  into `share_list` any more, only a tap on a `search_users_by_name` result, so the UI cannot even
+  construct a request naming an account that doesn't exist. `share_list`'s `P0002` now guards only the
+  narrower race of the account vanishing between the search and the tap. Conclusion unchanged: a
+  stranger needs a `list_invites` table claimed at sign-up before they can be invited.
 - A non-owner cannot remove their own membership: the delete is filtered to zero rows and answers
   `204`, so a "Leave this list" button would look like it worked and change nothing
   ([select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md),
@@ -49,13 +53,12 @@ conflict resolution beyond last-write-wins.**
   own row, so any count the client computed would read `1` for everybody.
 
 Equally deliberate, and in the same family: a sole owner deleting their account leaves an **ownerless
-list nobody can see or clean up**, because the alternative was cascading and destroying lists other
-people are in ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)).
+list nobody can see or clean up** — the alternative was cascading onto lists other people are in
+([list-data-scoped-by-rls](list-data-scoped-by-rls.md)).
 
-**"The user can create a list" means *many* named lists, not one standing list** — settled with the
-user against a genuinely ambiguous step-1 description, which is why there are two list screens
-(`Lists` → `ListDetail`) and why the app depends on React Navigation at all. Treat it as settled: do
-not "simplify" the product back to one list.
+**"The user can create a list" means *many* named lists, not one standing list** — settled against a
+genuinely ambiguous step-1 description, which is why there are two list screens (`Lists` →
+`ListDetail`). Treat it as settled: do not "simplify" the product back to one list.
 
 ## What a landed step did *not* land
 
@@ -63,9 +66,8 @@ Each of these is easy to assume and wrong:
 
 - **step 4, offline** — no sync engine (PowerSync is the answer if this ever needs real convergence),
   no connectivity library, no conflict resolution beyond last-write-wins, and no "wait for sync"
-  confirmation when signing out with writes pending. Reading offline *did* come in with it, decided
-  with the user before the work started: without a cached copy a cold start with no signal shows an
-  empty app, and the shop-with-no-bars scenario the queue exists for never happens
+  confirmation when signing out with writes pending. Reading offline *did* land with it: without a
+  cached copy a cold start with no signal shows an empty app
   ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md),
   [list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)).
 - **step 5, cloud** — no user-facing feature and no schema change. Nothing about the local-first
@@ -80,38 +82,36 @@ Each of these is easy to assume and wrong:
   were offered to the user and declined. No presence and no per-field conflict UI either:
   last-write-wins is made *visible* rather than replaced
   ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
-- **step 9, deletion** — no policy change (a tombstone is still a row a member must see to restore
-  it), no realtime migration, and no restore of a list's items when the list itself is restored; does
-  not solve happens-before — the rule is who you are, not whose change came first
-  ([deletion-is-a-tombstone](deletion-is-a-tombstone.md),
+- **step 9, deletion** — no policy change, no realtime migration, no restore of a list's items when
+  the list itself is restored, and no happens-before: the rule is who you are, not whose change came
+  first ([deletion-is-a-tombstone](deletion-is-a-tombstone.md),
   [writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
-- **step 10, item rename** — no re-granted `title` column and no policy change: the write is a
-  `security definer` RPC because the client still holds no UPDATE on `items` at all
-  ([server-stamps-done-at](server-stamps-done-at.md)). No realtime migration either, and no
-  happens-before between a rename and a delete of the same item from two devices.
-- **step 11, pagination** — no migration (no new index, no policy change). The sharing roster and the
-  lists themselves are **not** paged — lists stop at `MAX_ROWS` with a dev-time warning. The bin's
-  first page ships with the fetch that opens a list, not with `fetchLists`, so `ListRow` shows no
-  item count at all; `items.title` has no length check, and an item added past a loaded page surfaces
-  one scroll away, by design ([read-rooted-at-list-members](read-rooted-at-list-members.md),
-  [max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md),
-  [deletion-is-a-tombstone](deletion-is-a-tombstone.md)).
-- **step 13, Google sign-in (phases 1-2)** — server side (phase 1) and the client (phase 2) both
-  landed: `[auth.external.google]` validates a real token, and a native "Continue with Google" button
+- **step 10, item rename** — no re-granted `title` column: the write is a `security definer` RPC
+  because the client still holds no UPDATE on `items` at all
+  ([server-stamps-done-at](server-stamps-done-at.md)). No realtime migration either.
+- **step 11, pagination** — no migration. The sharing roster and the lists themselves are **not**
+  paged — lists stop at `MAX_ROWS` with a dev-time warning, `ListRow` shows no item count at all, and
+  an item added past a loaded page surfaces one scroll away, by design
+  ([read-rooted-at-list-members](read-rooted-at-list-members.md),
+  [max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md)).
+- **step 13, Google sign-in (phases 1-2)** — server side and client both landed:
+  `[auth.external.google]` validates a real token, and a native "Continue with Google" button
   (`Platform.OS !== 'web'`, a product choice — see
   [google-native-signin-library-gaps](google-native-signin-library-gaps.md)) calls
-  `src/lib/googleSignIn.ts` on Android and iOS. Still not landed: any push to production, or a
-  completed real-account sign-in on either device.
+  `src/lib/googleSignIn.ts`. Still not landed: any push to production, or a completed real-account
+  sign-in on either device.
 - **step 17, user names** — no backfill migration and no forced re-gate of an existing account before
-  its next sign-in; every pre-step-17 row just hits the same one-time gate, indistinguishable from a
-  brand-new account. No seeding from Google's `full_name` claim (a collision would abort the whole
-  sign-up transaction) and no length/character-set constraint on `name`, matching `items.title`.
+  its next sign-in; every pre-step-17 row hits the same one-time gate as a brand-new account. No
+  seeding from Google's `full_name` claim and no length/character-set constraint on `name`.
+- **step 18, share by name** — no scoping to co-members: `search_users_by_name` is an open search
+  over every named account, resolved that way deliberately (`ai/suggestions/share-by-name.md`'s
+  tradeoff). No client-side cap either — 5 rows is enforced once, server-side.
 
-**Cloud is five migrations behind local.** The four migrations up to realtime are pushed and read
-back from the production project; deletion, purge scheduling, item rename, session revocation and
-user names (steps 9, 10, 15, 17 — every `supabase/migrations/*.sql` dated after `20260909000000`)
-have not been pushed at all, and no client has ever connected to the cloud realtime socket. A pushed
-migration is schema-level proof, never behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
+**Cloud is six migrations behind local, not pushed at all** — deletion, purge scheduling, item
+rename, session revocation, user names and share-by-name (steps 9, 10, 15, 17, 18, every
+`supabase/migrations/*.sql` dated after `20260909000000`) — and no client has ever connected to the
+cloud realtime socket. A pushed migration is schema-level proof, never behaviour-level
+([supabase-local-stack](supabase-local-stack.md)).
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
 absence as a gap worth flagging in a review. When a new task description lands, re-read this entry

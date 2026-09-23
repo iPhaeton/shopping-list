@@ -4,8 +4,8 @@ title: A write refused for a revoked session redirects to sign-in instead of err
 type: decision
 status: current
 tags: [state, auth, outbox, architecture]
-sources: [ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, src/lib/listsApi.ts, src/state/useOutbox.ts, src/state/ListsContext.tsx, src/state/SessionContext.tsx, src/screens/SharingScreen.tsx, src/screens/AccountScreen.tsx, src/screens/SetNameScreen.tsx, src/screens/SignInScreen.tsx, App.tsx]
-last_verified: 2026-09-21
+sources: [ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, src/lib/listsApi.ts, src/state/useOutbox.ts, src/state/ListsContext.tsx, src/state/SessionContext.tsx, src/screens/SharingScreen.tsx, src/screens/AccountScreen.tsx, src/screens/SetNameScreen.tsx, src/screens/SignInScreen.tsx, App.tsx]
+last_verified: 2026-09-22
 verify: grep -A2 'if (sessionRevoked) {' src/state/useOutbox.ts | grep -q 'onSessionRevoked();' && test "$(grep -n 'if (sessionRevoked) {' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" && grep -q 'onSessionRevoked: () => void;' src/state/useOutbox.ts && grep -q 'onSessionRevoked: () => void;' src/state/ListsContext.tsx && ! grep -qE "import .*SessionContext" src/state/ListsContext.tsx && grep -A2 'if (sessionRevoked) {' src/screens/SharingScreen.tsx | grep -q "signOut('revoked')" && grep -A2 'if (sessionRevoked) {' src/screens/AccountScreen.tsx | grep -q "signOut('revoked')" && grep -A2 'if (sessionRevoked) {' src/screens/SetNameScreen.tsx | grep -q "signOut('revoked')" && grep -q "signOut: (reason?: 'revoked') => Promise<Result>;" src/state/SessionContext.tsx && grep -q "state.reason === 'revoked'" src/screens/SignInScreen.tsx && grep -q "onSessionRevoked={() => void signOut('revoked')}" App.tsx
 related: [session-still-valid-guards-writes, writes-retry-from-an-outbox, writes-can-land-on-a-tombstone]
 ---

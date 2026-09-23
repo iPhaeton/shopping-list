@@ -4,10 +4,10 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
-last_verified: 2026-09-21
-verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts
-related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
+last_verified: 2026-09-22
+verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts && grep -q "from '../lib/membersApi'" src/components/UserAutocomplete.tsx && for f in src/components/ItemRow.tsx src/components/ListRow.tsx src/components/RolePicker.tsx; do ! grep -q "from '../lib/" "$f" || exit 1; done
+related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 ---
 
 [src/lib/supabase.ts](../../../src/lib/supabase.ts) creates the client and is the only file under
@@ -66,6 +66,14 @@ is unchanged by that — the screen still imports a query module, never `supabas
 rule to carry: state that the reducer owns goes through the provider; state that only one screen has
 goes in that screen's `useState`, calling the query module directly.
 
+**Step 18 extended that rule from screens to a component — same rule, not a new one.**
+[UserAutocomplete](../../../src/components/UserAutocomplete.tsx) owns a debounced search effect and
+calls `membersApi.searchUsers` itself rather than taking suggestions as a prop, because the effect
+(timer, in-flight-response race) is the component's own state, with nothing for a parent to hold.
+Read "screens and providers import the query module" as "whatever owns the state that triggers the
+call does" — a presentational component (`ItemRow`, `ListRow`, `RolePicker`) still takes everything
+as props and imports nothing from `lib/`.
+
 **One suite is the exception, and it has to be: `listsApi`'s own — and `membersApi`'s is the same
 exception a second time.** [src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) mocks
 `./supabase` — the seam *below* the module under test — because `fetchLists` and `fetchItems` are
@@ -81,24 +89,21 @@ across suites. A module cannot be tested through the mock of itself.
 **Step 17 added a fourth module at the seam, for `SessionContext` rather than `ListsContext`.**
 [src/lib/profileApi.ts](../../../src/lib/profileApi.ts) holds `fetchProfile`/`setName`; it imports
 `supabase` from here directly, the same "one importer" shape as `membersApi.ts`. `SessionContext`
-now calls `fetchProfile` unconditionally on every sign-in, live or restored, to resolve the name
-gate — so **every suite that renders `SessionProvider` and lets a session go non-null must
+calls `fetchProfile` unconditionally on every sign-in, live or restored, to resolve the name gate —
+so **every suite that renders `SessionProvider` and lets a session go non-null must
 `jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.fn() }))`**, the same
-consequence `listsChannel.ts` forces on `ListsProvider` suites above. `SignInScreen.test.tsx` is the
-one `SessionProvider`-rendering suite that skips this mock, and only because none of its cases ever
-emit a non-null session to the listener; the moment one does, the real `fetchProfile` would reach a
-mocked `supabase` object whose stub typically carries only `auth`, not `from`.
+consequence `listsChannel.ts` forces on `ListsProvider` suites above. `SignInScreen.test.tsx` skips
+this mock only because none of its cases ever emit a non-null session to the listener.
 
 **Not every module beside it is a seam to mock, though.** Step 4's `src/lib/outbox.ts` and
-`src/lib/listCache.ts` are also plain modules under `lib/`, but the list suites deliberately let
-them run for real against AsyncStorage's own jest mock — faking them would fake away the thing under
-test. Mock the module that owns a *network* call; let the ones that own disk run.
+`src/lib/listCache.ts` are plain modules under `lib/` too, but the list suites let them run for real
+against AsyncStorage's own jest mock — faking them would fake away the thing under test. Mock the
+module that owns a *network* call; let the ones that own disk run.
 
 **`sessionStorage` is exported by name** rather than passed inline as `storage: AsyncStorage`,
 because it is the seam a biometric unlock replaces: it would swap in a blob encrypted under a
-keystore-gated key with nothing else in the app changing. Ten lines that keep a planned feature to
-one file — the same reasoning that shaped the state layer before persistence landed
-(see [persistence-isolated-to-provider](persistence-isolated-to-provider.md), now superseded).
+keystore-gated key with nothing else in the app changing — ten lines that keep a planned feature to
+one file (see [persistence-isolated-to-provider](persistence-isolated-to-provider.md), now superseded).
 
 **Configuration that needs *testing* moves out, one module down.** Step 5 wrote `pickTarget()` —
 which Supabase URL and key to use — inside `supabase.ts` first, and could not test it there: a suite
