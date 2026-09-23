@@ -15,12 +15,15 @@ type MemberRow = { user_id: string; email: string; name: string | null; role: Ro
 export type Member = { userId: string; email: string; name: string | null; role: Role };
 
 /**
- * The roster, and the three ways to change it.
+ * The roster, and the four ways to change it.
  *
- * All four are RPCs because the `list_members` select policy shows you exactly one row — your own —
+ * All five are RPCs because the `list_members` select policy shows you exactly one row — your own —
  * and a select policy also gates what UPDATE and DELETE may touch, so an owner acting on somebody
- * else has to go through a `security definer` function. `list_members_of` is gated on the caller's
- * own membership, so a reader gets the full roster and a stranger gets nothing.
+ * else has to go through a `security definer` function. `leaveList` needs no such function-per-target
+ * reasoning — it only ever touches the caller's own row, which the select policy already always
+ * shows them — but it stays an RPC anyway, for the session guard and to raise loudly rather than
+ * answer a refusal with a silent zero-row `204`. `list_members_of` is gated on the caller's own
+ * membership, so a reader gets the full roster and a stranger gets nothing.
  *
  * None of these go through the outbox. `shareList` takes an id a `searchUsers` suggestion already
  * resolved, so there is nothing left to answer while the user is looking at the screen — but the
@@ -79,6 +82,12 @@ export async function removeMember(listId: string, userId: string): Promise<Resu
     p_list_id: listId,
     p_user_id: userId,
   });
+  return resultFor(error, status);
+}
+
+/** A reader or writer removing their own membership — the one case `removeMember` can't reach. */
+export async function leaveList(listId: string): Promise<Result> {
+  const { error, status } = await supabase.rpc('leave_list', { p_list_id: listId });
   return resultFor(error, status);
 }
 

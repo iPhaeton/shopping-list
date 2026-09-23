@@ -8,6 +8,7 @@ import { UserAutocomplete } from '../components/UserAutocomplete';
 import type { Result } from '../lib/listsApi';
 import {
   fetchMembers,
+  leaveList,
   removeMember,
   setMemberRole,
   shareList,
@@ -52,6 +53,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<UserSuggestion | null>(null);
   const [inviteRole, setInviteRole] = useState<Role>('writer');
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const load = useCallback(async () => {
     const { members: rows, error: failure } = await fetchMembers(listId);
@@ -76,9 +78,11 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
 
   /**
    * Every membership write goes through here: disable the controls, send, then either say what went
-   * wrong or re-read both the roster and the lists.
+   * wrong or re-read both the roster and the lists. Returns whether the write went through, which
+   * `confirmingLeave` uses to collapse back to the plain "Leave list" button on a refusal — the same
+   * shape `AccountScreen`'s `pressConfirmEverywhere` uses for its own confirm row.
    */
-  async function run(call: () => Promise<Result>) {
+  async function run(call: () => Promise<Result>): Promise<boolean> {
     setPending(true);
     setError(null);
 
@@ -90,23 +94,25 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
       // matching `SignInScreen.verifyCode`'s pattern for a path that's about to unmount.
       if (sessionRevoked) {
         void signOut('revoked');
-        return;
+        return false;
       }
 
       // `verdict` rather than the status: `P0002` — "that account no longer exists" — arrives as a
       // 500 and is classified by its SQLSTATE, so a vanished target does not read as an outage.
       setError(verdict === 'retryable' ? 'You need a connection to change who has access.' : failure);
       setPending(false);
-      return;
+      return false;
     }
 
     const rows = await load();
     void refresh();
     setPending(false);
 
-    // Removing or demoting yourself is legal for an owner while another owner remains. If your own
-    // membership is gone, this list is no longer yours to look at.
+    // Removing or demoting yourself is legal for an owner while another owner remains, and so is
+    // leaving as a reader/writer. If your own membership is gone, this list is no longer yours to
+    // look at.
     if (rows && !rows.some((member) => member.userId === userId)) navigation.popToTop();
+    return true;
   }
 
   if (!list) {
@@ -156,6 +162,52 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                     <Text style={[styles.removeText, locked && styles.mutedText]}>Remove</Text>
                   </Pressable>
                 </View>
+              ) : you ? (
+                !confirmingLeave ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Leave list"
+                    accessibilityState={{ disabled: pending }}
+                    disabled={pending}
+                    onPress={() => setConfirmingLeave(true)}
+                    style={styles.remove}>
+                    <Text style={[styles.removeText, pending && styles.mutedText]}>Leave list</Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.confirm}>
+                    <Text style={styles.confirmText}>
+                      You'll lose access to this list until someone shares it with you again.
+                    </Text>
+                    <View style={styles.confirmActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel"
+                        accessibilityState={{ disabled: pending }}
+                        disabled={pending}
+                        onPress={() => setConfirmingLeave(false)}
+                        style={styles.cancelButton}>
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </Pressable>
+                      {/* The label stays fixed while the visible text toggles during the request,
+                          same convention as AccountScreen's "Sign out of all devices" confirm. */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Confirm leave list"
+                        accessibilityState={{ disabled: pending }}
+                        disabled={pending}
+                        onPress={() => {
+                          void run(() => leaveList(listId)).then((ok) => {
+                            if (!ok) setConfirmingLeave(false);
+                          });
+                        }}
+                        style={styles.dangerButton}>
+                        <Text style={styles.dangerButtonText}>
+                          {pending ? 'Leaving…' : 'Leave list'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )
               ) : (
                 <Text style={styles.role}>{member.role}</Text>
               )}
@@ -268,6 +320,41 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 15,
     color: colors.textMuted,
+  },
+  confirm: {
+    gap: spacing.sm,
+  },
+  confirmText: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  dangerButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: radius.sm,
+    backgroundColor: colors.error,
+  },
+  dangerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.onAccent,
   },
   invite: {
     flexDirection: 'row',

@@ -4,8 +4,8 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
-last_verified: 2026-09-22
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
+last_verified: 2026-09-23
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts && grep -q "from '../lib/membersApi'" src/components/UserAutocomplete.tsx && for f in src/components/ItemRow.tsx src/components/ListRow.tsx src/components/RolePicker.tsx; do ! grep -q "from '../lib/" "$f" || exit 1; done
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 ---
@@ -58,7 +58,7 @@ deliver a nudge or a reconnect by hand, wrapped in `act` because it is an extern
 ([rntl-14-api-changes](rntl-14-api-changes.md)).
 
 **A screen may call the query module directly, and one does.** `SharingScreen` calls `fetchMembers`
-/ `shareList` / `setMemberRole` / `removeMember` itself rather than going through `ListsContext`,
+/ `shareList` / `setMemberRole` / `removeMember` / `leaveList` itself rather than going through `ListsContext`,
 because the roster is not in `State`, is not cached, and has nothing for `replay` to fold. The seam
 is unchanged by that — the screen still imports a query module, never `supabase` — it is just
 `membersApi.ts` for those four now, plus `type Result` from `listsApi.ts`. Its suite mocks

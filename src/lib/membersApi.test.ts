@@ -1,4 +1,11 @@
-import { fetchMembers, removeMember, searchUsers, setMemberRole, shareList } from './membersApi';
+import {
+  fetchMembers,
+  leaveList,
+  removeMember,
+  searchUsers,
+  setMemberRole,
+  shareList,
+} from './membersApi';
 import { supabase } from './supabase';
 
 /**
@@ -20,7 +27,7 @@ beforeEach(() => {
 });
 
 /**
- * The roster, and the three ways to change it — all four RPCs because the `list_members` select
+ * The roster, and the four ways to change it — all five RPCs because the `list_members` select
  * policy shows the caller exactly one row, their own, and a select policy also gates what UPDATE and
  * DELETE may touch.
  */
@@ -52,7 +59,7 @@ describe('the membership calls', () => {
 
   /**
    * PostgREST resolves an RPC by argument *name*, so a typo here reads as "function not found"
-   * rather than as a bad argument. These five assertions are the only thing that would catch it.
+   * rather than as a bad argument. These six assertions are the only thing that would catch it.
    */
   it('names every RPC argument the way the function declares it', async () => {
     const rpc = respondToRpcWith({ data: null, error: null, status: 204 });
@@ -79,6 +86,9 @@ describe('the membership calls', () => {
 
     await removeMember('l1', 'u2');
     expect(rpc).toHaveBeenLastCalledWith('remove_member', { p_list_id: 'l1', p_user_id: 'u2' });
+
+    await leaveList('l1');
+    expect(rpc).toHaveBeenLastCalledWith('leave_list', { p_list_id: 'l1' });
   });
 
   it('maps search results onto the client shape', async () => {

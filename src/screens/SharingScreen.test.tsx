@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { fetchLists } from '../lib/listsApi';
 import {
   fetchMembers,
+  leaveList,
   removeMember,
   searchUsers,
   setMemberRole,
@@ -45,6 +46,7 @@ jest.mock('../lib/membersApi', () => ({
   shareList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setMemberRole: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   removeMember: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  leaveList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
 }));
 
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
@@ -103,6 +105,7 @@ beforeEach(async () => {
   jest.mocked(shareList).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(setMemberRole).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(removeMember).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(leaveList).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(fetchMembers).mockResolvedValue({ members: [ALICE, BOB], error: null });
   jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
   jest.mocked(searchUsers).mockResolvedValue({ users: [], error: null });
@@ -202,13 +205,86 @@ it('falls back to a not-found state for an unknown list', async () => {
  * an answer to. Changing the answer is another matter.
  */
 describe('somebody who is not an owner', () => {
-  it('sees who has access but is given nothing to change', async () => {
+  it('sees who has access but is given nothing to change about anybody else', async () => {
     await renderScreen('reader');
 
     expect(screen.getByText('bob@example.com')).toBeOnTheScreen();
     expect(screen.getByText('Only an owner can change who has access.')).toBeOnTheScreen();
     expect(screen.queryByLabelText('Name')).not.toBeOnTheScreen();
     expect(screen.queryByLabelText('Remove bob@example.com')).not.toBeOnTheScreen();
+  });
+
+  it('is offered a way to leave, on their own row only', async () => {
+    await renderScreen('reader');
+
+    expect(screen.getByLabelText('Leave list')).toBeOnTheScreen();
+    // Bob's row stays plain text — a non-owner cannot act on anyone but themselves.
+    expect(screen.queryByLabelText('Leave bob@example.com')).not.toBeOnTheScreen();
+  });
+
+  it('does not leave until the confirm step is pressed', async () => {
+    await renderScreen('reader');
+
+    await fireEvent.press(screen.getByLabelText('Leave list'));
+
+    expect(leaveList).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Confirm leave list')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('Confirm leave list'));
+    expect(leaveList).toHaveBeenCalledWith('l1');
+  });
+
+  it('cancels out of the confirm step without leaving', async () => {
+    await renderScreen('reader');
+
+    await fireEvent.press(screen.getByLabelText('Leave list'));
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+
+    expect(leaveList).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Leave list')).toBeOnTheScreen();
+  });
+
+  it('leaves the screen once the list is left', async () => {
+    jest
+      .mocked(fetchMembers)
+      .mockResolvedValueOnce({ members: [ALICE, BOB], error: null })
+      .mockResolvedValueOnce({ members: [BOB], error: null });
+
+    await renderScreen('reader');
+    await fireEvent.press(screen.getByLabelText('Leave list'));
+    await fireEvent.press(screen.getByLabelText('Confirm leave list'));
+
+    expect(navigation.popToTop).toHaveBeenCalled();
+  });
+
+  it('collapses back to the plain button and shows why when leaving is refused', async () => {
+    jest
+      .mocked(leaveList)
+      .mockResolvedValue({ error: 'you are not a member of this list', verdict: 'permanent' });
+
+    await renderScreen('reader');
+    await fireEvent.press(screen.getByLabelText('Leave list'));
+    await fireEvent.press(screen.getByLabelText('Confirm leave list'));
+
+    expect(await screen.findByText('you are not a member of this list')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Leave list')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Confirm leave list')).not.toBeOnTheScreen();
+  });
+
+  it('signs out this device instead of showing a refusal for a revoked session, when leaving', async () => {
+    jest.mocked(leaveList).mockResolvedValue({
+      error: 'this device has been signed out',
+      verdict: 'permanent',
+      sessionRevoked: true,
+    });
+
+    await renderScreen('reader');
+    await fireEvent.press(screen.getByLabelText('Leave list'));
+    await fireEvent.press(screen.getByLabelText('Confirm leave list'));
+
+    await act(async () => {});
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(screen.queryByText('this device has been signed out')).not.toBeOnTheScreen();
   });
 });
 
@@ -259,6 +335,15 @@ describe('an owner', () => {
     await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
 
     expect(removeMember).toHaveBeenCalledWith('l1', 'u2');
+  });
+
+  /** `leaveList` is a reader/writer's path — an owner still removes themselves the way they already
+   * could, through `remove_member`, not the new confirm-step control. */
+  it("still uses Remove on their own row, not the reader/writer 'Leave list' control", async () => {
+    await renderScreen();
+
+    expect(screen.getByLabelText('Remove alice@example.com')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Leave list')).not.toBeOnTheScreen();
   });
 });
 

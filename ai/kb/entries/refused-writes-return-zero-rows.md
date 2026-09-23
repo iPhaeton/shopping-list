@@ -4,8 +4,8 @@ title: Row-level security refuses a client UPDATE or DELETE with zero rows, whic
 type: gotcha
 status: current
 tags: [supabase, postgrest, rls, persistence, offline, security]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts]
-last_verified: 2026-09-22
+sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/suggestions/list-sharing-ui.md, src/lib/listsApi.ts, supabase/migrations/20260924000000_leave_list.sql]
+last_verified: 2026-09-23
 verify: test "$(grep -c '\.update(\|\.delete(' src/lib/listsApi.ts)" = "$(grep -A4 '\.update(\|\.delete(' src/lib/listsApi.ts | grep -c '\.select(')" && grep -q "if (!error) return { error: null, verdict: 'ok' };" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts
 related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, writes-can-land-on-a-tombstone, supabase-local-stack, insert-returning-races-membership-trigger]
 ---
@@ -52,11 +52,12 @@ whole fix failing. supabase-js's `.select()` adds the header itself, which is wh
 request returned `200`. **Reproducing a postgrest-js call with `curl` needs that header, or the
 reproduction lies about the code you are trying to test.**
 
-**The `DELETE` row of the table is why there is no "Leave this list" button.** A non-owner's delete
-of their own membership is filtered away and answers `204`, so a self-service leave would look like it
-worked and change nothing. Removing people stays an owner's job through `remove_member`; leaving a
-list you do not own is item 10 in `backlog/backlog.txt` and needs either a self-service delete policy
-or a fourth RPC. The underlying reason the row is unreachable is in
+**The `DELETE` row of the table is why "Leave list" (step 19) is a fourth membership-write RPC,
+`leave_list`, rather than a client `DELETE`.** A non-owner's raw `.delete()` of their own membership would be filtered away
+by the same select-policy gate and answer `204` — a self-service leave built that way would look like
+it worked and change nothing. `leave_list` sidesteps it entirely: same shape as the other three
+membership RPCs, `security definer`, raises rather than returning silently. The underlying reason a raw
+client `DELETE` was never viable is in
 [select-policy-gates-update-and-delete](select-policy-gates-update-and-delete.md) — that entry is the
 `psql` half of this fact ("assert the row count, not the absence of an error"); this one is what it
 looks like from the client.

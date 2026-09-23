@@ -4,8 +4,8 @@ title: A SELECT policy also gates the rows UPDATE and DELETE may touch, so self-
 type: gotcha
 status: current
 tags: [supabase, postgres, rls, security]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-09-08
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, supabase/migrations/20260924000000_leave_list.sql]
+last_verified: 2026-09-23
 verify: grep -A1 'create policy "read your own memberships" on public.list_members' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'for select using (user_id = (select auth.uid()));' && grep -A3 'create function public.set_member_role' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer' && grep -A3 'create function public.remove_member' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer'
 related: [list-data-scoped-by-rls, read-rooted-at-list-members, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows]
 indexed: false
@@ -40,9 +40,13 @@ stay in step with. Do not delete them as dead weight, and do not add a third way
 
 **Over HTTP the same silence is worse, because it reaches the app.** A client `DELETE` filtered to
 zero rows comes back `204` with no error and is read as success — measured for a non-owner trying to
-remove their own membership, which is why there is no "Leave this list" button. See
+remove their own membership. That is why step 19's "Leave list" is a fourth membership RPC
+(`leave_list`), not a client `DELETE`, even though a *new*, self-scoped delete policy would in fact be
+reachable here (unlike the owner-acting-on-someone-else case this entry describes, since the select
+policy already always shows a caller their own row) — the RPC was chosen anyway, for the session guard
+every other write gets and to raise loudly rather than risk this exact silent `204`. See
 [refused-writes-return-zero-rows](refused-writes-return-zero-rows.md) for what a client must do about
-it.
+a filtered write in general.
 
 **What to do:** when a role must act on rows it cannot see, reach for a definer function, not a
 policy. And when testing a policy, assert the **row count**, not the absence of an error — `DELETE 0`

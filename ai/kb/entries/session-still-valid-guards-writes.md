@@ -4,9 +4,9 @@ title: Signing out globally does not revoke an already-issued access token — w
 type: decision
 status: current
 tags: [supabase, postgres, auth, security, rls]
-sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, supabase/migrations/20260920000000_session_revocation.sql, supabase/migrations/20260921000000_user_names.sql, supabase/migrations/20260922000000_share_by_name.sql, supabase/migrations/20260923000000_set_name_min_length.sql, src/lib/listsApi.ts]
+sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, supabase/migrations/20260920000000_session_revocation.sql, supabase/migrations/20260921000000_user_names.sql, supabase/migrations/20260922000000_share_by_name.sql, supabase/migrations/20260923000000_set_name_min_length.sql, supabase/migrations/20260924000000_leave_list.sql, src/lib/listsApi.ts]
 last_verified: 2026-09-23
-verify: grep -q "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql && grep -A6 "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql | grep -q "security definer" && grep -q "auth.jwt() ->> 'session_id'" supabase/migrations/20260920000000_session_revocation.sql && grep -q '^revoke execute on function public.session_still_valid() from public, anon;' supabase/migrations/20260920000000_session_revocation.sql && grep -q '^grant execute on function public.session_still_valid() to authenticated;' supabase/migrations/20260920000000_session_revocation.sql && test "$(grep -rh 'if not public.session_still_valid() then' supabase/migrations | wc -l | tr -d ' ')" = 12 && test "$(grep -rl 'session_still_valid' supabase/migrations | wc -l | tr -d ' ')" = 4 && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260921000000_user_names.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260922000000_share_by_name.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260923000000_set_name_min_length.sql && grep -A2 "case '42501':" src/lib/listsApi.ts | grep -q 'You no longer have permission' && grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts && grep -q "sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE" src/lib/listsApi.ts
+verify: grep -q "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql && grep -A6 "^create function public.session_still_valid" supabase/migrations/20260920000000_session_revocation.sql | grep -q "security definer" && grep -q "auth.jwt() ->> 'session_id'" supabase/migrations/20260920000000_session_revocation.sql && grep -q '^revoke execute on function public.session_still_valid() from public, anon;' supabase/migrations/20260920000000_session_revocation.sql && grep -q '^grant execute on function public.session_still_valid() to authenticated;' supabase/migrations/20260920000000_session_revocation.sql && test "$(grep -rh 'if not public.session_still_valid() then' supabase/migrations | wc -l | tr -d ' ')" = 13 && test "$(grep -rl 'session_still_valid' supabase/migrations | wc -l | tr -d ' ')" = 5 && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260921000000_user_names.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260922000000_share_by_name.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260923000000_set_name_min_length.sql && grep -q 'if not public.session_still_valid() then' supabase/migrations/20260924000000_leave_list.sql && grep -A2 "case '42501':" src/lib/listsApi.ts | grep -q 'You no longer have permission' && grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts && grep -q "sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE" src/lib/listsApi.ts
 related: [server-stamps-done-at, list-data-scoped-by-rls, read-rooted-at-list-members, realtime-is-a-nudge-to-a-per-user-inbox, supabase-default-grants-defeat-revokes, writes-retry-from-an-outbox, insert-returning-races-membership-trigger, session-revoked-write-redirects]
 ---
 
@@ -24,16 +24,19 @@ elsewhere.
 is `select exists (select 1 from auth.sessions where id = (auth.jwt() ->> 'session_id')::uuid)` —
 `security definer`, because `authenticated` holds no grant at all on `auth.sessions` (only `postgres`
 does; an `invoker` version would fail outright, valid session or not). It is the first statement
-inside `begin` in all ten write RPCs: `set_item_done`, `add_item`, `rename_item`, `rename_list`,
-`set_list_deleted`, `set_item_deleted`, `share_list`, `set_member_role`, `remove_member`, and — since
-step 17 — `set_name` ([user_names.sql](../../../supabase/migrations/20260921000000_user_names.sql)).
-Each raises `42501` with `'this device has been signed out'` on failure — the same SQLSTATE every other refusal
+inside `begin` in all eleven write RPCs: `set_item_done`, `add_item`, `rename_item`, `rename_list`,
+`set_list_deleted`, `set_item_deleted`, `share_list`, `set_member_role`, `remove_member`, `set_name`
+(since step 17,
+[user_names.sql](../../../supabase/migrations/20260921000000_user_names.sql)), and — since step 19 —
+`leave_list`
+([leave_list.sql](../../../supabase/migrations/20260924000000_leave_list.sql)), the reader/writer
+self-removal RPC. Each raises `42501` with `'this device has been signed out'` on failure — the same SQLSTATE every other refusal
 in this schema already raises, so `verdictFor` in [listsApi.ts](../../../src/lib/listsApi.ts) already
 classifies it `permanent` with no client change needed
 ([server-stamps-done-at](server-stamps-done-at.md)).
 
-**The `verify:` grep counts 12 occurrences across 4 files, not 10 across 2 — and that is migration
-history accumulating, not a twelfth RPC.** Step 18's first half dropped and recreated `share_list`
+**The `verify:` grep counts 13 occurrences across 5 files, not 10 across 2 — and most of that is
+migration history accumulating, not new RPCs.** Step 18's first half dropped and recreated `share_list`
 with a new signature (`uuid, uuid, list_role`, id instead of email) to take an id a name search
 already resolved; the guard was carried over into the new function body verbatim. Migrations are
 append-only, so `20260920000000_session_revocation.sql` still holds the original `share_list`
@@ -42,10 +45,12 @@ same RPC under its new signature. Step 18's second half then `create or replace`
 [20260923000000_set_name_min_length.sql](../../../supabase/migrations/20260923000000_set_name_min_length.sql)
 to add a 3-character floor — same signature, so the whole body (guard included) was copied forward
 again rather than patched in place, the same append-only mechanics as the `share_list` case one
-migration earlier. The set of **currently active** write RPCs is still exactly ten; count files, not
-just occurrences, before assuming a grep count change means a new call site. Expect this count to
-keep climbing every time an existing guarded RPC gets a same-signature `create or replace` — it is
-not evidence of scope creep.
+migration earlier. **Step 19's file is different: a genuinely new call site, not a recreate** — it adds
+`leave_list`, an eleventh RPC, in its own migration, which is why both the occurrence count and the
+file count moved together this time. The set of **currently active** write RPCs is now exactly eleven;
+count files against the enumeration above, not just occurrences, before assuming a grep count change
+means a new call site — a same-signature `create or replace` moves this number too and is not evidence
+of scope creep on its own.
 
 **A realtime "kick" was considered and rejected.** Delivery on the per-user nudge channel is
 at-most-once ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)):
@@ -65,15 +70,15 @@ list/item row counts.
 **Scope is writes only, deliberately, and narrower than "every write" reads.** `list_members_of` and
 the SELECT-side RLS policies (`my_memberships()`, the read policies) are untouched: a revoked device
 may still *read* briefly-stale data until its token naturally expires. And **creating a list is not
-one of the ten RPCs** — `insertList` sends a plain `.insert()` into `lists`, unchanged by this
+one of the eleven RPCs** — `insertList` sends a plain `.insert()` into `lists`, unchanged by this
 migration, and the `lists` INSERT policy checks only `created_by = (select auth.uid())`. **A revoked
 device can still create new lists until its access token naturally expires.** Closing that gap, and
 folding the check into the read side, were both scoped out as separate work, not oversights.
 
 **The distinct message never reaches the user as text — step 2 reads it before `humanize` can erase
 it.** `writeResult` still maps every `42501` to the same generic sentence, `'You no longer have
-permission to make that change.'`, and the four non-outbox RPCs (the three membership calls plus
-`set_name`) still skip `humanize` and keep the database's own words. But `resultFor` — the function
+permission to make that change.'`, and the five non-outbox RPCs (the four membership calls, `leave_list`
+included, plus `set_name`) still skip `humanize` and keep the database's own words. But `resultFor` — the function
 both paths call — now matches the exact string
 `'this device has been signed out'` into `Result.sessionRevoked` *before* either of those renderings
 happens, and both the outbox (`useOutbox.flush`) and `SharingScreen`'s `run()` check that flag first
@@ -87,6 +92,6 @@ public.session_still_valid() then raise exception using errcode = '42501', messa
 as its first statement, matching this shape exactly. A new *read* RPC, or a change to
 `list_members_of` or the SELECT policies, does not get this check — that closure is unmade work, not
 an oversight to "complete" casually. The `verify:` command asserts the function's shape and grants,
-that exactly ten call sites guard themselves across the migrations that add them, that no third
+that exactly eleven call sites guard themselves across the migrations that add them, that no third
 migration has adopted the function (the read side stays untouched), that `humanize` still collapses
 `42501` to one sentence, and that `insertList` is still a bare `.insert()`.

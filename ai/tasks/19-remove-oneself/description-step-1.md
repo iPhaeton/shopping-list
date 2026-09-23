@@ -1,0 +1,1 @@
+The user should be able to remove themselved form a list
