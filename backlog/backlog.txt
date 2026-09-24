@@ -13,3 +13,4 @@
 (12. Refactor authentication. Users should have names)
 (13. Split ListContext)
 14. Limit the cache
+15. Make Supabase API not available publicly
