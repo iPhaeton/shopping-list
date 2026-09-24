@@ -6,6 +6,13 @@
 
 **Date:** 2026-09-24, written against commit `a2eb1f6`.
 
+**Revised 2026-09-24: the seller is the owner's Polish sole proprietorship (JDG).** It is an active
+VAT payer with a valid EU VAT number. Its registry details (name, address, NIP, bank accounts) are
+in `~/Dropbox/jdg/firm-info.md`, outside this repo, and are deliberately not copied here. This
+settled decisions 0.2 and 0.3 and added Polish tax and legal steps. The code phases did not change.
+The tax points are what Polish sources describe; the owner's accountant confirms them (Phase 6,
+step 8).
+
 Four gaps block a release no matter what the pricing is:
 
 - The app has no account deletion.
@@ -15,7 +22,7 @@ Four gaps block a release no matter what the pricing is:
 
 The steps are ordered so Apple's slow paperwork runs while the code is written.
 
-## 0. Three decisions to make first (they change the code)
+## 0. Three decisions that change the code (two now settled)
 
 1. **What the subscription unlocks.** Recommended: a free tier (for example 1 list and no sharing)
    plus a paid "Pro" plan for unlimited lists and sharing. People invited to a Pro user's list would
@@ -23,32 +30,51 @@ The steps are ordered so Apple's slow paperwork runs while the code is written.
    when a list is created and in `share_list`. The other option is a hard paywall, where nothing
    works without paying after a trial. The UI is simpler, but everyone invited must also pay, and
    every write function needs the check.
-2. **Sell as an individual or a company.** As an individual, enrollment is fast and your legal name
-   appears as the seller. A company needs a legal entity and a D-U-N-S number, which is free but can
-   take 1–2 weeks.
-3. **Sell in the EU or not.** Selling subscriptions makes you a "trader" under the EU's Digital
-   Services Act, and Apple then publishes your address, phone number and email on the EU store
-   page. EU countries can be left out for now.
+2. **Individual or company — settled: Individual.** Apple enrolls a sole proprietorship as an
+   individual. A JDG is not a separate legal entity, so the Organization route and its D-U-N-S
+   number don't apply. The seller name shown on the App Store is the owner's legal name, which is
+   also the JDG's registered name.
+3. **EU or not — settled: sell in the EU as a declared "trader".** Selling subscriptions from a
+   Polish business makes you a trader under the EU's Digital Services Act, and leaving out the EU
+   would mean leaving out Poland. Apple publishes the address, phone number and email on EU product
+   pages. The address is already public in CEIDG; the phone and email are not, so use a separate
+   phone number and `support@shopping-loop.com` (Phase 1, step 5).
 
 ## Phase 1: Accounts and paperwork (start first, these involve waiting)
 
 1. **Join the Apple Developer Program** at developer.apple.com/programs/enroll. It costs $99 a year
-   and needs an Apple ID with two-factor authentication. For an individual, the fastest way is the
-   Apple Developer app on an iPhone, which scans your ID.
+   and needs an Apple ID with two-factor authentication. Enroll as an **Individual**, with Poland as
+   the country and the legal name exactly as on your ID. The fastest way is the Apple Developer app
+   on an iPhone, which scans your ID.
 2. **Create the app record in App Store Connect** (Apps → "+" → New App):
    - Name "ShoppingLoop". Names must be unique across the whole store and are limited to 30
      characters. If it's taken, use something like "ShoppingLoop: Shared Lists".
    - Bundle ID `com.shoppingloop.app`, which is already set in [app.json](../../app.json).
    - SKU: any string, for example `shoppingloop-ios`.
-3. **Set up payments** in App Store Connect → Business. Accept the **Paid Apps Agreement**, add a
-   bank account, and fill in the tax forms (W-9 for US persons, W-8BEN otherwise). Nothing can be
-   sold, and subscriptions can't really be tested, until the agreement shows "Active".
+3. **Set up payments** in App Store Connect → Business. Accept the **Paid Apps Agreement** and add
+   one of the JDG's business bank accounts. Nothing can be sold, and subscriptions can't really be
+   tested, until the agreement shows "Active".
+   - Tax form: **W-8BEN** (the individuals' form, not W-8BEN-E), in your own name, claiming the
+     US–Poland tax treaty to reduce US withholding. The NIP is probably the "foreign tax ID".
+   - Fill it in as best you can now. If the accountant wants a different treaty claim (Phase 6,
+     step 8), submit a corrected form before release. With no sales yet, nothing has been withheld.
 4. **Apply to the App Store Small Business Program.** It cuts Apple's commission from 30% to 15%.
-5. **Publish three web pages on shopping-loop.com:**
-   - A Privacy Policy. It must say what is collected (email, display name, lists and items,
-     purchase status) and who processes it (Supabase, Resend, Google, Apple, RevenueCat).
-   - Terms of Use. Apple's standard EULA can be linked instead of writing one.
-   - A Support page. A contact email is enough.
+5. **Publish three web pages on shopping-loop.com**, each naming the business (name, address, NIP):
+   - A Privacy Policy. It names the JDG as the GDPR data controller and says what is collected
+     (email, display name, lists and items, purchase status) and who processes it (Supabase,
+     Resend, Google, Apple, RevenueCat).
+   - Terms of Use. Polish law on electronic services requires terms of service ("regulamin") for
+     the account and sync service, so write your own rather than only linking Apple's standard
+     EULA.
+   - A Support page with a contact email.
+   - Because the app sells to Polish consumers, the terms and the privacy policy also need Polish
+     versions.
+   - `support@shopping-loop.com` needs a mailbox that receives mail. Today the domain only sends
+     (Resend, from the `mail.` subdomain). The same address is the email Apple publishes for the
+     trader status.
+   - Accept the data processing agreements (DPAs) in the Supabase, Resend and RevenueCat
+     dashboards. Supabase already runs in the EU (eu-west-1); Resend and RevenueCat are US
+     companies, and their DPAs cover the data transfer.
 6. **Create an Expo account** (free), then install and log into the build tool:
    `npm i -g eas-cli && eas login`.
 7. **Create a RevenueCat account.** It checks Apple's receipts, keeps each user's subscription
@@ -59,6 +85,10 @@ The steps are ordered so Apple's slow paperwork runs while the code is written.
 9. **Publish the Google OAuth consent screen** (Google Cloud Console → OAuth consent screen →
    Publish app). While it's in "Testing" mode, only listed test users can use "Continue with
    Google".
+10. **Buy every service as the business.** Put the EU VAT number in the billing settings of
+    Supabase, RevenueCat, Expo and Resend, so they invoice the JDG without VAT, and keep the Apple
+    Developer Program invoice too. Hand them to the accountant with the usual monthly documents:
+    the reverse-charge VAT on them belongs to the month of purchase, not the release month.
 
 ## Phase 2: Code Apple requires, whatever the price
 
@@ -251,7 +281,31 @@ snippet in `supabase/snippets/`).
    - Explain the name screen and where the paywall appears.
 6. On the version page, under **In-App Purchases and Subscriptions**, select both products. A first
    subscription is only reviewed together with an app version.
-7. Submit and choose "Manually release", so you pick the launch day. Review usually takes 1–2 days.
+7. Submit and choose **"Manually release"**. Review usually takes 1–2 days, and approval then does
+   not make the app live. Nothing before release counts as income: TestFlight and sandbox purchases
+   are free test purchases.
+8. **Meet the accountant, after approval and before pressing Release.** Questions to bring:
+   1. Which treaty article to claim on the W-8BEN, and whether the foreign tax ID is the NIP or the
+      PESEL.
+   2. Which month App Store income belongs to, for VAT and for income tax, and when to issue the
+      invoice to Apple. Apple pays up to 45 days after each month ends and holds amounts below its
+      minimum payout, so the first VAT and income-tax deadlines can come before the first payout.
+   3. Whether the expected VAT treatment holds: a service to Apple Distribution International
+      (Ireland), "np" / reverse charge, reported in JPK_V7 and VAT-UE.
+   4. Whether IP Box (5% income tax on income from software you wrote) makes sense with the current
+      tax form. It is claimed in the annual return, so it can be decided later, even for past years
+      through a corrected return. The evidence is this repo's git history and `ai/tasks/*` logs,
+      plus the cost invoices and Apple's reports, so don't rewrite or squash the history.
+   5. How to credit US tax withheld by Apple against Polish tax.
+   6. What the accountant needs each month (Apple's reports from Payments and Financial Reports, the
+      service invoices).
+
+   **Exception:** if the JDG is on ryczałt, IP Box needs a switch to liniowy or skala. That can only
+   start with a new year and must be declared by 20 February. If the release lands in early 2027 and
+   the meeting could fall after 20 February 2027, send that one question earlier; an email is enough.
+9. **Press Release.** Within 7 days, add PKD **58.29.Z** (software publishing) to the CEIDG entry.
+   It's free and done online. The current only code, 62.10.B, covers programming for clients, not
+   selling your own app.
 
 ## Costs
 
@@ -263,6 +317,8 @@ snippet in `supabase/snippets/`).
 | RevenueCat | free under $2.5k/month revenue, then 1% |
 | EAS Build | the free plan's monthly build quota is enough |
 | Resend | free up to 100 emails a day |
+
+All of these are invoiced to the JDG (Phase 1, step 10).
 
 ## How this fits the repo's workflow
 
