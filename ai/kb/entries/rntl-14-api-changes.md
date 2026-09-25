@@ -8,7 +8,13 @@ sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log
 last_verified: 2026-08-31
 verify: grep -q '"@testing-library/react-native": "\^14' package.json
 related: [queries-go-through-a11y-labels, screens-take-navigation-props, supabase-client-module-boundary, tsconfig-explicit-types-array]
+indexed: false
 ---
+
+> **Demoted from `INDEX.md` at task 20 step 1, still true.** Nothing has cited it since step 3, and
+> every suite in the repo already shows the `await render` pattern to copy. Reached from
+> [queries-go-through-a11y-labels](queries-go-through-a11y-labels.md) and
+> [screens-take-navigation-props](screens-take-navigation-props.md).
 
 React Native Testing Library 14 changed two things that break tests written from memory:
 

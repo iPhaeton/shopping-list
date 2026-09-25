@@ -1,8 +1,11 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, spacing } from '../theme';
 
 export function EmptyState({ title, hint }: { title: string; hint: string }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
@@ -11,7 +14,7 @@ export function EmptyState({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
@@ -19,13 +22,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   title: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 17,
-    fontWeight: '600',
     color: colors.text,
   },
   hint: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
     textAlign: 'center',
   },
-});
+}));

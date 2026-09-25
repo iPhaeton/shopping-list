@@ -1,12 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-
 import type { Role } from '../state/types';
-import { colors, radius, spacing } from '../theme';
+import { SegmentedPicker, type SegmentedOption } from './SegmentedPicker';
 
 /** Declaration order, weakest first — the same order the database's enum is written in. */
-const ROLES: Role[] = ['reader', 'writer', 'owner'];
-
-const TITLES: Record<Role, string> = { reader: 'Reader', writer: 'Writer', owner: 'Owner' };
+const ROLES: SegmentedOption<Role>[] = [
+  { value: 'reader', title: 'Reader' },
+  { value: 'writer', title: 'Writer' },
+  { value: 'owner', title: 'Owner' },
+];
 
 type Props = {
   value: Role;
@@ -21,53 +21,12 @@ type Props = {
 
 export function RolePicker({ value, labelFor, disabled = false, onChange }: Props) {
   return (
-    <View style={styles.group}>
-      {ROLES.map((role) => {
-        const checked = role === value;
-
-        return (
-          <Pressable
-            key={role}
-            accessibilityRole="radio"
-            accessibilityState={{ checked, disabled }}
-            accessibilityLabel={labelFor(role)}
-            disabled={disabled}
-            onPress={() => onChange(role)}
-            style={[styles.option, checked && styles.optionChecked, disabled && styles.optionDisabled]}>
-            <Text style={[styles.text, checked && styles.textChecked]}>{TITLES[role]}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedPicker
+      options={ROLES}
+      value={value}
+      labelFor={labelFor}
+      disabled={disabled}
+      onChange={onChange}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  group: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  option: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  optionChecked: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  optionDisabled: {
-    opacity: 0.5,
-  },
-  text: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  textChecked: {
-    color: colors.onAccent,
-    fontWeight: '600',
-  },
-});

@@ -1,17 +1,17 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names and leaving a list in; invites and paged lists out
+title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, leaving a list and Day/Night themes in; invites and paged lists out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, b78d16f]
-last_verified: 2026-09-23
-related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, b78d16f]
+last_verified: 2026-09-25
+related: [suggestions-are-proposals, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters, phone-is-the-product, theme-reaches-native-surfaces, theme-tokens-only]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of step 19:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of task 20 step 1:
 
 | | |
 |---|---|
@@ -33,18 +33,16 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 17 | every account gets a required, unique (case-insensitive), editable display name — a blocking `SetNameScreen` gate between sign-in and the rest of the app, an `Account` screen edit, and the sharing roster showing names instead of emails |
 | step 18 | inviting is by name, not email: a live, debounced autocomplete (`search_users_by_name`, trigram-indexed, self-excluded, capped at 5) replaces the free-typed address field, and `share_list` now takes an id the search already resolved instead of resolving an email server-side |
 | step 19 | a reader or writer can remove themselves from a list they don't own ("Leave list"), through a fourth membership RPC, `leave_list`; an owner still removes anyone — including themselves — through the existing `remove_member` behind "Remove", now behind the same two-step Cancel/confirm every row gets (step 3) |
+| step 20 step 1 | the **Quiet Horizon** restyle begins, and with it **the phone becomes the product** ([phone-is-the-product](phone-is-the-product.md)): two role-keyed palettes, Day and Night ("Moonlit"), Nunito Sans + Source Serif 4, and a manual Day/Night choice under "Appearance" on Account, stored per device — applied flat, every layout unchanged. Steps 2–5 are described but not landed: Auto from sunset to sunrise, Lists and List detail built to the mockups, then the remaining screens and the launch screen |
 
 **Still deliberately out: inviting someone with no account (`list_invites`), showing an owner how
 widely a list is shared without opening it, passwords, and conflict resolution beyond last-write-wins.**
-(Leaving a list you do not own — item 10 in `backlog/backlog.txt` — shipped in step 19, below.)
 
 **Two of those are database limits, not backlog laziness** — neither is an afternoon of UI work:
 
-- **Since step 18 this is enforced structurally, not just by a refusal.** There is no free-text field
-  into `share_list` any more, only a tap on a `search_users_by_name` result, so the UI cannot even
-  construct a request naming an account that doesn't exist. `share_list`'s `P0002` now guards only the
-  narrower race of the account vanishing between the search and the tap. Conclusion unchanged: a
-  stranger needs a `list_invites` table claimed at sign-up before they can be invited.
+- **A stranger needs a `list_invites` table claimed at sign-up.** Since step 18 the UI cannot even
+  name one: `share_list` takes only a tapped `search_users_by_name` result, and its `P0002` guards
+  just the race of the account vanishing between the search and the tap.
 - A list you own cannot say "shared with 2 people": the `list_members` select policy shows you your
   own row, so any count the client computed would read `1` for everybody.
 
@@ -67,8 +65,8 @@ Each of these is easy to assume and wrong:
   ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md),
   [list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)).
 - **step 5, cloud** — no user-facing feature and no schema change. Nothing about the local-first
-  workflow changed; web is still where work is verified
-  ([supabase-local-stack](supabase-local-stack.md)).
+  workflow changed; flows are still verified on web against local
+  ([supabase-local-stack](supabase-local-stack.md)) — looks, since task 20, on the phone.
 - **step 6, SMTP** — phase 2 (a verified sending domain) landed 2026-09-17: a stranger's
   `signInWithOtp` now reaches a real inbox, not just the Resend account owner's. Deliverability
   itself is still unproven and no physical-device sign-in has ever completed against production
@@ -106,6 +104,10 @@ Each of these is easy to assume and wrong:
   an owner's "Remove" still calls `remove_member` for every row including their own, never migrated
   onto `leave_list` — step 3 only put the same Cancel/confirm step "Leave list" already had in front
   of it. No bulk leave and no "leave and delete my account" combination.
+- **step 20 step 1, two themes** — no Auto yet, no layout, illustration or icon change, and the
+  choice is neither per account nor on the server. The launch screen and Google's consent sheet do
+  not follow it ([theme-reaches-native-surfaces](theme-reaches-native-surfaces.md)). Day `textMuted`
+  misses AA; kept as the description gave it, the user's call ([theme-tokens-only](theme-tokens-only.md)).
 
 **Cloud is seven migrations behind local, not pushed at all** — deletion, purge scheduling, item
 rename, session revocation, user names, share-by-name and leave-list (steps 9, 10, 15, 17, 18, 19,
@@ -115,6 +117,4 @@ the cloud realtime socket. A pushed migration is schema-level proof, never behav
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
 absence as a gap worth flagging in a review. When a new task description lands, re-read this entry
-and update it — that is the moment it goes stale.
-
-No `verify:` command — scope is a judgment fact.
+and update it — that is the moment it goes stale. No `verify:` — scope is a judgment fact.

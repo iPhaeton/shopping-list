@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { searchUsers, type UserSuggestion } from '../lib/membersApi';
-import { colors, radius, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 300;
@@ -24,6 +25,8 @@ type Props = {
  * an absolute one would carry there.
  */
 export function UserAutocomplete({ value, onChangeText, onSelect, selected, disabled = false }: Props) {
+  const styles = useStyles();
+  const { colors, scheme } = useTheme();
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
 
   useEffect(() => {
@@ -60,6 +63,8 @@ export function UserAutocomplete({ value, onChangeText, onSelect, selected, disa
         onChangeText={onChangeText}
         placeholder="Start typing a name"
         placeholderTextColor={colors.textMuted}
+        keyboardAppearance={scheme}
+        selectionColor={colors.primary}
         accessibilityLabel="Name"
         autoCapitalize="words"
         autoCorrect={false}
@@ -84,21 +89,25 @@ export function UserAutocomplete({ value, onChangeText, onSelect, selected, disa
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   input: {
     height: 44,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
     color: colors.text,
+    fontFamily: fonts.sans,
     fontSize: 16,
+    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
+    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
+    letterSpacing: 0,
   },
   suggestions: {
     marginTop: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -109,10 +118,11 @@ const styles = StyleSheet.create({
   },
   suggestionDivider: {
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.divider,
   },
   suggestionText: {
+    fontFamily: fonts.sans,
     fontSize: 16,
     color: colors.text,
   },
-});
+}));

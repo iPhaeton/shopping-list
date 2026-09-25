@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Item } from '../state/types';
-import { colors, radius, spacing } from '../theme';
+import { fonts, radius, spacing } from '../theme';
 
 type Props = {
   item: Item;
@@ -16,6 +17,9 @@ type Props = {
 };
 
 export function ItemRow({ item, editable = true, onToggle, onRename, onSetDeleted }: Props) {
+  const styles = useStyles();
+  const { colors, scheme } = useTheme();
+
   // `doneAt` records when the item was checked off; nothing here shows the time, only the fact.
   const done = item.doneAt !== null;
 
@@ -55,6 +59,8 @@ export function ItemRow({ item, editable = true, onToggle, onRename, onSetDelete
           onChangeText={setDraft}
           placeholder="Item name"
           placeholderTextColor={colors.textMuted}
+          keyboardAppearance={scheme}
+          selectionColor={colors.primary}
           accessibilityLabel="Item name"
           autoFocus
           returnKeyType="done"
@@ -131,7 +137,7 @@ export function ItemRow({ item, editable = true, onToggle, onRename, onSetDelete
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -140,10 +146,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
   },
   rowDeleted: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyHorizon,
   },
   // The padding lives on the tappable half so the whole title row stays a comfortable target.
   tap: {
@@ -164,15 +170,19 @@ const styles = StyleSheet.create({
     marginLeft: spacing.lg,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
+    fontFamily: fonts.sans,
     fontSize: 16,
+    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
+    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
+    letterSpacing: 0,
   },
   tag: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 12,
-    fontWeight: '600',
     color: colors.textMuted,
     textTransform: 'uppercase',
   },
@@ -181,13 +191,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   actionText: {
+    fontFamily: fonts.sans,
     fontSize: 14,
-    color: colors.accent,
+    color: colors.primary,
   },
   actionTextDisabled: {
-    color: colors.accentDisabled,
+    color: colors.primaryDisabled,
   },
   actionTextMuted: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.textMuted,
   },
@@ -196,27 +208,28 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.checkboxOutline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   check: {
-    color: colors.onAccent,
+    color: colors.onPrimary,
+    fontFamily: fonts.sansBold,
     fontSize: 14,
     lineHeight: 16,
-    fontWeight: '700',
   },
   title: {
     flex: 1,
+    fontFamily: fonts.sans,
     fontSize: 17,
     color: colors.text,
   },
   titleDone: {
-    color: colors.textMuted,
+    color: colors.textDone,
     textDecorationLine: 'line-through',
   },
-});
+}));

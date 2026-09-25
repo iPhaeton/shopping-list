@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 type Props = {
   placeholder: string;
@@ -20,6 +21,8 @@ type Props = {
  * a bar that is open while the underlying name changes keeps what the user is typing.
  */
 export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }: Props) {
+  const styles = useStyles();
+  const { colors, scheme } = useTheme();
   const [value, setValue] = useState(initialValue);
   const canSubmit = value.trim().length > 0;
 
@@ -37,6 +40,8 @@ export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }
         onChangeText={setValue}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
+        keyboardAppearance={scheme}
+        selectionColor={colors.primary}
         accessibilityLabel={placeholder}
         returnKeyType="done"
         onSubmitEditing={submit}
@@ -59,43 +64,47 @@ export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flexDirection: 'row',
     gap: spacing.sm,
     padding: spacing.lg,
     backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.divider,
   },
   input: {
     flex: 1,
     height: 44,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
+    fontFamily: fonts.sans,
     fontSize: 16,
+    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
+    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
+    letterSpacing: 0,
   },
   button: {
     height: 44,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: colors.accentDisabled,
+    backgroundColor: colors.primaryDisabled,
   },
   buttonPressed: {
     opacity: 0.8,
   },
   buttonText: {
-    color: colors.onAccent,
+    color: colors.onPrimary,
+    fontFamily: fonts.sansSemiBold,
     fontSize: 16,
-    fontWeight: '600',
   },
-});
+}));

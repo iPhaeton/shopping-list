@@ -4,7 +4,8 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput,
 import { ErrorBanner } from '../components/ErrorBanner';
 import type { SetNameScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
-import { colors, radius, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 /**
  * The gate a signed-in account with no confirmed name is routed to — see `AuthState`'s
@@ -13,6 +14,8 @@ import { colors, radius, spacing } from '../theme';
  * away on its own once `setName` succeeds.
  */
 export function SetNameScreen(_props: SetNameScreenProps) {
+  const styles = useStyles();
+  const { colors, scheme } = useTheme();
   const { state, setName, retryName, signOut } = useSession();
   const session = state.status === 'nameRequired' ? state.session : null;
 
@@ -67,6 +70,8 @@ export function SetNameScreen(_props: SetNameScreenProps) {
           onChangeText={setNameDraft}
           placeholder="Your name"
           placeholderTextColor={colors.textMuted}
+          keyboardAppearance={scheme}
+          selectionColor={colors.primary}
           accessibilityLabel="Your name"
           autoCapitalize="words"
           autoCorrect={false}
@@ -98,6 +103,8 @@ function PrimaryButton({
   enabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -115,11 +122,11 @@ function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
     padding: spacing.lg,
   },
   card: {
@@ -128,14 +135,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
   },
   title: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 24,
-    fontWeight: '600',
     color: colors.text,
   },
   hint: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
@@ -143,28 +151,32 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
+    fontFamily: fonts.sans,
     fontSize: 16,
+    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
+    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
+    letterSpacing: 0,
   },
   button: {
     height: 44,
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: colors.accentDisabled,
+    backgroundColor: colors.primaryDisabled,
   },
   buttonPressed: {
     opacity: 0.8,
   },
   buttonText: {
-    color: colors.onAccent,
+    color: colors.onPrimary,
+    fontFamily: fonts.sansSemiBold,
     fontSize: 16,
-    fontWeight: '600',
   },
-});
+}));

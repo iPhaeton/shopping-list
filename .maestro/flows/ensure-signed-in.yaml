@@ -1,0 +1,13 @@
+# Ends on Lists whatever the app opened on: signs in as EMAIL only if it opened on Sign in.
+appId: com.shoppingloop.app
+---
+- extendedWaitUntil:
+    visible: Email address|Account
+    timeout: 30000
+- runFlow:
+    when:
+      visible: Email address
+    file: sign-in.yaml
+- extendedWaitUntil:
+    visible: Account
+    timeout: 15000

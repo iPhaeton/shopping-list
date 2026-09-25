@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, View } from 'react-native';
 
 import { AddBar } from '../components/AddBar';
 import { BlockedBanner } from '../components/BlockedBanner';
@@ -12,9 +12,12 @@ import type { ListsScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { liveLists } from '../state/listsReducer';
 import { canManageList } from '../state/roles';
-import { colors, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { spacing } from '../theme';
 
 export function ListsScreen({ navigation }: ListsScreenProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { lists, status, error, pending, blocked, createList, setListDeleted, restoreBlocked, discardBlocked } =
     useLists();
 
@@ -33,7 +36,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   if (status === 'loading') {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator accessibilityLabel="Loading your lists" color={colors.accent} />
+        <ActivityIndicator accessibilityLabel="Loading your lists" color={colors.primary} />
       </View>
     );
   }
@@ -85,19 +88,19 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
   },
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
   },
   content: {
     padding: spacing.lg,
     gap: spacing.md,
   },
-});
+}));

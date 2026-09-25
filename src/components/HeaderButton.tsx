@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
-import { colors, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, spacing } from '../theme';
 
 /**
  * A text button for a navigation header. Used both from inside a screen via
@@ -16,6 +17,8 @@ export function HeaderButton({
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -29,7 +32,7 @@ export function HeaderButton({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   button: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -38,10 +41,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   text: {
-    color: colors.accent,
+    color: colors.primary,
+    fontFamily: fonts.sans,
     fontSize: 16,
   },
   textDisabled: {
     color: colors.textMuted,
   },
-});
+}));

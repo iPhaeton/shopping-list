@@ -4,7 +4,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -21,9 +20,12 @@ import type { ListDetailScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { inCreationOrder, liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
-import { colors, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts, spacing } from '../theme';
 
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { listId } = route.params;
   const {
     lists,
@@ -112,7 +114,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           )
         : undefined,
     });
-  }, [navigation, list, list?.name, manageable, listId]);
+  }, [navigation, list, list?.name, manageable, listId, styles]);
 
   if (!list) {
     return (
@@ -127,7 +129,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   if (!list.itemsLoaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator accessibilityLabel="Loading list items" color={colors.accent} />
+        <ActivityIndicator accessibilityLabel="Loading list items" color={colors.primary} />
       </View>
     );
   }
@@ -202,7 +204,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           loadingMore ? (
             <ActivityIndicator
               accessibilityLabel="Loading more items"
-              color={colors.accent}
+              color={colors.primary}
               style={styles.footer}
             />
           ) : null
@@ -229,16 +231,16 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
   },
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -247,6 +249,7 @@ const styles = StyleSheet.create({
   readOnly: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
@@ -258,6 +261,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   binnedText: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
@@ -268,4 +272,4 @@ const styles = StyleSheet.create({
   footer: {
     paddingVertical: spacing.md,
   },
-});
+}));

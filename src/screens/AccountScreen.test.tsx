@@ -1,9 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { fetchProfile, setName as setNameApi } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { AccountScreenProps } from '../navigation/types';
 import { SessionProvider } from '../state/SessionContext';
+import { ThemeProvider } from '../state/ThemeContext';
+import { day, night } from '../theme';
 import { AccountScreen } from './AccountScreen';
 
 /**
@@ -179,5 +182,56 @@ describe('the account row', () => {
     await fireEvent.press(screen.getByLabelText('Save name'));
 
     await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
+  });
+});
+
+describe('the appearance picker', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  async function renderThemed() {
+    await render(
+      <ThemeProvider>
+        <SessionProvider>
+          <AccountScreen {...props} />
+        </SessionProvider>
+      </ThemeProvider>
+    );
+
+    await screen.findByLabelText('Sign out');
+  }
+
+  it('offers Day and Night, with Day checked by default', async () => {
+    await renderThemed();
+
+    expect(screen.getByLabelText('Day')).toBeChecked();
+    expect(screen.getByLabelText('Night')).not.toBeChecked();
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: day.primary });
+  });
+
+  it('switches to Night at once and remembers it on this device', async () => {
+    await renderThemed();
+
+    await fireEvent.press(screen.getByLabelText('Night'));
+
+    expect(screen.getByLabelText('Night')).toBeChecked();
+    expect(screen.getByLabelText('Day')).not.toBeChecked();
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
+    await waitFor(async () =>
+      expect(JSON.parse((await AsyncStorage.getItem('theme-preference')) ?? 'null')).toEqual({
+        v: 1,
+        preference: 'night',
+      })
+    );
+  });
+
+  it('shows a stored Night choice as checked', async () => {
+    await AsyncStorage.setItem('theme-preference', JSON.stringify({ v: 1, preference: 'night' }));
+
+    await renderThemed();
+
+    expect(screen.getByLabelText('Night')).toBeChecked();
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
   });
 });

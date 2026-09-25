@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { blockedList, restorePlan, type Blocked } from '../state/restorePlan';
+import { themedStyles } from '../state/ThemeContext';
 import type { List } from '../state/types';
-import { colors, radius, spacing } from '../theme';
+import { fonts, radius, spacing } from '../theme';
 
 /**
  * A queued write that landed on something somebody else put in the bin.
@@ -29,6 +30,8 @@ export function BlockedBanner({
   onRestore: () => void;
   onDiscard: () => void;
 }) {
+  const styles = useStyles();
+
   if (restorePlan(lists, blocked).length === 0) return null;
 
   return (
@@ -58,7 +61,7 @@ export function BlockedBanner({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   banner: {
     margin: spacing.lg,
     marginBottom: 0,
@@ -66,10 +69,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.primary,
     backgroundColor: colors.surface,
   },
   text: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.text,
   },
@@ -84,12 +88,13 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primary: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 15,
-    fontWeight: '600',
-    color: colors.accent,
+    color: colors.primary,
   },
   secondary: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
-});
+}));

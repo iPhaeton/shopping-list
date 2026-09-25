@@ -6,18 +6,19 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Stack and environment**
 
-- [A native dev build now works end to end](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` build and install it, not Expo Go (`expo start --go` still reaches Expo Go); CocoaPods, both bundle identifiers, and `expo-dev-client` are set; only `eas` and the Apple Developer account remain absent (environment)
-- [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; verify in the browser (environment)
+- [A native dev build works on both platforms](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` build and install it, not Expo Go; after a non-clean prebuild run `pod install` yourself, and the iOS `.app` lands in DerivedData, not `ios/build`; only `eas` and the Apple Developer account remain absent (environment)
+- [Maestro drives the native app](ai/kb/entries/maestro-drives-the-native-ui.md) — `~/.maestro/bin/maestro` with `JAVA_HOME` set, not on PATH; a simulator needs its keyboards reset before `inputText` works; iOS has no `back`; flows and `seed.mjs` live in `.maestro/` (environment)
+- [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; flows are verified in the browser (environment)
 - [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, and leaving a list in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, leaving a list, and Day/Night themes in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
+- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iPhone 17e simulator, web only has to work; fix web on the web side, never bend the phone design; web shows no checked state (constraint)
 
 **Auth**
 
 - [The Supabase client is a module seam](ai/kb/entries/supabase-client-module-boundary.md) — only `src/lib/supabase.ts` imports supabase-js; tests mock it, or the query module above it (convention)
-- [Cloud auth mail goes through Resend](ai/kb/entries/cloud-auth-mail-goes-through-resend.md) — from `no-reply@mail.shopping-loop.com`, the one verified domain, so any address gets the code now; DNS resolving is not verification, a `403` from `POST /emails` is the only local signal and gates the push (environment)
 - [Google's free sign-in library has two gaps](ai/kb/entries/google-native-signin-library-gaps.md) — no nonce option anywhere in its API, so `skip_nonce_check = true` is deliberate; iOS also needs an explicit `iosClientId` beside `webClientId` or it crashes at launch (gotcha)
 - [`onAuthStateChange`'s `'SIGNED_IN'` fires on restore too](ai/kb/entries/signed-in-event-fires-on-restore-too.md) — a cold-start session restore broadcasts the same event a live sign-in does; `SessionContext`'s `hasResolvedOnce` ref is what tells them apart (gotcha)
 - [A restored session waits for evidence](ai/kb/entries/restored-session-state-waits-for-evidence.md) — `AuthState` stays `loading`, mounting nothing, until a name-cache read or fetch actually decides `signedIn` vs. `nameRequired`; setting `signedIn` before either answered flashed the full app on every cold start (gotcha)
@@ -42,10 +43,6 @@ Run `npm run kb:audit` to check every entry still holds.
 
 - [Queries go through a11y labels](ai/kb/entries/queries-go-through-a11y-labels.md) — interactive elements keep role/label/state props; empty-state copy is asserted verbatim (convention)
 - [Screens take navigation props](ai/kb/entries/screens-take-navigation-props.md) — never `useNavigation()`, so tests can stub it; a stub means `headerRight` never mounts (convention)
-
-**Testing**
-
-- [RNTL 14 API changes](ai/kb/entries/rntl-14-api-changes.md) — `await` render/fireEvent/unmount; `toBeChecked` replaced `toHaveAccessibilityState`; `act` for external updates (gotcha)
 
 ---
 

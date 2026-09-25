@@ -1,10 +1,21 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { ErrorBanner } from '../components/ErrorBanner';
+import { SegmentedPicker, type SegmentedOption } from '../components/SegmentedPicker';
+import type { ThemePreference } from '../lib/themePreference';
 import type { AccountScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
-import { colors, radius, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
+
+const APPEARANCES: SegmentedOption<ThemePreference>[] = [
+  { value: 'day', title: 'Day' },
+  { value: 'night', title: 'Night' },
+];
+
+const appearanceLabel = (preference: ThemePreference) =>
+  APPEARANCES.find((option) => option.value === preference)?.title ?? preference;
 
 /**
  * Takes `navigation`/`route` as props per convention even though it never uses them: like
@@ -12,6 +23,8 @@ import { colors, radius, spacing } from '../theme';
  * which unmounts this screen rather than navigating away from it.
  */
 export function AccountScreen(_props: AccountScreenProps) {
+  const styles = useStyles();
+  const { colors, scheme, preference, setPreference } = useTheme();
   const { state, signOut, signOutEverywhere, setName } = useSession();
 
   const [pending, setPending] = useState(false);
@@ -110,6 +123,8 @@ export function AccountScreen(_props: AccountScreenProps) {
               onChangeText={setNameDraft}
               placeholder="Your name"
               placeholderTextColor={colors.textMuted}
+              keyboardAppearance={scheme}
+              selectionColor={colors.primary}
               accessibilityLabel="Your name"
               autoCapitalize="words"
               autoCorrect={false}
@@ -157,6 +172,19 @@ export function AccountScreen(_props: AccountScreenProps) {
             </View>
           </View>
         )}
+      </View>
+
+      {/* Per device, not per account: it applies before sign-in too, and outlives this account. */}
+      <View style={styles.row}>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Appearance</Text>
+          <SegmentedPicker
+            options={APPEARANCES}
+            value={preference}
+            labelFor={appearanceLabel}
+            onChange={setPreference}
+          />
+        </View>
       </View>
 
       <View style={styles.row}>
@@ -214,10 +242,10 @@ export function AccountScreen(_props: AccountScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
     padding: spacing.lg,
     gap: spacing.md,
   },
@@ -225,7 +253,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
   },
   button: {
     padding: spacing.lg,
@@ -234,15 +262,16 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.accent,
+    color: colors.primary,
   },
   confirm: {
     padding: spacing.lg,
     gap: spacing.md,
   },
   confirmText: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.textMuted,
   },
@@ -256,9 +285,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.outline,
   },
   cancelButtonText: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.text,
   },
@@ -270,9 +300,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   dangerButtonText: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 15,
-    fontWeight: '600',
-    color: colors.onAccent,
+    color: colors.onError,
   },
   infoRow: {
     flexDirection: 'row',
@@ -281,10 +311,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   infoLabel: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
   infoValue: {
+    fontFamily: fonts.sans,
     fontSize: 16,
     color: colors.text,
   },
@@ -298,32 +330,37 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   editButtonText: {
+    fontFamily: fonts.sans,
     fontSize: 15,
-    color: colors.accent,
+    color: colors.primary,
   },
   input: {
     height: 44,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
+    fontFamily: fonts.sans,
     fontSize: 16,
+    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
+    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
+    letterSpacing: 0,
   },
   saveButton: {
     flex: 1,
     paddingVertical: spacing.md,
     alignItems: 'center',
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
   },
   saveButtonDisabled: {
-    backgroundColor: colors.accentDisabled,
+    backgroundColor: colors.primaryDisabled,
   },
   saveButtonText: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 15,
-    fontWeight: '600',
-    color: colors.onAccent,
+    color: colors.onPrimary,
   },
-});
+}));

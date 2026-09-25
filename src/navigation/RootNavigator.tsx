@@ -1,6 +1,7 @@
-import { NavigationContainer } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useMemo } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 import { HeaderButton } from '../components/HeaderButton';
 import { AccountScreen } from '../screens/AccountScreen';
@@ -10,31 +11,53 @@ import { SetNameScreen } from '../screens/SetNameScreen';
 import { SharingScreen } from '../screens/SharingScreen';
 import { SignInScreen } from '../screens/SignInScreen';
 import { useSession, type AuthState } from '../state/SessionContext';
-import { colors } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts } from '../theme';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   const { state } = useSession();
+  const { name, colors } = useTheme();
+  const styles = useStyles();
+
+  // What the navigator paints where no screen does — behind a push, say. Left at React Navigation's
+  // default, that is a white card sliding across the night sky.
+  const navigationTheme = useMemo<Theme>(() => {
+    const base = name === 'night' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.primary,
+        background: colors.skyTop,
+        card: colors.skyTop,
+        text: colors.text,
+        border: colors.divider,
+      },
+    };
+  }, [name, colors]);
 
   // Nothing is known yet about whether a stored session exists; showing either stack here would
   // flash the wrong one.
   if (state.status === 'loading') {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={colors.accent} />
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
+          headerStyle: { backgroundColor: colors.skyTop },
           headerTintColor: colors.text,
-          contentStyle: { backgroundColor: colors.background },
+          headerTitleStyle: { fontFamily: fonts.serif },
+          headerBackTitleStyle: { fontFamily: fonts.sans },
+          contentStyle: { backgroundColor: colors.skyTop },
         }}>
         {screensFor(state)}
       </Stack.Navigator>
@@ -81,11 +104,11 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
   }
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
   },
-});
+}));

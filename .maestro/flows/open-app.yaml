@@ -1,0 +1,14 @@
+# Cold-starts the dev client straight into this machine's Metro, skipping the launcher screen.
+appId: com.shoppingloop.app
+---
+- stopApp
+- openLink: exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081
+# A simulator that has never opened this scheme asks first — after a beat, hence the wait.
+- waitForAnimationToEnd
+- tapOn:
+    text: Open
+    optional: true
+# The dev client shows a one-time "developer menu" explainer on first launch.
+- tapOn:
+    text: Continue
+    optional: true

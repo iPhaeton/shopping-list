@@ -1,0 +1,11 @@
+# From Lists to the Sign in screen.
+appId: com.shoppingloop.app
+---
+- extendedWaitUntil:
+    visible: Account
+    timeout: 30000
+- tapOn: Account
+- tapOn: Sign out
+- extendedWaitUntil:
+    visible: Email address
+    timeout: 10000

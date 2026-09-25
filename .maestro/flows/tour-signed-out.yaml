@@ -1,0 +1,29 @@
+# From the Sign in screen: both sign-in phases, then Set name for a brand-new account. Pass THEME
+# (day or night, used in file names) and EMAIL, an address the local stack has never seen, so it
+# lands on the name gate. Screenshots go to <--test-output-dir>/takeScreenshot/.
+appId: com.shoppingloop.app
+---
+- extendedWaitUntil:
+    visible: Email address
+    timeout: 10000
+- takeScreenshot: sign-in-email-${THEME}
+- tapOn: Email address
+# iOS drops the first keystrokes typed while the keyboard is still sliding in.
+- waitForAnimationToEnd
+- eraseText
+- inputText: ${EMAIL}
+- takeScreenshot: sign-in-email-keyboard-${THEME}
+- tapOn: Send code
+- extendedWaitUntil:
+    visible: Six-digit code
+    timeout: 10000
+- takeScreenshot: sign-in-code-${THEME}
+- runScript: ../scripts/mailpit-code.js
+- tapOn: Six-digit code
+- waitForAnimationToEnd
+- inputText: ${output.code}
+- tapOn: Sign in
+- extendedWaitUntil:
+    visible: Your name
+    timeout: 10000
+- takeScreenshot: set-name-${THEME}

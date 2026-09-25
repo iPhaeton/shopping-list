@@ -3,7 +3,8 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput,
 
 import type { SignInScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
-import { colors, radius, spacing } from '../theme';
+import { themedStyles, useTheme } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 /** Supabase allows one code request per minute; the countdown makes that visible. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -18,6 +19,8 @@ const CODE_LENGTH = 6;
  * swaps the whole stack when the session state changes, which unmounts this screen.
  */
 export function SignInScreen(_props: SignInScreenProps) {
+  const styles = useStyles();
+  const { colors, scheme } = useTheme();
   const { requestCode, verifyCode, signInWithGoogle, state } = useSession();
   const revoked = state.status === 'signedOut' && state.reason === 'revoked';
 
@@ -112,6 +115,8 @@ export function SignInScreen(_props: SignInScreenProps) {
               onChangeText={setEmail}
               placeholder="you@example.com"
               placeholderTextColor={colors.textMuted}
+              keyboardAppearance={scheme}
+              selectionColor={colors.primary}
               accessibilityLabel="Email address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -142,6 +147,8 @@ export function SignInScreen(_props: SignInScreenProps) {
               onChangeText={setCode}
               placeholder="123456"
               placeholderTextColor={colors.textMuted}
+              keyboardAppearance={scheme}
+              selectionColor={colors.primary}
               accessibilityLabel="Six-digit code"
               keyboardType="number-pad"
               maxLength={CODE_LENGTH}
@@ -193,6 +200,8 @@ function PrimaryButton({
   enabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -210,11 +219,11 @@ function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
     padding: spacing.lg,
   },
   card: {
@@ -223,14 +232,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
   },
   title: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 24,
-    fontWeight: '600',
     color: colors.text,
   },
   hint: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
@@ -238,11 +248,15 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     color: colors.text,
+    fontFamily: fonts.sans,
     fontSize: 16,
+    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
+    // field below would keep its letter spacing — every placeholder after it came out spaced.
+    letterSpacing: 0,
   },
   codeInput: {
     letterSpacing: 6,
@@ -251,27 +265,28 @@ const styles = StyleSheet.create({
   button: {
     height: 44,
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: colors.accentDisabled,
+    backgroundColor: colors.primaryDisabled,
   },
   buttonPressed: {
     opacity: 0.8,
   },
   buttonText: {
-    color: colors.onAccent,
+    color: colors.onPrimary,
+    fontFamily: fonts.sansSemiBold,
     fontSize: 16,
-    fontWeight: '600',
   },
   link: {
     alignItems: 'center',
     paddingVertical: spacing.xs,
   },
   linkText: {
-    color: colors.accent,
+    color: colors.primary,
+    fontFamily: fonts.sans,
     fontSize: 15,
   },
   linkTextDisabled: {
@@ -279,6 +294,7 @@ const styles = StyleSheet.create({
   },
   error: {
     color: colors.error,
+    fontFamily: fonts.sans,
     fontSize: 15,
   },
-});
+}));

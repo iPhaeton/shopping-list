@@ -8,7 +8,13 @@ sources: [ai/tasks/6-custom-smtp/plan-step-1.md, ai/tasks/6-custom-smtp/implemen
 last_verified: 2026-09-18
 verify: grep -q '^admin_email = "no-reply@mail.shopping-loop.com"$' supabase/config.toml && awk '/^\[remotes\.production\.auth\.email\.smtp\]/{f=1;next} /^\[/{f=0} f' supabase/config.toml | grep -q '^enabled = true$' && grep -q '^host = "smtp.resend.com"$' supabase/config.toml && grep -q '^pass = "env(RESEND_API_KEY)"' supabase/config.toml && ! grep -q 'resend\.dev' supabase/config.toml && ! grep -q '^RESEND_API_KEY=' .env.example && grep -qx '.env' .gitignore
 related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, otp-email-templates-carry-the-code, shoppingloop-is-the-visible-name-only, scope-boundaries]
+indexed: false
 ---
+
+> **Demoted from `INDEX.md` at task 20 step 1, still true.** Nothing has cited it since task 13, and
+> it matters only when production auth mail or its config push is touched. Reached from
+> [supabase-local-stack](supabase-local-stack.md) and
+> [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md).
 
 Since task 6 every auth email the cloud project sends — both OTP templates — leaves through Resend's
 SMTP, not Supabase's built-in mailer: `[remotes.production.auth.email.smtp]` at the end of

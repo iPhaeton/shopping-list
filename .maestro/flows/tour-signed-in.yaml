@@ -1,0 +1,40 @@
+# Screenshots every signed-in screen as the seeded owner (Groceries with a binned item and a member
+# named Sam; "Birthday party" shared read-only). Starts on Lists. Pass THEME (day or night, used in
+# file names). Screenshots go to <--test-output-dir>/takeScreenshot/.
+appId: com.shoppingloop.app
+---
+- extendedWaitUntil:
+    visible: Groceries
+    timeout: 15000
+- takeScreenshot: lists-${THEME}
+
+- tapOn: Groceries
+- extendedWaitUntil:
+    visible: Add an item
+    timeout: 10000
+- tapOn: Show 1 deleted
+- takeScreenshot: list-detail-bin-shown-${THEME}
+- tapOn: Show 1 deleted
+- tapOn: Rename list
+- takeScreenshot: list-detail-rename-open-${THEME}
+- tapOn: Rename list
+
+- tapOn: Share list
+- extendedWaitUntil:
+    visible: Sam
+    timeout: 10000
+- takeScreenshot: sharing-${THEME}
+# iOS back buttons are labelled with the previous screen's title; Maestro's `back` is Android-only.
+- tapOn: Groceries
+- tapOn: My Lists
+
+- tapOn: Birthday party, shared with you
+- extendedWaitUntil:
+    visible: Candles
+    timeout: 10000
+- takeScreenshot: list-detail-read-only-${THEME}
+- tapOn: My Lists
+
+- tapOn: Account
+- takeScreenshot: account-${THEME}
+- tapOn: My Lists

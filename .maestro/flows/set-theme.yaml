@@ -1,0 +1,6 @@
+# From Lists: Account → pick THEME (Day or Night) → back to Lists.
+appId: com.shoppingloop.app
+---
+- tapOn: Account
+- tapOn: ${THEME}
+- tapOn: My Lists

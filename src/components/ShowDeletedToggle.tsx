@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 /**
  * The bin, behind a checkbox.
@@ -32,6 +33,7 @@ export function ShowDeletedToggle({
   more?: boolean;
   onChange: (checked: boolean) => void;
 }) {
+  const styles = useStyles();
   const label = more
     ? `Show ${count}+ deleted`
     : count === 1
@@ -53,7 +55,7 @@ export function ShowDeletedToggle({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -69,22 +71,23 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: radius.sm,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.checkboxOutline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   boxChecked: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   check: {
-    color: colors.onAccent,
+    color: colors.onPrimary,
+    fontFamily: fonts.sansBold,
     fontSize: 11,
     lineHeight: 13,
-    fontWeight: '700',
   },
   label: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.textMuted,
   },
-});
+}));

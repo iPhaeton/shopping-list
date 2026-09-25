@@ -1,0 +1,17 @@
+# From the Sign in screen to signed in, reading the code out of Mailpit. Pass EMAIL.
+appId: com.shoppingloop.app
+---
+- tapOn: Email address
+# iOS drops the first keystrokes typed while the keyboard is still sliding in.
+- waitForAnimationToEnd
+- eraseText
+- inputText: ${EMAIL}
+- tapOn: Send code
+- extendedWaitUntil:
+    visible: Six-digit code
+    timeout: 10000
+- runScript: ../scripts/mailpit-code.js
+- tapOn: Six-digit code
+- waitForAnimationToEnd
+- inputText: ${output.code}
+- tapOn: Sign in

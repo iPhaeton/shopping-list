@@ -1,6 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 /**
  * A write the database *refused*, or a read that came back with nothing to show. Not a write that
@@ -10,6 +11,8 @@ import { colors, radius, spacing } from '../theme';
  * underneath is what the database holds.
  */
 export function ErrorBanner({ message }: { message: string }) {
+  const styles = useStyles();
+
   return (
     <View accessibilityRole="alert" style={styles.banner}>
       <Text style={styles.text}>{message}</Text>
@@ -17,7 +20,7 @@ export function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   banner: {
     margin: spacing.lg,
     marginBottom: 0,
@@ -28,7 +31,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   text: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.error,
   },
-});
+}));

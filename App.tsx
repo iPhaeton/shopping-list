@@ -5,18 +5,27 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ListsProvider } from './src/state/ListsContext';
 import { SessionProvider, useSession } from './src/state/SessionContext';
+import { ThemeProvider, useTheme } from './src/state/ThemeContext';
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <SessionProvider>
-        <ListsForSignedInUser>
-          <StatusBar style="dark" />
-          <RootNavigator />
-        </ListsForSignedInUser>
-      </SessionProvider>
+      <ThemeProvider>
+        <SessionProvider>
+          <ListsForSignedInUser>
+            <ThemedStatusBar />
+            <RootNavigator />
+          </ListsForSignedInUser>
+        </SessionProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+/** Dark icons on the day sky, light ones on the night sky. */
+function ThemedStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
 }
 
 /**

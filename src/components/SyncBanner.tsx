@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, radius, spacing } from '../theme';
 
 /**
  * A write that lands within one normal online round trip should never paint at all — only one
@@ -18,6 +19,7 @@ const SHOW_AFTER_MS = 400;
  * `ErrorBanner` is for the other kind: a write the database refused, which is gone.
  */
 export function SyncBanner({ pending }: { pending: number }) {
+  const styles = useStyles();
   const [visible, setVisible] = useState(false);
   const waiting = pending > 0;
 
@@ -42,18 +44,19 @@ export function SyncBanner({ pending }: { pending: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   banner: {
     margin: spacing.lg,
     marginBottom: 0,
     padding: spacing.md,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: colors.surfaceOutline,
+    backgroundColor: colors.bannerSurface,
   },
   text: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
-});
+}));

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -19,8 +19,9 @@ import type { SharingScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { canManageList } from '../state/roles';
 import { useSession } from '../state/SessionContext';
+import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Role } from '../state/types';
-import { colors, radius, spacing } from '../theme';
+import { fonts, radius, spacing } from '../theme';
 
 /** The wording the `keep_last_owner` trigger raises, so the app and the database agree on one. */
 const LAST_OWNER = 'A list must keep at least one owner.';
@@ -42,6 +43,8 @@ function displayNameFor(member: Member): string {
  * rather than queued.
  */
 export function SharingScreen({ navigation, route }: SharingScreenProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { listId } = route.params;
   const { lists, userId, refresh, lastNudge } = useLists();
   const { signOut } = useSession();
@@ -143,7 +146,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
       <Text style={styles.heading}>People with access</Text>
 
       {members === null ? (
-        <ActivityIndicator accessibilityLabel="Loading who has access" color={colors.accent} />
+        <ActivityIndicator accessibilityLabel="Loading who has access" color={colors.primary} />
       ) : (
         members.map((member) => {
           const you = member.userId === userId;
@@ -322,18 +325,18 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.skyTop,
   },
   content: {
     padding: spacing.lg,
     gap: spacing.md,
   },
   heading: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 17,
-    fontWeight: '600',
     color: colors.text,
   },
   member: {
@@ -342,13 +345,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceOutline,
   },
   email: {
+    fontFamily: fonts.sans,
     fontSize: 16,
     color: colors.text,
   },
   role: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.textMuted,
   },
@@ -362,6 +367,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   removeText: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.error,
   },
@@ -369,6 +375,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   hint: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.textMuted,
   },
@@ -376,6 +383,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   confirmText: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.textMuted,
   },
@@ -389,9 +397,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.outline,
   },
   cancelButtonText: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.text,
   },
@@ -403,9 +412,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   dangerButtonText: {
+    fontFamily: fonts.sansSemiBold,
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.onAccent,
+    color: colors.onError,
   },
   invite: {
     flexDirection: 'row',
@@ -417,16 +426,16 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: colors.accentDisabled,
+    backgroundColor: colors.primaryDisabled,
   },
   buttonText: {
-    color: colors.onAccent,
+    color: colors.onPrimary,
+    fontFamily: fonts.sansSemiBold,
     fontSize: 16,
-    fontWeight: '600',
   },
-});
+}));

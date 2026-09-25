@@ -4,10 +4,10 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md]
-last_verified: 2026-09-18
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md]
+last_verified: 2026-09-25
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && test -n "$(grep -rl "'.env', '.env.development', '.env.local', '.env.development.local'" node_modules/expo node_modules/@expo 2>/dev/null | head -1)"
-related: [cloud-auth-mail-goes-through-resend, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
+related: [cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
 
 **There are two Supabase environments since step 5.**
@@ -29,7 +29,8 @@ Start Docker Desktop, then `npx supabase start`. The CLI is a devDependency, so 
 supabase` — a globally installed one may be a different version.
 
 **Why local is still the verification path:** the six-digit sign-in code is machine-readable in
-Mailpit, so the whole OTP flow can be driven end to end by Playwright. On cloud the code lands in a
+Mailpit, so the whole OTP flow can be driven end to end — by Playwright on web, by Maestro on a
+simulator. On cloud the code lands in a
 real inbox and a human has to relay it. Nothing local is ever sent to a real address; **cloud mail is
 real mail, sent through Resend from a verified domain to any address** —
 [cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md) has the block, the
@@ -111,10 +112,9 @@ refuses an UPDATE or DELETE by matching zero rows rather than erroring
 `pg_proc.proacl` and `information_schema.column_privileges` directly rather than trusting a `revoke`
 ([supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)).
 
-**Verify anything that touches Supabase in the browser**, with `psql` against port 54322 as the check
-on what actually landed. `npm run web` was the only path driven end to end until task 13 phase 2 added
-a real Android sign-in against local — the iOS simulator still hasn't
-([native-build-toolchain](native-build-toolchain.md)). A physical device reaches cloud, whose SMTP and
-templates are live and have sent one real code, but no device has completed a sign-in against
-production — the only thing left that would prove it end to end
-([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).
+**Verify flows that touch Supabase in the browser**, with `psql` against port 54322 as the check on
+what actually landed; looks are signed off on the simulator ([phone-is-the-product](phone-is-the-product.md)).
+Both native builds have signed in against local too — Android with Google (task 13), iOS by OTP with
+Maestro reading Mailpit (task 20; [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md)).
+Cloud's SMTP and templates are live and have sent one real code, but no device has completed a
+sign-in against production ([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).
