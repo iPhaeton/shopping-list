@@ -4,10 +4,10 @@ title: Every color and font comes from src/theme.ts, read at render through them
 type: convention
 status: current
 tags: [styling, theme, fonts]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md]
-last_verified: 2026-09-25
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md]
+last_verified: 2026-09-26
 verify: test -z "$(grep -rnE '#[0-9a-fA-F]{3,8}|rgba?\(' src --include='*.ts' --include='*.tsx' | grep -v src/theme.ts)" && test "$(grep -rl 'StyleSheet.create' src --include='*.tsx' | grep -v '\.test\.')" = src/state/ThemeContext.tsx && ! grep -rq 'fontWeight' src --include='*.tsx' && ! grep -rqE "from '@expo-google-fonts/[a-z0-9-]+'" src && ! grep -q 'export const colors' src/theme.ts
-related: [queries-go-through-a11y-labels, theme-reaches-native-surfaces, recycled-text-input-keeps-letter-spacing, phone-is-the-product]
+related: [queries-go-through-a11y-labels, theme-reaches-native-surfaces, recycled-text-input-keeps-letter-spacing, phone-is-the-product, theme-provider-suites-fake-the-clock]
 indexed: false
 ---
 
@@ -33,7 +33,9 @@ palette and caches. An inline color (a `placeholderTextColor`, an `ActivityIndic
   providers, open editors, drafts, scroll positions and the stack all survive it.
 
 The context default is the day palette rather than a throw for a missing provider — that is what lets
-every screen suite render without a `ThemeProvider` and never wait on fonts.
+every screen suite render without a `ThemeProvider`, never wait on fonts, and never depend on the
+time of day: it stays a fixed Day although the provider's own default is now Auto
+([theme-provider-suites-fake-the-clock](theme-provider-suites-fake-the-clock.md)).
 
 **Fonts: one family per weight, never `fontWeight`.** `fonts.sans`, `sansSemiBold`, `sansBold`
 (Nunito Sans) and `fonts.serif` (Source Serif 4, screen titles). Android does not pick a weight

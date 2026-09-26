@@ -1,4 +1,4 @@
-# From Lists: Account → pick THEME (Day or Night) → back to Lists.
+# From Lists: Account → pick THEME (Day, Night, or Auto) → back to Lists.
 appId: com.shoppingloop.app
 ---
 - tapOn: Account

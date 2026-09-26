@@ -4,10 +4,10 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md]
-last_verified: 2026-09-25
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md]
+last_verified: 2026-09-26
 verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs
-related: [phone-is-the-product, native-build-toolchain, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels]
+related: [phone-is-the-product, native-build-toolchain, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone]
 ---
 
 Since task 20 step 1, **Maestro 2.10.0** is how an agent reaches a screen and state on the iOS
@@ -57,6 +57,25 @@ plus `KeyboardPrediction`, `KeyboardAutocorrection`, `KeyboardCheckSpelling`,
   (`RCTDevMenu.RCTPerfMonitorKey` in the app container's
   `Library/Preferences/com.shoppingloop.app.plist`); if it shows up in a screenshot, turn it off
   there with `xcrun simctl spawn booted defaults write …`.
+- On the iPhone 17 Pro Max's first launch after a boot, `open-app.yaml`'s optional `Continue` tap
+  opened the dev menu itself; close it by tapping its ✕ at `point: "89%,47%"`.
+
+**Reaching a time of day** (Auto's sunset and sunrise) takes no code — move the zone, not the clock:
+
+- **iOS simulator**, per launch: `xcrun simctl terminate booted com.shoppingloop.app`, then
+  `SIMCTL_CHILD_TZ=<zone> xcrun simctl launch booted com.shoppingloop.app`, then
+  `xcrun simctl openurl booted` with `open-app.yaml`'s deep link. Not `open-app.yaml` itself: its
+  `stopApp` ends the process that carries the variable. `SIMCTL_CHILD_*` reaches the app, and
+  Hermes's `Intl` and `Date` both follow `TZ`. The first `openurl` after a fresh boot may time out
+  (`NSPOSIXErrorDomain 60`) and still load the app ~48 s later.
+- **Android emulator** (a Play Store image, so no `adb root`): `adb shell cmd time_zone_detector
+  set_time_zone_state_for_tests --zone_id <zone> --user_should_confirm_id false`.
+  `suggest_manual_time_zone` is refused — the shell lacks `SUGGEST_MANUAL_TIME_AND_ZONE`. Press
+  Home before and resume after, to exercise the foreground re-check. Restore `Europe/Warsaw` and
+  `set_auto_detection_enabled true` afterwards.
+- To find a zone whose transition is minutes away, run `resolveTheme` over every `ZONE_COORDS` key in
+  a throwaway jest file. The `status_bar` override keeps showing 9:41, never the time under test;
+  read what the app believes through [metro-inspector-reads-live-app-state](metro-inspector-reads-live-app-state.md).
 
 **Android:** `back` works. Run `adb reverse tcp:8081 tcp:8081` first so `open-app.yaml`'s
 `127.0.0.1:8081` reaches Metro. After Maestro's first-time driver install the app was not running
@@ -68,9 +87,10 @@ UI isn't responding" over everything — tap Wait.
 - `flows/open-app.yaml` — cold-starts the dev client straight into Metro through its deep link.
 - `flows/sign-in.yaml` (`EMAIL`) — OTP sign-in; `scripts/mailpit-code.js` reads the code from
   Mailpit's HTTP API inside the flow. Also `ensure-signed-in`, `sign-out`, `set-theme` (`THEME` =
-  `Day`/`Night`), and the two screenshot tours (`THEME` = `day`/`night`).
-- `shoot-all.sh <out> <owner-email> <fresh-prefix>` — both tours in both themes. Set name only
-  appears for a never-seen address, so each run needs a fresh prefix.
+  `Day`/`Night`/`Auto`), and the two screenshot tours (`THEME` = `day`/`night`).
+- `shoot-all.sh <out> <owner-email> <fresh-prefix>` — both tours in both themes, each set
+  explicitly, so Auto's default never reaches them. Set name only appears for a never-seen address,
+  so each run needs a fresh prefix.
 - `seed.mjs [owner] [member]` — the tour data, made **through the API** (OTP via Mailpit, then the
   app's own RPCs). A psql role switch cannot do it: every write RPC checks for a live
   `auth.sessions` row ([session-still-valid-guards-writes](session-still-valid-guards-writes.md)).

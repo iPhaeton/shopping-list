@@ -13,7 +13,7 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Scope**
 
-- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, leaving a list, and Day/Night themes in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
+- [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, leaving a list, and Day/Night/Auto themes in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
 - [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iPhone 17e simulator, web only has to work; fix web on the web side, never bend the phone design; web shows no checked state (constraint)
 
 **Auth**

@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [navigation, screens, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-21
+last_verified: 2026-09-26
 verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && grep -q 'headerRight' src/screens/ListDetailScreen.test.tsx && grep -q "options={({ navigation })" src/navigation/RootNavigator.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels]
 ---

@@ -11,9 +11,17 @@ const VERSION = 1;
  */
 const KEY = 'theme-preference';
 
-export type ThemePreference = ThemeName;
+/** `'auto'` follows the sun (`src/state/resolveTheme.ts`); the other two are fixed. */
+export type ThemePreference = ThemeName | 'auto';
 
-const DEFAULT: ThemePreference = 'day';
+/**
+ * For anyone who never chose. `'auto'` joined the stored values without a version bump: a `'day'`
+ * or `'night'` stored before it existed is still read as chosen.
+ */
+const DEFAULT: ThemePreference = 'auto';
+
+const isPreference = (value: unknown): value is ThemePreference =>
+  value === 'auto' || value === 'day' || value === 'night';
 
 /**
  * Never rejects. Absent, unreadable, and anything this version does not recognise all come back as
@@ -26,7 +34,7 @@ export async function readThemePreference(): Promise<ThemePreference> {
 
     const stored = JSON.parse(raw) as { v?: unknown; preference?: unknown };
     if (stored.v !== VERSION) return DEFAULT;
-    return stored.preference === 'day' || stored.preference === 'night' ? stored.preference : DEFAULT;
+    return isPreference(stored.preference) ? stored.preference : DEFAULT;
   } catch {
     return DEFAULT;
   }

@@ -4,19 +4,19 @@ title: A component gets its own test suite only once it owns real logic — ever
 type: convention
 status: current
 tags: [testing, components, architecture]
-sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, src/components/UserAutocomplete.tsx, src/components/UserAutocomplete.test.tsx]
-last_verified: 2026-09-22
+sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, src/components/UserAutocomplete.tsx, src/components/UserAutocomplete.test.tsx]
+last_verified: 2026-09-26
 verify: test "$(ls src/components/*.test.tsx 2>/dev/null | wc -l | tr -d ' ')" = 1 && test -f src/components/UserAutocomplete.test.tsx && grep -q 'setTimeout' src/components/UserAutocomplete.tsx && grep -q 'useFakeTimers' src/components/UserAutocomplete.test.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels, supabase-client-module-boundary]
 indexed: false
 ---
 
 Every component under [src/components/](../../../src/components/) — `ItemRow`, `ListRow`,
-`RolePicker`, `AddBar`, `HeaderButton`, `ShowDeletedToggle`, `BlockedBanner`, `SyncBanner`,
-`EmptyState`, `ErrorBanner` — is exercised only through the screen that renders it; none has its own
-`.test.tsx`. [UserAutocomplete](../../../src/components/UserAutocomplete.tsx), added in step 18, is
-the first exception, and the reason is not "it's new" — it's that it owns logic none of the others
-do: a debounce timer, a fetch, and an in-flight-response race (`cancelled`) that a screen-level test
+`RolePicker`, `SegmentedPicker`, `AddBar`, `HeaderButton`, `ShowDeletedToggle`, `BlockedBanner`,
+`SyncBanner`, `EmptyState`, `ErrorBanner` — is exercised only through the screen that renders it;
+none has its own `.test.tsx`. [UserAutocomplete](../../../src/components/UserAutocomplete.tsx),
+added in step 18, is the first exception, and the reason is not "it's new" — it's that it owns
+logic none of the others do: a debounce timer, a fetch, and an in-flight-response race (`cancelled`) that a screen-level test
 would have to reach through two layers of indirection and fake timers to exercise at all.
 
 **The line is "does this component own async logic of its own," not "is it new" or "is it complex

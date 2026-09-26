@@ -4,8 +4,8 @@ title: src/lib/supabase.ts is the only runtime importer of supabase-js, and the 
 type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
-last_verified: 2026-09-23
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
+last_verified: 2026-09-26
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts && grep -q "from '../lib/membersApi'" src/components/UserAutocomplete.tsx && for f in src/components/ItemRow.tsx src/components/ListRow.tsx src/components/RolePicker.tsx; do ! grep -q "from '../lib/" "$f" || exit 1; done
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 ---
@@ -71,8 +71,8 @@ goes in that screen's `useState`, calling the query module directly.
 calls `membersApi.searchUsers` itself rather than taking suggestions as a prop, because the effect
 (timer, in-flight-response race) is the component's own state, with nothing for a parent to hold.
 Read "screens and providers import the query module" as "whatever owns the state that triggers the
-call does" — a presentational component (`ItemRow`, `ListRow`, `RolePicker`) still takes everything
-as props and imports nothing from `lib/`.
+call does" — a presentational component (`ItemRow`, `ListRow`, `RolePicker`) takes its data as
+props, reads only the theme from context, and imports nothing from `lib/`.
 
 **One suite is the exception, and it has to be: `listsApi`'s own — and `membersApi`'s is the same
 exception a second time.** [src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) mocks

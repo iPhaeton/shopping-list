@@ -12,6 +12,7 @@ import { fonts, radius, spacing } from '../theme';
 const APPEARANCES: SegmentedOption<ThemePreference>[] = [
   { value: 'day', title: 'Day' },
   { value: 'night', title: 'Night' },
+  { value: 'auto', title: 'Auto' },
 ];
 
 const appearanceLabel = (preference: ThemePreference) =>
@@ -24,7 +25,7 @@ const appearanceLabel = (preference: ThemePreference) =>
  */
 export function AccountScreen(_props: AccountScreenProps) {
   const styles = useStyles();
-  const { colors, scheme, preference, setPreference } = useTheme();
+  const { colors, scheme, preference, nextChange, setPreference } = useTheme();
   const { state, signOut, signOutEverywhere, setName } = useSession();
 
   const [pending, setPending] = useState(false);
@@ -185,6 +186,8 @@ export function AccountScreen(_props: AccountScreenProps) {
             onChange={setPreference}
           />
         </View>
+        {/* Under Auto: when it next switches, which also shows how rough the time-zone sunset is. */}
+        {nextChange ? <Text style={styles.hint}>{nextChange}</Text> : null}
       </View>
 
       <View style={styles.row}>
@@ -313,6 +316,15 @@ const useStyles = themedStyles((colors) => ({
   infoLabel: {
     fontFamily: fonts.sans,
     fontSize: 15,
+    color: colors.textMuted,
+  },
+  hint: {
+    marginTop: -spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    textAlign: 'right',
+    fontFamily: fonts.sans,
+    fontSize: 14,
     color: colors.textMuted,
   },
   infoValue: {

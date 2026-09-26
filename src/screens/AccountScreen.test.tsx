@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+import { deviceTimeZone } from '../lib/deviceTimeZone';
 import { fetchProfile, setName as setNameApi } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { AccountScreenProps } from '../navigation/types';
@@ -32,6 +33,9 @@ jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
  * module reaches for the real Supabase client. A non-null default keeps `state.status` at
  * `signedIn` throughout — this screen renders nothing while it is `nameRequired`. */
 jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.fn() }));
+
+/** Auto reads the zone to find a sunset; pinned so the appearance tests never see the real one. */
+jest.mock('../lib/deviceTimeZone', () => ({ deviceTimeZone: jest.fn() }));
 
 const auth = supabase.auth as unknown as {
   getSession: jest.Mock;
@@ -186,8 +190,15 @@ describe('the account row', () => {
 });
 
 describe('the appearance picker', () => {
+  // Auto is the default, so what these see depends on the clock: noon in Warsaw, sunset at 21:01.
   beforeEach(async () => {
+    jest.useFakeTimers({ now: new Date('2026-06-21T12:00:00+02:00') });
+    jest.mocked(deviceTimeZone).mockReturnValue('Europe/Warsaw');
     await AsyncStorage.clear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   async function renderThemed() {
@@ -202,12 +213,39 @@ describe('the appearance picker', () => {
     await screen.findByLabelText('Sign out');
   }
 
-  it('offers Day and Night, with Day checked by default', async () => {
+  it('offers Day, Night, and Auto, with Auto checked by default', async () => {
     await renderThemed();
 
-    expect(screen.getByLabelText('Day')).toBeChecked();
+    expect(screen.getByLabelText('Auto')).toBeChecked();
+    expect(screen.getByLabelText('Day')).not.toBeChecked();
     expect(screen.getByLabelText('Night')).not.toBeChecked();
     expect(screen.getByText('Sign out')).toHaveStyle({ color: day.primary });
+  });
+
+  it('says under Auto when the next change comes', async () => {
+    await renderThemed();
+
+    expect(screen.getByText(/^Night from \d/)).toBeOnTheScreen();
+  });
+
+  it('paints night under Auto after sunset, and names the morning', async () => {
+    jest.setSystemTime(new Date('2026-06-21T23:30:00+02:00'));
+
+    await renderThemed();
+
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
+    expect(screen.getByText(/^Day from \d/)).toBeOnTheScreen();
+  });
+
+  it('shows the hint only while Auto is chosen', async () => {
+    await renderThemed();
+
+    await fireEvent.press(screen.getByLabelText('Day'));
+    expect(screen.queryByText(/ from \d/)).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Auto'));
+    expect(screen.getByLabelText('Auto')).toBeChecked();
+    expect(screen.getByText(/^Night from \d/)).toBeOnTheScreen();
   });
 
   it('switches to Night at once and remembers it on this device', async () => {
@@ -233,5 +271,6 @@ describe('the appearance picker', () => {
 
     expect(screen.getByLabelText('Night')).toBeChecked();
     expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
+    expect(screen.queryByText(/ from \d/)).toBeNull();
   });
 });

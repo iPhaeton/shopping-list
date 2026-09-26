@@ -5,7 +5,7 @@ type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
 sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md]
-last_verified: 2026-09-25
+last_verified: 2026-09-26
 verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx
 related: [maestro-drives-the-native-ui, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries]
 ---
