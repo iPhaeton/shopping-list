@@ -148,8 +148,10 @@ it('says a write is waiting to sync instead of raising an error', async () => {
 });
 
 /**
- * A list somebody shared with you says so; one you own reads exactly as it always has, so no
- * existing query moves. It deliberately does not say how widely *your* list is shared — the
+ * A list somebody shared with you says so, and says whether you can edit it; one you own reads
+ * exactly as it always has, so no existing query moves. The a11y label deliberately does not grow
+ * to mention the role — it stays `name, shared with you` regardless — only the *visible* subtitle
+ * splits by role. It also deliberately does not say how widely *your* list is shared — the
  * `list_members` select policy shows you your own row only, so any count would read `1` for
  * everybody.
  */
@@ -157,7 +159,8 @@ it('marks a list somebody else shared, in the label as well as on screen', async
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [
       { id: 'l1', name: 'Groceries', role: 'reader', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
-      { id: 'l2', name: 'Hardware', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+      { id: 'l2', name: 'Weekend BBQ', role: 'writer', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+      { id: 'l3', name: 'Hardware', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
     ],
     error: null,
     truncated: false,
@@ -165,8 +168,11 @@ it('marks a list somebody else shared, in the label as well as on screen', async
 
   await renderScreen();
 
-  expect(screen.getByText('Shared with you')).toBeOnTheScreen();
+  expect(screen.getByText('Shared with you · view only')).toBeOnTheScreen();
+  expect(screen.getByText('Shared with you · can edit')).toBeOnTheScreen();
+  expect(screen.queryAllByText(/^Shared with you/)).toHaveLength(2);
   expect(screen.getByLabelText('Groceries, shared with you')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Weekend BBQ, shared with you')).toBeOnTheScreen();
   expect(screen.getByLabelText('Hardware')).toBeOnTheScreen();
 });
 
@@ -179,6 +185,19 @@ it('navigates to the list when a row is pressed', async () => {
   expect(navigation.navigate).toHaveBeenCalledWith('ListDetail', {
     listId: expect.any(String),
   });
+});
+
+/**
+ * The title row's Account button replaced the native header's since task 20 step 3 — drawn inside
+ * the screen itself, as part of the sky/horizon composition, and reached with `navigation` as a
+ * prop like everything else here, never a hook.
+ */
+it('opens Account when the Account button is pressed', async () => {
+  const { navigation } = await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Account'));
+
+  expect(navigation.navigate).toHaveBeenCalledWith('Account');
 });
 
 // --- The bin ------------------------------------------------------------------------------------
@@ -210,13 +229,13 @@ it('leaves deleted lists off the screen until they are asked for', async () => {
  * Deleted rows arrive in the same fetch as live ones, so this is instant: no spinner and no round
  * trip. That is most of why the bin reads better than a separate screen would.
  */
-it('reveals them behind the checkbox, with no second request', async () => {
+it('reveals them behind the switch, with no second request', async () => {
   withBin();
 
   await renderScreen();
   jest.mocked(fetchLists).mockClear();
 
-  const toggle = screen.getByLabelText('Show 1 deleted');
+  const toggle = screen.getByRole('switch', { name: 'Show 1 deleted' });
   expect(toggle).not.toBeChecked();
 
   await fireEvent.press(toggle);
@@ -228,7 +247,7 @@ it('reveals them behind the checkbox, with no second request', async () => {
 });
 
 /** A control that reveals nothing is noise, and there is nothing else in the app like it. */
-it('does not offer the checkbox when the bin is empty', async () => {
+it('does not offer the switch when the bin is empty', async () => {
   jest.mocked(fetchLists).mockResolvedValue({
     lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
     error: null,

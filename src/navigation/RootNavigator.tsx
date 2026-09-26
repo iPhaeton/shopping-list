@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { HeaderButton } from '../components/HeaderButton';
 import { AccountScreen } from '../screens/AccountScreen';
 import { ListDetailScreen } from '../screens/ListDetailScreen';
 import { ListsScreen } from '../screens/ListsScreen';
@@ -86,16 +85,12 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
     case 'signedIn':
       return (
         <>
-          <Stack.Screen
-            name="Lists"
-            component={ListsScreen}
-            options={({ navigation }) => ({
-              title: 'My Lists',
-              headerRight: () => (
-                <HeaderButton label="Account" onPress={() => navigation.navigate('Account')} />
-              ),
-            })}
-          />
+          {/*
+            No native header: the title row and Account button are drawn inside `ListsScreen`
+            itself, as part of the scrolling sky/horizon composition. `title` stays — it is still
+            the iOS back-button label from `ListDetail`/`Account`, and the web page title.
+          */}
+          <Stack.Screen name="Lists" component={ListsScreen} options={{ title: 'My Lists', headerShown: false }} />
           <Stack.Screen name="ListDetail" component={ListDetailScreen} />
           <Stack.Screen name="Sharing" component={SharingScreen} options={{ title: 'Sharing' }} />
           <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />

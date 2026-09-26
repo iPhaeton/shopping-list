@@ -6,8 +6,8 @@
  *
  * The sky-to-sun rows were sampled from the Lists mockups (a compressed PNG, so close approximations);
  * `groundTop` through `divider` are the exact values the List detail mockups were drawn with.
- * `bands`, the ground, `farHill`, `celestial`, the switch, and `iconButtonFill` are first used when
- * the screens are built to the mockups; they are defined now so the palette lives in one place.
+ * `bands`, the ground, `farHill`, `celestial`, the switch, and `iconButtonFill` are first used in
+ * task 20 step 3, which built `ListsScreen` to the mockup.
  */
 export type Palette = {
   /** The sky, top of the screen → near the horizon. A flat screen background uses `skyTop`. */
@@ -43,6 +43,16 @@ export type Palette = {
   farHill: string;
   checkboxOutline: string;
   iconButtonFill: string;
+  /**
+   * The icon-button fill under an `onPrimary` glyph — a row-index band dark enough to need the
+   * light ink also needs a much fainter circle, or the glyph loses the 3:1 icon-contrast floor
+   * against it (measured: `iconButtonFill` composited under `onPrimary` falls to ~1.8–2.3:1 on the
+   * darkest day bands). Paired with `onPrimary` in `bandAt` (`src/state/bands.ts`).
+   */
+  iconButtonFillInverse: string;
+  /** A light top-edge highlight drawn into each horizon band's wave, so two rows holding the same
+   * ramp step past `bands.length` still read as separate bands. */
+  bandRim: string;
   divider: string;
   /** Passes AA as text on every surface of its own theme. */
   error: string;
@@ -72,6 +82,8 @@ export const day: Palette = {
   farHill: '#e3d8ec',
   checkboxOutline: '#6e7090',
   iconButtonFill: 'rgba(255,255,255,0.55)',
+  iconButtonFillInverse: 'rgba(255,255,255,0.14)',
+  bandRim: 'rgba(255,255,255,0.22)',
   divider: 'rgba(44,47,78,0.11)',
   error: '#b3261e',
   onError: '#ffffff',
@@ -99,6 +111,8 @@ export const night: Palette = {
   farHill: '#56628a',
   checkboxOutline: '#c9cde6',
   iconButtonFill: 'rgba(255,255,255,0.12)',
+  iconButtonFillInverse: 'rgba(255,255,255,0.12)',
+  bandRim: 'rgba(255,255,255,0.1)',
   divider: 'rgba(255,255,255,0.09)',
   error: '#ff9b90',
   onError: '#1b2137',
@@ -117,6 +131,7 @@ export const fonts = {
   /** Screen titles. */
   serif: 'SourceSerif4_400Regular',
   sans: 'NunitoSans_400Regular',
+  sansMedium: 'NunitoSans_500Medium',
   sansSemiBold: 'NunitoSans_600SemiBold',
   sansBold: 'NunitoSans_700Bold',
 };

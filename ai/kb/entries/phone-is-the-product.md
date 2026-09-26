@@ -4,10 +4,10 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md]
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md]
 last_verified: 2026-09-26
 verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx
-related: [maestro-drives-the-native-ui, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries]
+related: [maestro-drives-the-native-ui, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty]
 ---
 
 **Since task 20 step 1: the product is the phone app** — iOS and Android, portrait. Before that the
@@ -47,3 +47,11 @@ browser. How to reach each screen there:
 
 **What to do:** check looks on the simulator, flows on web, and both before calling a step done.
 When the two disagree, the phone wins and web gets a fallback.
+
+**Checking the phone design on web catches its own bugs, not just fallback needs.** Task 20 step 3's
+full-bleed `Sky`/`Band` background behind `ListsScreen`'s `FlatList` surfaced two rendering bugs only
+visible on web — a tap-eating layering bug
+([absolute-decoration-needs-pointer-events-on-its-wrapper](absolute-decoration-needs-pointer-events-on-its-wrapper.md))
+and a seam below a short list
+([flatlist-footer-absent-when-list-is-empty](flatlist-footer-absent-when-list-is-empty.md)). Both
+would have shipped invisibly past RNTL and were only found by driving the actual browser DOM.

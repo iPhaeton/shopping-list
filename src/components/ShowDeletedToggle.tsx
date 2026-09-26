@@ -4,7 +4,7 @@ import { themedStyles } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
 
 /**
- * The bin, behind a checkbox.
+ * The bin, behind a switch.
  *
  * **Rendered only when there is something in it** — `count` of zero means both screens leave this
  * out entirely. A toggle that reveals nothing is noise, and the app has no other permanently visible
@@ -42,13 +42,16 @@ export function ShowDeletedToggle({
 
   return (
     <Pressable
-      accessibilityRole="checkbox"
+      // A switch, not a checkbox: it flips a display filter on immediately, the same shape as an
+      // iOS "on/off" setting, not a multi-select box to tick before submitting anything.
+      accessibilityRole="switch"
       accessibilityState={{ checked }}
       accessibilityLabel={label}
       onPress={() => onChange(!checked)}
+      hitSlop={4}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <View style={[styles.box, checked && styles.boxChecked]}>
-        {checked ? <Text style={styles.check}>✓</Text> : null}
+      <View style={[styles.track, checked && styles.trackChecked]}>
+        <View style={[styles.knob, checked && styles.knobChecked]} />
       </View>
       <Text style={styles.label}>{label}</Text>
     </Pressable>
@@ -59,35 +62,41 @@ const useStyles = themedStyles((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    alignSelf: 'flex-start',
   },
   rowPressed: {
     opacity: 0.7,
   },
-  box: {
+  track: {
+    width: 36,
+    height: 22,
+    borderRadius: radius.pill,
+    padding: 2,
+    justifyContent: 'center',
+    backgroundColor: colors.switchTrack,
+  },
+  trackChecked: {
+    backgroundColor: colors.primary,
+  },
+  knob: {
     width: 18,
     height: 18,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: colors.checkboxOutline,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.switchKnob,
   },
-  boxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  check: {
-    color: colors.onPrimary,
-    fontFamily: fonts.sansBold,
-    fontSize: 11,
-    lineHeight: 13,
+  knobChecked: {
+    alignSelf: 'flex-end',
+    backgroundColor: colors.onPrimary,
   },
   label: {
     fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: 17,
+    // `text`, not `textMuted`: this sits on the sky, and `textMuted` on `skyTop` falls short of AA
+    // (a pre-existing gap, flagged in task 20 step 1 — no reason to make a new use of it).
+    color: colors.text,
   },
 }));

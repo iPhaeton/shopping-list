@@ -4,9 +4,9 @@ title: Screens take navigation/route as props, never useNavigation()
 type: convention
 status: current
 tags: [navigation, screens, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, 6ef87a2]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, 6ef87a2]
 last_verified: 2026-09-26
-verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && grep -q 'headerRight' src/screens/ListDetailScreen.test.tsx && grep -q "options={({ navigation })" src/navigation/RootNavigator.tsx
+verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && grep -q 'headerRight' src/screens/ListDetailScreen.test.tsx && grep -q 'headerShown: false' src/navigation/RootNavigator.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels]
 ---
 
@@ -37,16 +37,23 @@ for the next screen with header buttons rather than reinventing the second-tree 
 `expect(setOptions).toHaveBeenCalledWith({ title: 'Hardware' })` breaks the moment a screen adds
 `headerRight`, because both travel in one call. Use `expect.objectContaining`.
 
-**A third header-wiring shape lives at the navigator, not inside a screen.** Step 14's `Lists`
-`Stack.Screen` gives `options` as a function —
-`options={({ navigation }) => ({ headerRight: () => <HeaderButton ... /> })}` in
-[RootNavigator.tsx](../../../src/navigation/RootNavigator.tsx) — instead of the static object
-`Sharing` uses. It is a plain, typed react-navigation API (confirmed against the installed
-`@react-navigation/core` types before use), not a workaround, and does not break the convention
-above: `navigation` is read by `RootNavigator`'s own JSX, never by a hook inside `ListsScreen`.
-Reach for this shape only when a header button must navigate and the screen has no other reason to
-call `setOptions` itself — `ListDetailScreen`'s Rename/Share buttons still go through `setOptions`
-from inside the screen because that screen already holds the render-time state its header needs.
+**A third header-wiring shape lived at the navigator, not inside a screen, for steps 14–19 — task
+20 step 3 retired it.** `Lists`' `Stack.Screen` used to give `options` as a function —
+`options={({ navigation }) => ({ headerRight: () => <HeaderButton ... /> })}` — instead of the
+static object `Sharing` uses; it was a plain, typed react-navigation API (confirmed against the
+installed `@react-navigation/core` types before use), not a workaround, and it did not break the
+convention above: `navigation` was read by `RootNavigator`'s own JSX, never by a hook inside
+`ListsScreen`. Step 3 hid `Lists`' native header entirely
+(`options={{ title: 'My Lists', headerShown: false }}` in
+[RootNavigator.tsx](../../../src/navigation/RootNavigator.tsx)) — the title row and the Account
+button are now drawn inside `ListsScreen` itself, as part of its own scrolling composition, so the
+function-`options` shape has no live example in the codebase any more. `ListsScreen` still gets
+`navigation` only as a prop and calls `navigation.navigate('Account')` directly from its own JSX,
+never a hook — `headerShown: false` moved where the button lives, not how it reaches `navigation`.
+The function-`options` shape remains valid react-navigation API, worth reaching for again if a
+future header button must navigate and its screen has no other reason to call `setOptions` itself —
+`ListDetailScreen`'s Rename/Share buttons still go through `setOptions` from inside the screen
+because that screen already holds the render-time state its header needs.
 
 **What to do:** a new screen adds its params to `RootStackParamList` and takes the generated props
 type. If a deeply nested component needs navigation, thread a callback down rather than reaching
@@ -62,5 +69,5 @@ The `verify:` command sweeps **all** of `src/screens/` — six screens now, `Set
 17 — and covers `useRoute()` as well as `useNavigation()`, so a newly added screen cannot slip past
 it. Test files are excluded because `ListsScreen.test.tsx` names `useNavigation()` in a header
 comment. It also pins the `Sharing` and `SetName` routes in `RootStackParamList`, the fact that the
-detail suite still renders a `headerRight`, and that `Lists`' `options` is still the function form —
+detail suite still renders a `headerRight`, and that `Lists` still carries `headerShown: false` —
 any of which disappearing is what would signal someone "simplified" one of these away.

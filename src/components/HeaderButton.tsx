@@ -4,9 +4,10 @@ import { themedStyles } from '../state/ThemeContext';
 import { fonts, spacing } from '../theme';
 
 /**
- * A text button for a navigation header. Used both from inside a screen via
- * `navigation.setOptions` (`ListDetailScreen`'s Rename/Share buttons) and from a static
- * `Stack.Screen` `options` function (`RootNavigator`'s Account entry point on `Lists`).
+ * A text button for a native navigation header, set via `navigation.setOptions`
+ * (`ListDetailScreen`'s Rename/Share buttons). Since task 20 step 3, `Lists` no longer uses a
+ * native header — its Account entry point is `PillButton`, drawn inside `ListsScreen` itself as
+ * part of the sky/horizon composition — so this component now has one call site, not two.
  */
 export function HeaderButton({
   label,

@@ -19,3 +19,14 @@ jest.mock('expo-crypto', () => ({
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
+
+/**
+ * `useSafeAreaInsets()`/`useSafeAreaFrame()` throw with no `SafeAreaProvider` above them
+ * (`NO_INSETS_ERROR`), and screen suites render a screen directly rather than the app's full
+ * provider tree. The library ships a mock built for exactly this: it falls back to a fixed
+ * `initialWindowMetrics` (all insets 0) instead of throwing, and still honours a real provider a
+ * suite chooses to add above the screen under test.
+ */
+jest.mock('react-native-safe-area-context', () =>
+  require('react-native-safe-area-context/jest/mock').default
+);

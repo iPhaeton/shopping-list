@@ -721,12 +721,13 @@ async function scrollToEnd() {
   await fireEvent(screen.getByLabelText('Milk'), 'endReached');
 }
 
-/** The item rows in order — the "Show deleted" toggle is a checkbox too, so it is left out. */
+/**
+ * The item rows in order. The "Show deleted" toggle used to be a checkbox too and needed
+ * filtering out here; since task 20 step 3 it is `accessibilityRole="switch"`, so
+ * `getAllByRole('checkbox')` already excludes it on its own.
+ */
 function itemLabels(): string[] {
-  return screen
-    .getAllByRole('checkbox')
-    .map((row) => String(row.props.accessibilityLabel))
-    .filter((label) => !label.startsWith('Show '));
+  return screen.getAllByRole('checkbox').map((row) => String(row.props.accessibilityLabel));
 }
 
 describe('a list longer than a page', () => {

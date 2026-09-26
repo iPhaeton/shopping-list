@@ -1,113 +1,120 @@
+import { memo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { themedStyles } from '../state/ThemeContext';
+import { bandAt } from '../state/bands';
+import { canEditItems } from '../state/roles';
+import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { List } from '../state/types';
-import { fonts, radius, spacing } from '../theme';
+import { fonts, spacing } from '../theme';
+import { Band } from './Band';
+import { ChevronIcon, RestoreIcon, TrashIcon } from './icons';
+import { IconButton } from './IconButton';
 
-export function ListRow({
+export const ListRow = memo(function ListRow({
   list,
-  onPress,
+  index,
+  onOpen,
   onSetDeleted,
 }: {
   list: List;
-  onPress: () => void;
+  /** This row's position among the *visible* rows — what colors its band. Never the list count, so
+   * creating a list never recolors the rows already on screen. */
+  index: number;
+  onOpen: (listId: string) => void;
   /** Absent for anyone but an owner, who alone may bin a list or bring one back. */
-  onSetDeleted?: (deleted: boolean) => void;
+  onSetDeleted?: (listId: string, deleted: boolean) => void;
 }) {
   const styles = useStyles();
+  const { colors } = useTheme();
+  const band = bandAt(colors, index);
   const deleted = list.deletedAt !== null;
-
-  // Somebody else's list that you have been given access to. It deliberately does not say *how
-  // widely* a list you own is shared: the `list_members` select policy shows you your own row only,
-  // so any count the client could compute would read `1` for everybody — convincing, and wrong.
   const shared = list.role !== 'owner';
+  const subtitle = shared ? (canEditItems(list.role) ? 'Shared with you · can edit' : 'Shared with you · view only') : null;
 
   return (
-    <View style={[styles.row, deleted && styles.rowDeleted]}>
+    <Band index={index}>
       <Pressable
         accessibilityRole="button"
+        // The label stays exactly `name` / `name, shared with you` regardless of role — the
+        // visible subtitle is what splits into "can edit"/"view only" below.
         accessibilityLabel={shared ? `${list.name}, shared with you` : list.name}
-        onPress={onPress}
+        onPress={() => onOpen(list.id)}
         style={({ pressed }) => [styles.tap, pressed && styles.rowPressed]}>
         <View style={styles.text}>
-          <Text style={styles.name}>{list.name}</Text>
-          {shared ? <Text style={styles.summary}>Shared with you</Text> : null}
-          {deleted ? <Text style={styles.tag}>Deleted</Text> : null}
+          <Text style={[styles.name, { color: band.ink }]} numberOfLines={2}>
+            {list.name}
+          </Text>
+          {subtitle ? (
+            <Text style={[styles.summary, { color: band.ink }]}>{subtitle}</Text>
+          ) : null}
+          {deleted ? <Text style={[styles.tag, { color: band.ink }]}>Deleted</Text> : null}
         </View>
-        <Text style={styles.chevron}>›</Text>
+        {onSetDeleted ? <View style={styles.actionSpacer} /> : null}
+        <ChevronIcon color={band.ink} size={16} />
       </Pressable>
 
       {onSetDeleted ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${deleted ? 'Restore' : 'Delete'} ${list.name}`}
-          onPress={() => onSetDeleted(!deleted)}
-          style={({ pressed }) => [styles.action, pressed && styles.rowPressed]}>
-          <Text style={styles.actionText}>{deleted ? 'Restore' : 'Delete'}</Text>
-        </Pressable>
+        <View style={styles.action} pointerEvents="box-none">
+          <IconButton
+            label={`${deleted ? 'Restore' : 'Delete'} ${list.name}`}
+            fill={band.iconFill}
+            onPress={() => onSetDeleted(list.id, !deleted)}>
+            {deleted ? (
+              <RestoreIcon color={band.ink} size={16} />
+            ) : (
+              <TrashIcon color={band.ink} size={16} />
+            )}
+          </IconButton>
+        </View>
       ) : null}
-    </View>
+    </Band>
   );
-}
+});
 
-const useStyles = themedStyles((colors) => ({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingRight: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-  },
-  rowDeleted: {
-    backgroundColor: colors.skyHorizon,
-  },
-  // The padding lives on the tappable half so the whole row stays a comfortable target.
+const useStyles = themedStyles(() => ({
   tap: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.lg,
+    paddingTop: 28,
+    paddingBottom: 20,
+    minHeight: 104,
   },
   rowPressed: {
-    opacity: 0.7,
+    opacity: 0.85,
+  },
+  text: {
+    flex: 1,
+    gap: 2,
+  },
+  name: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 22,
+  },
+  summary: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
   },
   tag: {
     fontFamily: fonts.sansSemiBold,
     fontSize: 12,
-    color: colors.textMuted,
     textTransform: 'uppercase',
+    marginTop: 2,
   },
+  // Reserves room for the icon button, which renders in its own absolutely positioned layer below
+  // so it stays a separate accessible element rather than nesting inside the row's own Pressable.
+  actionSpacer: {
+    width: 36,
+  },
+  // Stretches the full row height and centers within it, rather than a fixed `top` offset, so a
+  // two-line wrapped name doesn't throw off the button's vertical position.
   action: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  actionText: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.primary,
-  },
-  text: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  name: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 17,
-    color: colors.text,
-  },
-  summary: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  chevron: {
-    fontFamily: fonts.sans,
-    fontSize: 24,
-    lineHeight: 24,
-    color: colors.textMuted,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: spacing.lg + 16 + spacing.md,
+    justifyContent: 'center',
   },
 }));

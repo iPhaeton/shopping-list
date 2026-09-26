@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
@@ -64,34 +64,38 @@ export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }
   );
 }
 
+// One pill: a borderless input flush against a filled pill button, both riding inside a single
+// outlined pill container. `container` owns its own horizontal placement (`marginHorizontal`) the
+// way the pre-mockup card did; vertical spacing between it and its neighbors is the caller's, since
+// the rhythm differs between the Lists header and List detail.
 const useStyles = themedStyles((colors) => ({
   container: {
     flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    marginHorizontal: spacing.lg,
     gap: spacing.sm,
-    padding: spacing.lg,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.surfaceOutline,
     backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
   },
   input: {
     flex: 1,
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
+    height: '100%',
     color: colors.text,
     fontFamily: fonts.sans,
-    fontSize: 16,
+    fontSize: 17,
     // Set, not left to the default: iOS reuses native text inputs, and one that was the code
     // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
     letterSpacing: 0,
   },
   button: {
-    height: 44,
+    height: 40,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -105,6 +109,6 @@ const useStyles = themedStyles((colors) => ({
   buttonText: {
     color: colors.onPrimary,
     fontFamily: fonts.sansSemiBold,
-    fontSize: 16,
+    fontSize: 17,
   },
 }));

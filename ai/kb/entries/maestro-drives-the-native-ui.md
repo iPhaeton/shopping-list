@@ -4,7 +4,7 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md]
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md]
 last_verified: 2026-09-26
 verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs
 related: [phone-is-the-product, native-build-toolchain, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone]
@@ -47,6 +47,13 @@ plus `KeyboardPrediction`, `KeyboardAutocorrection`, `KeyboardCheckSpelling`,
   title**, so flows `tapOn: My Lists` / `tapOn: Groceries`. Flows tap by visible text and a11y label
   throughout, so a renamed header title or label breaks them as surely as it breaks the RNTL suites
   ([queries-go-through-a11y-labels](queries-go-through-a11y-labels.md)).
+- **A `tapOn: <previous screen title>` back-navigation step only works on iOS.** iOS's native-stack
+  back button keeps the previous screen's `title` as its own a11y label regardless of `headerShown`
+  on the *current* screen — confirmed by `maestro hierarchy` on both platforms in task 20 step 3,
+  with `Lists`' native header hidden. Android's back button never carries it: its label is always the
+  OS-generic **"Navigate up"**, a plain Android accessibility convention, nothing to do with
+  `headerShown`. `set-theme.yaml`'s last step (`tapOn: My Lists`) fails on Android for exactly this
+  reason and almost certainly always would have; use `tapOn: "Navigate up"` there instead, or `back`.
 - `takeScreenshot` refuses a path outside the run's output folder. Use a bare name and pass
   `--test-output-dir`; PNGs land in `<dir>/takeScreenshot/` at the simulator's full resolution.
 - A simulator that has never opened `exp+shopping-list://` asks "Open in “ShoppingLoop”?" first —

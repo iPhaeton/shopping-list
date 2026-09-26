@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { themedStyles } from '../state/ThemeContext';
+import { themedStyles, useTheme } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
+import { CloudIcon, CloudPuff } from './icons';
 
 /**
  * A write that lands within one normal online round trip should never paint at all — only one
@@ -20,6 +21,7 @@ const SHOW_AFTER_MS = 400;
  */
 export function SyncBanner({ pending }: { pending: number }) {
   const styles = useStyles();
+  const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
   const waiting = pending > 0;
 
@@ -38,25 +40,48 @@ export function SyncBanner({ pending }: { pending: number }) {
   const changes = pending === 1 ? '1 change' : `${pending} changes`;
 
   return (
-    <View accessibilityLiveRegion="polite" style={styles.banner}>
-      <Text style={styles.text}>{`${changes} will sync when you're back online`}</Text>
+    <View accessibilityLiveRegion="polite" style={styles.wrap}>
+      <View
+        style={styles.puff}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants">
+        <CloudPuff color={colors.bannerSurface} />
+      </View>
+      <View style={styles.banner}>
+        <CloudIcon color={colors.text} size={18} />
+        <Text style={styles.text}>{`${changes} will sync when you're back online`}</Text>
+      </View>
     </View>
   );
 }
 
 const useStyles = themedStyles((colors) => ({
+  wrap: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    alignSelf: 'flex-start',
+  },
+  puff: {
+    position: 'absolute',
+    top: -14,
+    left: 20,
+  },
   banner: {
-    margin: spacing.lg,
-    marginBottom: 0,
-    padding: spacing.md,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingLeft: 14,
+    paddingRight: spacing.lg,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
     backgroundColor: colors.bannerSurface,
   },
   text: {
     fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+    fontSize: 16,
+    // `text`, not `textMuted`: `textMuted` falls short of AA on this surface (flagged in task 20
+    // step 1's log) and the mockup reads this sentence in the full-strength ink.
+    color: colors.text,
   },
 }));

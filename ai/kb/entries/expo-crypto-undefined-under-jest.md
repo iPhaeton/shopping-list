@@ -4,9 +4,9 @@ title: expo-crypto's randomUUID() returns undefined under jest instead of throwi
 type: gotcha
 status: current
 tags: [testing, jest, expo, ids]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, jest.setup.ts, src/lib/ids.ts]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, jest.setup.ts, src/lib/ids.ts]
 last_verified: 2026-09-26
-verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json && ! grep -q 'expo-device' jest.setup.ts && grep -q "jest.mock('expo-device'" src/lib/supabaseTarget.test.ts
+verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q "jest.mock('react-native-safe-area-context'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json && ! grep -q 'expo-device' jest.setup.ts && grep -q "jest.mock('expo-device'" src/lib/supabaseTarget.test.ts && ! grep -q 'react-native-svg' jest.setup.ts
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, supabase-target-picked-at-runtime]
 indexed: false
 ---
@@ -57,6 +57,17 @@ steer is mocked in that suite.** The `verify:` command pins both halves, because
 That module is also this entry's lesson repeating: `Device.isDevice` is exactly the kind of native
 constant that can come back `undefined` rather than throwing, so `pickTarget()` carries an explicit
 fallback and a test for it instead of trusting the flag.
+
+**`react-native-safe-area-context` is the fourth, and it takes AsyncStorage's branch, not
+`expo-crypto`'s.** Task 20 step 3's `ListsScreen` was the first caller of `useSafeAreaInsets()`, and
+the real hook throws `NO_INSETS_ERROR` under jest with no `SafeAreaProvider` above it — read directly
+from the library's own source, not assumed. Its shipped
+`jest.mock('react-native-safe-area-context', () =>
+require('react-native-safe-area-context/jest/mock').default)` fixes it the same way AsyncStorage's
+mock does: check whether the library ships one before writing a bespoke mock of your own. **Not
+every native module needs a decision here at all** — `react-native-svg`, added the same step, needed
+no `jest.setup.ts` entry: `jest-expo`'s native-module mocking covers it well enough that the full
+suite passes rendering real `<Svg>` trees.
 
 **What to do:** keep [src/lib/ids.ts](../../../src/lib/ids.ts) as the single call site of
 `randomUUID`, so this stays a one-line problem. A further native module used in code under test needs

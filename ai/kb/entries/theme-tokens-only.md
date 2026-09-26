@@ -4,7 +4,7 @@ title: Every color and font comes from src/theme.ts, read at render through them
 type: convention
 status: current
 tags: [styling, theme, fonts]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, src/state/bands.test.ts]
 last_verified: 2026-09-26
 verify: test -z "$(grep -rnE '#[0-9a-fA-F]{3,8}|rgba?\(' src --include='*.ts' --include='*.tsx' | grep -v src/theme.ts)" && test "$(grep -rl 'StyleSheet.create' src --include='*.tsx' | grep -v '\.test\.')" = src/state/ThemeContext.tsx && ! grep -rq 'fontWeight' src --include='*.tsx' && ! grep -rqE "from '@expo-google-fonts/[a-z0-9-]+'" src && ! grep -q 'export const colors' src/theme.ts
 related: [queries-go-through-a11y-labels, theme-reaches-native-surfaces, recycled-text-input-keeps-letter-spacing, phone-is-the-product, theme-provider-suites-fake-the-clock]
@@ -46,6 +46,15 @@ imported by subpath (`@expo-google-fonts/nunito-sans/700Bold`) — each package 
 **Token values are the task description's, not ours to tune.** Day `textMuted` (`#75778f`) is
 3.48:1 on the day sky, below AA for hint text; it was kept as given and flagged to the user, who
 decides. `error` did change (`#b3261e` / `#ff9b90`) because the old red failed AA on the new sky.
+
+**The sweep covers every `.ts`/`.tsx` under `src/`, test files and comments included — not just
+app code.** `src/state/bands.test.ts` (task 20 step 3) needs a real black/white pair and a
+malformed hex to exercise `contrastRatio`'s rejection path, and even a comment *describing* those
+inputs in the usual `#rrggbb`/`rgba(` notation trips the check as surely as a literal would — it
+failed this way twice during that step before landing on wording that describes the pattern without
+typing it. Build a test's own throwaway colors at runtime instead (`` `#${'f'.repeat(3)}` ``,
+`` `#${r}${g}${b}` `` from numeric channels) and describe a rejected shape in prose rather than by
+example.
 
 **What to do:** need a shade, weight, or gap with no token? Add it to `theme.ts`, in both palettes.
 The `verify:` fails on a hex or `rgb(a)` literal outside `theme.ts`, a `StyleSheet.create` anywhere
