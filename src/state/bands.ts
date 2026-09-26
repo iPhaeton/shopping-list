@@ -30,8 +30,12 @@ const cache = new WeakMap<Palette, Band[]>();
 
 /**
  * A row's horizon band by its **visible position**, never the list count — so creating a list
- * never recolors the rows above it. Past the ramp's last step the color holds; `bandRim`
- * (`Band.tsx`'s wave decoration) is what keeps two rows holding the same step apart.
+ * never recolors the rows above it. Past the ramp's last step it bounces back and forth across the
+ * six colors — light-to-dark, then dark-to-light, then light-to-dark again — reflecting at each end
+ * without repeating the end step itself: after the darkest step it moves to the second-darkest, and
+ * after the lightest step it moves to the second-lightest, so no two adjacent rows ever land on the
+ * same color. `bandRim` (`Band.tsx`'s wave decoration) exists for the same reason but only carries
+ * the case this indexing can't: two *non-adjacent* rows sharing a step once the list is long enough.
  *
  * `ink`/`iconFill` are picked by contrast, not by index: whichever of `colors.text` /
  * `colors.onPrimary` scores higher against the band color wins, paired with the icon-button fill
@@ -51,5 +55,11 @@ export function bandAt(colors: Palette, index: number): Band {
     });
     cache.set(colors, bands);
   }
-  return bands[Math.min(Math.max(index, 0), bands.length - 1)];
+  const n = bands.length;
+  const safeIndex = Math.max(index, 0);
+  if (n <= 1) return bands[0];
+  const period = 2 * (n - 1);
+  const pos = safeIndex % period;
+  const step = pos <= n - 1 ? pos : period - pos;
+  return bands[step];
 }

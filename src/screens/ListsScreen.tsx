@@ -99,7 +99,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
 
   // The screen's own background, not the sky: what an overscroll past a short list — or past the
   // last row of a long one — reveals below the content, so it reads as a continuation of the last
-  // band rather than a seam. `bandAt` holds the ramp's last step past index 5.
+  // band rather than a seam. `bandAt` bounces back and forth across the ramp past index 5.
   const groundColor = bandAt(colors, Math.max(visible.length, 1) - 1).color;
 
   return (

@@ -60,10 +60,19 @@ describe('bandAt', () => {
     expect(darkBand.iconFill).toBe(day.iconButtonFillInverse);
   });
 
-  it('holds the last ramp step past index 5, rather than throwing or repeating from the start', () => {
-    const last = bandAt(day, 5);
-    expect(bandAt(day, 6)).toEqual(last);
-    expect(bandAt(day, 999)).toEqual(last);
+  it('bounces across the six-step ramp past index 5 without ever repeating a step on the next row', () => {
+    // 0,1,2,3,4,5,4,3,2,1,0,1,2,3,4,5,4,3,2,1,0 — reflects at each end one step in, so the
+    // darkest/lightest step is never immediately followed by itself.
+    const steps = Array.from({ length: 21 }, (_, index) => bandAt(day, index).color);
+    const expected = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0].map(
+      (bandIndex) => day.bands[bandIndex],
+    );
+    expect(steps).toEqual(expected);
+
+    // No two adjacent rows ever land on the same color, including across every reflection.
+    for (let index = 1; index < steps.length; index += 1) {
+      expect(steps[index]).not.toBe(steps[index - 1]);
+    }
   });
 
   it('clamps a negative index to the first band', () => {
