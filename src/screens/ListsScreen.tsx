@@ -89,7 +89,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
           <AddBar placeholder="New list name" buttonLabel="Create" onSubmit={(name) => createList(name)} />
         </>
       )}
-      <Horizon>
+      <Horizon ground={bandAt(colors, 0).color}>
         {!loading && binned > 0 ? (
           <ShowDeletedToggle checked={showDeleted} count={binned} onChange={setShowDeleted} />
         ) : null}
@@ -136,16 +136,18 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
         ListEmptyComponent={
           // `ListFooterComponent` does not render alongside `ListEmptyComponent` — confirmed by
           // inspection, not assumed — so the empty state has to guarantee its own minimum height
-          // itself, the same way the non-empty footer below does for a short list.
-          loading ? null : (
-            <Band index={0} style={styles.footer}>
+          // itself, the same way the non-empty footer below does for a short list. Rendered bare
+          // while loading too: the horizon's hill is this band's top edge, and without it the hill
+          // would float on sky.
+          <Band index={0} style={styles.footer}>
+            {loading ? null : (
               <EmptyState
                 title="No lists yet"
                 hint="Name your first list above — for example, Groceries."
                 ink={bandAt(colors, 0).ink}
               />
-            </Band>
-          )
+            )}
+          </Band>
         }
         // A short (non-empty) list doesn't reach past the bounded `Sky` layer behind the
         // `FlatList` on its own. A footer with a concrete `minHeight` matching `SKY_HEIGHT`

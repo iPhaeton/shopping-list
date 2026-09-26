@@ -25,8 +25,11 @@ const WAVES = [
  * entirely inside this row's own bounds: a backdrop rect in the row above's color, with this row's
  * own color painted over it as a wave, plus a light rim highlight. That keeps every row
  * self-contained — nothing depends on overflow bleeding across a `FlatList` row boundary, which is
- * fragile on Android and under `removeClippedSubviews`. The very first row (`index === 0`) has no
- * "row above," so it paints its wave straight onto whatever is already behind it.
+ * fragile on Android and under `removeClippedSubviews`.
+ *
+ * The first band (`index === 0`) draws no top edge: `Horizon`, directly above it, draws it as the
+ * hill the sun/moon sinks behind. That curve has to pass in front of the sun, and only the
+ * component that draws the sun can put it there without bleeding across that same boundary.
  */
 export function Band({
   index,
@@ -45,19 +48,21 @@ export function Band({
 
   return (
     <View style={[{ backgroundColor: band.color }, style]}>
-      <View style={styles.decoration} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Svg width="100%" height={WAVE_H} viewBox={`0 0 100 ${WAVE_H}`} preserveAspectRatio="none">
-          <Defs>
-            <LinearGradient id="bandRim" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={colors.bandRim} stopOpacity={0.2} />
-              <Stop offset="1" stopColor={colors.bandRim} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          {above ? <Rect x={0} y={0} width={100} height={WAVE_H} fill={above.color} /> : null}
-          <Path d={wave} fill={band.color} />
-          <Path d={wave} fill="url(#bandRim)" />
-        </Svg>
-      </View>
+      {above ? (
+        <View style={styles.decoration} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Svg width="100%" height={WAVE_H} viewBox={`0 0 100 ${WAVE_H}`} preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="bandRim" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={colors.bandRim} stopOpacity={0.2} />
+                <Stop offset="1" stopColor={colors.bandRim} stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
+            <Rect x={0} y={0} width={100} height={WAVE_H} fill={above.color} />
+            <Path d={wave} fill={band.color} />
+            <Path d={wave} fill="url(#bandRim)" />
+          </Svg>
+        </View>
+      ) : null}
       {children}
     </View>
   );
