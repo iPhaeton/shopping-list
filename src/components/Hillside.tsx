@@ -7,30 +7,38 @@ import { themedStyles, useTheme } from '../state/ThemeContext';
 /** The strip's height: from the add bar's foot (y 224 on the mockup) to the first row (y 306). */
 const STRIP_H = 82;
 
-/** The width the mockup was drawn at. Curves are traced in it and stretched to the real width. */
+/**
+ * The width the mockup was drawn at. Everything here is placed in it and stretched horizontally to
+ * the real width — the sun included, so it stays behind the hilltop on every phone.
+ */
 const DRAWN_W = 390;
 
 /**
- * The front edge of the land, left to right, in the mockup's own strip coordinates (y = mockup
- * y − 224): low on the left under the switch, a broad crest around x 240, easing down past the sun.
- * Traced from the images to within half a point.
+ * The front edge of the land, left to right, in the mockup's strip coordinates (y = mockup y − 224):
+ * low on the left under the switch, rising to a rounded hilltop at x 300 that the sun or moon sits
+ * behind, then falling off toward the right edge. The top is curved hard enough (a radius of about
+ * 150pt) that the land cuts the disc along an arc. The mockups ran it nearly flat across the disc,
+ * which read as a ruled line.
  */
-const LAND: readonly number[] = [0, 76, 80, 69.5, 150, 62.5, 240, 59, 300, 60, 340, 65.5, 370, 65.3, 380, 65, 386, 64.5, 390, 64];
+const LAND: readonly number[] = [0, 76, 60, 74.5, 130, 71.5, 195, 69, 225, 67.85, 268, 59.5, 300, 59.5, 332, 59.5, 362, 66.5, 390, 70];
 
-/** The far hill's crest, left to right; it runs on under the land, which hides the rest. */
-const FAR_HILL: readonly number[] = [0, 59, 40, 50.5, 75, 46, 115, 46.3, 160, 46.5, 200, 52, 250, 60];
+/**
+ * The far hill's crest, left to right. Its tail runs down under the land's rise to the hilltop, so
+ * the two meet in a valley well to the left of the disc.
+ */
+const FAR_HILL: readonly number[] = [0, 59, 40, 50.5, 75, 46, 115, 46.3, 150, 46.5, 185, 52, 225, 64, 245, 70, 265, 76, 290, 82];
 
-/** The sun's or moon's center, from the right edge and the strip's top — on the land line, so the
- * land hides exactly its lower half. The disc stays this far from the right on a wider phone. */
-const CEL_FROM_RIGHT = 90;
+/** The sun's or moon's center: under the hilltop's crest, a little below it, so the hill hides
+ * slightly more than the disc's lower half. */
+const CEL_X = 300;
 const CEL_Y = 62;
 
-/** Three birds to the sun's left, by day — their left ends, from the right edge and the top. */
-const BIRDS: readonly [number, number][] = [[175, 31], [154, 25], [141, 41]];
+/** Three birds to the sun's left, by day — their left ends. */
+const BIRDS: readonly [number, number][] = [[215, 31], [236, 25], [249, 41]];
 
-/** A few stars low over the land by night, from the right edge (points) and the top. */
+/** A few stars low over the land by night: x, y, radius, opacity. */
 const LOW_STARS: readonly [number, number, number, number][] = [
-  [89, 7.5, 1.1, 0.75], [45.5, 18, 1.1, 0.8], [31, 24.5, 1.1, 0.9], [388, 34, 0.6, 0.8],
+  [301, 7.5, 1.1, 0.75], [344.5, 18, 1.1, 0.8], [359, 24.5, 1.1, 0.9], [2, 34, 0.6, 0.8],
 ];
 
 /** Joins `[x0, y0, x1, y1, …]` as a path of cubic segments after the first point, stretching x. */
@@ -65,12 +73,13 @@ export function Hillside({ children }: { children?: ReactNode }) {
   const { width } = useWindowDimensions();
   const sx = width / DRAWN_W;
   const isDay = name === 'day';
-  const cx = width - CEL_FROM_RIGHT;
+  const cx = CEL_X * sx;
   const r = isDay ? 36 : 34;
 
   const aboveLand = `${curve(LAND, sx)} L${width},0 L0,0 Z`;
   // Above the far hill where it runs, and the full height past its end, where the land hides it.
-  const aboveFarHill = `${curve(FAR_HILL, sx)} L${(250 * sx).toFixed(2)},${STRIP_H} L${width},${STRIP_H} L${width},0 L0,0 Z`;
+  const farEnd = (FAR_HILL[FAR_HILL.length - 2] * sx).toFixed(2);
+  const aboveFarHill = `${curve(FAR_HILL, sx)} L${farEnd},${STRIP_H} L${width},${STRIP_H} L${width},0 L0,0 Z`;
 
   return (
     <View style={styles.strip}>
@@ -97,15 +106,15 @@ export function Hillside({ children }: { children?: ReactNode }) {
               <Rect x={0} y={0} width={width} height={STRIP_H} fill={colors.skyHorizon} />
               {isDay
                 ? null
-                : LOW_STARS.map(([fromRight, y, starR, opacity], i) => (
-                    <Circle key={i} cx={width - fromRight} cy={y} r={starR} fill={colors.celestial} opacity={opacity} />
+                : LOW_STARS.map(([x, y, starR, opacity], i) => (
+                    <Circle key={i} cx={x * sx} cy={y} r={starR} fill={colors.celestial} opacity={opacity} />
                   ))}
               <Circle cx={cx} cy={CEL_Y} r={r * 1.6} fill="url(#hsGlow)" />
               <Circle cx={cx} cy={CEL_Y} r={r} fill={colors.celestial} />
               {isDay ? (
                 <G stroke={colors.textMuted} strokeWidth={1.4} strokeLinecap="round" fill="none">
-                  {BIRDS.map(([fromRight, y], i) => (
-                    <Path key={i} d={`M${width - fromRight},${y} q3.25,-3.5 6.5,0 q3.25,-3.5 6.5,0`} />
+                  {BIRDS.map(([x, y], i) => (
+                    <Path key={i} d={`M${(x * sx).toFixed(2)},${y} q3.25,-3.5 6.5,0 q3.25,-3.5 6.5,0`} />
                   ))}
                 </G>
               ) : null}
