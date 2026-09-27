@@ -4,8 +4,8 @@ title: Auto takes sunset from the device's time zone, never its location — the
 type: decision
 status: current
 tags: [theme, time, hermes, intl, privacy, scope]
-sources: [ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md]
-last_verified: 2026-09-26
+sources: [ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md]
+last_verified: 2026-09-27
 verify: grep -q "DEFAULT: ThemePreference = 'auto'" src/lib/themePreference.ts && ! grep -qiE 'location' package.json app.json && grep -q "'Europe/Oslo': \[59.92, 10.75\]" src/lib/zoneCoords.ts && grep -q "'Iceland': \[64.15, -21.85\]" src/lib/zoneCoords.ts && ! grep -qE "^  '(UTC|UCT|GMT[^']*|Zulu|Universal|Greenwich|Etc/[^']*)':" src/lib/zoneCoords.ts && ! grep -qE 'get(Hours|Minutes|Date|Day|Month|FullYear|TimezoneOffset)\(' src/lib/sun.ts
 related: [scope-boundaries, theme-reaches-native-surfaces, theme-provider-suites-fake-the-clock, metro-inspector-reads-live-app-state, phone-is-the-product]
 indexed: false
@@ -54,11 +54,13 @@ release (2026c; the command is in the script header). macOS ships `zone.tab` in
 (`gml.noaa.gov/grad/solcalc/main.js`) and matches it within 0.25 s; `suncalc` is a different
 algorithm and ships no types. No native module, no `app.json` change.
 
-**Hermes `Intl` was measured on both platforms, not assumed** (iPhone 17e iOS 26.5, `Pixel_10`
-Android 37, through [metro-inspector-reads-live-app-state](metro-inspector-reads-live-app-state.md)):
-`resolvedOptions().timeZone` gives the IANA name, `timeStyle: 'short'` and `timeZone:` are honoured,
-legacy names are accepted, and an unknown zone **throws** (`RangeError` on iOS,
-`JSRangeErrorException` on Android) — `clockTime` catches it. **On Android, `Date`'s local offset
+**Hermes `Intl` was measured on both platforms, not assumed**, through
+[metro-inspector-reads-live-app-state](metro-inspector-reads-live-app-state.md). It was measured on
+SDK 54 (iPhone 17e iOS 26.5, `Pixel_10` Android 37), then again under SDK 57's Hermes V1 (iOS 27,
+Android 37), with the same answers: `resolvedOptions().timeZone` gives the IANA name,
+`timeStyle: 'short'` and `timeZone:` are honoured, legacy names are accepted, and an unknown zone
+**throws**. The error was `JSRangeErrorException` on Android before Hermes V1 and is a plain
+`RangeError` on both platforms now. `clockTime` uses a bare `catch`, so keep it that broad. **On Android, `Date`'s local offset
 lags a zone change by minutes while `Intl` follows at once.** That is why the sun path works in UTC
 instants and formats with an explicit `timeZone`; only the no-city fallback reads `Date`'s local
 fields. Keep it that way — the `verify:` fails on a local-field getter in `sun.ts`.

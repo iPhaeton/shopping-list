@@ -2,13 +2,20 @@
 id: react-native-screens-past-the-sdk-pin
 title: react-native-screens is ~4.19, past Expo 54's ~4.16 pin — on iOS 26, 4.16 leaves the native back button dead after a pop onto a headerless screen
 type: decision
-status: current
+status: superseded
+superseded_by: [expo-sdk-version]
 tags: [expo, versions, navigation, ios, react-native-screens]
 sources: [ai/tasks/20-ux/implementation-log-step-4.md, package.json, src/navigation/RootNavigator.tsx]
 last_verified: 2026-09-27
 verify: grep -q '"react-native-screens": "~4.19' package.json && grep -q '"react-native-screens": "~4.16' node_modules/expo/bundledNativeModules.json && node -p "require('react-native-screens/package.json').version" | grep -qE '^4\.(19|[2-9][0-9])\.' && grep -q 'name="ListDetail" component={ListDetailScreen} options={{ headerShown: false }}' src/navigation/RootNavigator.tsx
-related: [screens-take-navigation-props, expo-sdk-54-pinned, native-build-toolchain, maestro-drives-the-native-ui]
+related: [expo-sdk-version, screens-take-navigation-props, expo-sdk-54-pinned, native-build-toolchain, maestro-drives-the-native-ui]
 ---
+
+> **Superseded in task 21 by [expo-sdk-version](expo-sdk-version.md).** SDK 57 pins
+> `react-native-screens` ~4.26, past 4.19, so the deviation below is over and
+> `npx expo install --fix` is safe again. Both repros below popped every time on 4.26 on iOS 27.
+> The iOS 26 runtime is gone from this Mac, so iOS 26 itself was not re-run. The bug description
+> stays as history, in case the package ever drops below 4.19.
 
 **`package.json` asks for `react-native-screens` `~4.19.0`; Expo SDK 54 pins `~4.16.0`**
 (`node_modules/expo/bundledNativeModules.json`). The mismatch is deliberate. The user chose it in

@@ -6,16 +6,16 @@ Run `npm run kb:audit` to check every entry still holds.
 
 **Stack and environment**
 
-- [A native dev build works on both platforms](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` build and install it, not Expo Go; after a non-clean prebuild run `pod install` yourself, and the iOS `.app` lands in DerivedData, not `ios/build`; only `eas` and the Apple Developer account remain absent (environment)
-- [Maestro drives the native app](ai/kb/entries/maestro-drives-the-native-ui.md) — `~/.maestro/bin/maestro` with `JAVA_HOME` set, not on PATH; a simulator needs its keyboards reset before `inputText` works; iOS has no `back` and no edge swipe; flows and `seed.mjs` live in `.maestro/` (environment)
-- [react-native-screens is past Expo 54's pin](ai/kb/entries/react-native-screens-past-the-sdk-pin.md) — ~4.19, not the SDK's ~4.16, which kills iOS 26's back button after a pop onto a headerless screen; `npx expo install --fix` would downgrade it (decision)
+- [A native dev build works on both platforms](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` build and install it, and Expo Go cannot run the app; Xcode 27 with only iOS 27; `pod install` needs `LANG=en_US.UTF-8`, prebuild now cleans by default, and the iOS `.app` lands in DerivedData; only `eas` and the Apple Developer account remain absent (environment)
+- [Maestro drives the native app](ai/kb/entries/maestro-drives-the-native-ui.md) — `~/.maestro/bin/maestro` with `JAVA_HOME` set, not on PATH; a simulator needs its keyboards reset before `inputText` works; the SDK 57 dev client's floating button covers the top-right pills until turned off; iOS has no `back` and no edge swipe; flows live in `.maestro/` (environment)
+- [iOS 27 needs the scene life cycle](ai/kb/entries/ios-scene-support-is-opt-in.md) — `expo-build-properties`' `ios.enableSceneSupport` in `app.json` is what keeps the app from being killed at launch; SDK 57 leaves it opt-in, SDK 58 makes it redundant, so remove it then (decision)
 - [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; flows are verified in the browser (environment)
 - [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
 
 **Scope**
 
 - [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, leaving a list, and Day/Night/Auto themes in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
-- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iPhone 17e simulator, web only has to work; fix web on the web side, never bend the phone design; web shows no checked state and has no browser back (constraint)
+- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iPhone 17e simulator, web only has to work; fix web on the web side, never bend the phone design; task screenshots are not the design (Lists' faint band rim is deliberate, never "restore" it); web shows no checked state and has no browser back (constraint)
 
 **Auth**
 

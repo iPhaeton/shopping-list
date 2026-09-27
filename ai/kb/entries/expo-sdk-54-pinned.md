@@ -2,16 +2,21 @@
 id: expo-sdk-54-pinned
 title: The project is on Expo SDK 54 — read the v54 docs, not the latest
 type: reference
-status: current
+status: superseded
+superseded_by: [expo-sdk-version]
 tags: [expo, versions, docs]
 sources: [4d55c18, ai/tasks/1/implementation-log-step-1.md]
 last_verified: 2026-09-27
 verify: grep -q '"expo": "\^54' package.json
-related: [native-build-toolchain, react-native-screens-past-the-sdk-pin]
+related: [expo-sdk-version, native-build-toolchain, react-native-screens-past-the-sdk-pin]
 indexed: false
 ---
 
-> **Demoted from `INDEX.md` at step 9, still true.** Its headline instruction is already auto-loaded
+> **Superseded in task 21 by [expo-sdk-version](expo-sdk-version.md).** The project moved to SDK 57:
+> SDK 54 cannot launch on iOS 27, and the Expo Go reason for 54 had been dead since task 13. What
+> follows was true from `4d55c18` until then, and is kept as history.
+>
+> **Demoted from `INDEX.md` at step 9.** Its headline instruction is already auto-loaded
 > into every session by [AGENTS.md](../../../AGENTS.md), which opens with the v54.0.0 docs link, so
 > the index line was buying a second copy of a fact nobody could miss. The version table below is the
 > part that is not duplicated anywhere; reach it from

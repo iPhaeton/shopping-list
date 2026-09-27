@@ -4,10 +4,10 @@ title: Every write action is idempotent by id, and updateList returns the origin
 type: convention
 status: current
 tags: [state, reducer, immutability]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-20
-verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && grep -q 'returns the same state object when the name is unchanged' src/state/listsReducer.test.ts && grep -q 'yields one row when a write the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'yields one item when an add the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'state.lists.some((candidate) => candidate.id === action.id)' src/state/listsReducer.ts && npx jest -t 'is a no-op|returns the same state object|yields one row|yields one item' --silent
-related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
+last_verified: 2026-09-27
+verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && grep -q 'returns the same state object when the name is unchanged' src/state/listsReducer.test.ts && grep -q 'yields one row when a write the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'yields one item when an add the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'state.lists.some((candidate) => candidate.id === action.id)' src/state/listsReducer.ts && npx jest src/state/listsReducer.test.ts src/state/replay.test.ts -t 'is a no-op|returns the same state object|yields one row|yields one item' --silent
+related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, jest-cold-cache-timeouts]
 indexed: false
 ---
 
@@ -65,3 +65,7 @@ were **inverted** from a test that used to assert duplication. The `-t` filter i
 them run together. It also greps the reducer for the `list/created` id check directly, since that arm
 is the one a refactor would "simplify" back into an append. Name a new no-op test to match one of the
 patterns, or add it here.
+
+Jest runs only `listsReducer.test.ts` and `replay.test.ts`, the two files the greps pin. Given only
+`-t`, it loaded all 27 suites to skip most of them, which took 164 s and timed the audit out on a
+loaded machine in task 21 ([jest-cold-cache-timeouts](jest-cold-cache-timeouts.md)).

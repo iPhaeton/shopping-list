@@ -4,10 +4,10 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md]
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md]
 last_verified: 2026-09-27
 verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml
-related: [phone-is-the-product, native-build-toolchain, react-native-screens-past-the-sdk-pin, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone]
+related: [phone-is-the-product, native-build-toolchain, dev-client-draws-over-the-app, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone]
 ---
 
 **Maestro 2.10.0** is how an agent reaches a screen and state on the iOS simulator or Android
@@ -21,16 +21,17 @@ JAVA_HOME=/opt/homebrew/opt/openjdk ~/.maestro/bin/maestro test --test-output-di
   .maestro/flows/<flow>.yaml -e THEME=Night
 ```
 
-It is not on PATH on purpose. `brew install mobile-dev-inc/tap/maestro` refuses on this machine
-(Homebrew calls Xcode 26.6 "too outdated" and wants 27), and the official `get.maestro.mobile.dev`
-script appends PATH lines to `~/.zshrc` and `~/.bash_profile` — so the release zip was unpacked into
-`~/.maestro` by hand and no dotfile changed. The first run on a new simulator installs Maestro's
-XCTest driver (~1m45s); every later invocation pays ~20–40 s of JVM and driver start.
+It is not on PATH on purpose. The official `get.maestro.mobile.dev` script appends PATH lines to
+`~/.zshrc` and `~/.bash_profile`, so the release zip was unpacked into `~/.maestro` by hand and no
+dotfile changed. The first run on a new simulator installs Maestro's XCTest driver (~1m45s); every
+later invocation pays ~20–40 s of JVM and driver start. **On iOS 27 the driver sometimes fails to
+start** ("iOS driver not ready in time"); a second attempt worked each time, and
+`MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the environment helps.
 
 **A simulator must have its keyboards reset before `inputText` works.** Simulators inherit the
 Mac's multilingual keyboard list, and Maestro's typing came out mangled (`maya@example.com` →
-`ya@example.comm`), then stopped landing at all. Fixed on the iPhone 17e and 17 Pro Max only — any
-other simulator Maestro types into needs the same, then a reboot of that simulator:
+`ya@example.comm`), then stopped landing at all. Fixed only on the iPhone 17e (iOS 27, 2026-09-27);
+any other simulator Maestro types into needs the same, then a reboot of that simulator:
 
 ```bash
 xcrun simctl spawn <udid> defaults write .GlobalPreferences AppleKeyboards -array "en_US@sw=QWERTY;hw=Automatic"
@@ -39,6 +40,12 @@ xcrun simctl spawn <udid> defaults write .GlobalPreferences AppleKeyboards -arra
 plus `KeyboardPrediction`, `KeyboardAutocorrection`, `KeyboardCheckSpelling`,
 `KeyboardAutocapitalization`, `KeyboardShowPredictionBar`, `SmartQuotesEnabled`,
 `SmartDashesEnabled` set to `NO` in `com.apple.Preferences`.
+
+**iOS 27 adds a one-time "Speed up your typing by sliding your finger…" tip** over the keyboard the
+first time a new simulator types a few words. It eats the next tap, so `sign-in.yaml`'s
+`tapOn: Send code` did nothing. Dismiss it with `tapOn: Continue`. The 17e also has
+`DidShowContinuousPathIntroduction -bool YES` in `com.apple.Preferences`, but that was set after
+the tip had shown, so nothing proves it suppresses the tip on a fresh simulator.
 
 **Traps in writing flows:**
 
@@ -62,25 +69,17 @@ plus `KeyboardPrediction`, `KeyboardAutocorrection`, `KeyboardCheckSpelling`,
   list is still coasting, so add `waitForAnimationToEnd` before the next tap. Scrolling back up a
   very long list times out; `tapOn: { point: "50%,1%" }` taps the status bar, which scrolls to the
   top.
-- **The dev client's blue "Refreshing…" banner** (top ~58pt, over the back button) sometimes
-  appears by itself on a push that fetches, with no file changed. It is not in the app's
-  hierarchy. Maestro cannot see it, so `extendedWaitUntil: notVisible` will not wait for it. A tap
-  that lands on it does nothing, which looked exactly like the
-  [react-native-screens-past-the-sdk-pin](react-native-screens-past-the-sdk-pin.md) bug until a
-  screenshot showed the banner. Screenshot around a tap that "did nothing" before blaming the app.
-  Release builds do not have this banner.
+- **The dev client draws over the app.** Since SDK 57 a Dev tools button covers the top-right
+  pills until it is turned off per device, so `tapOn: Account` opens the dev menu. The fix, and the
+  other overlays: [dev-client-draws-over-the-app](dev-client-draws-over-the-app.md).
+- **Under heavy machine load, a tap right after `inputText` can be lost.** At load 60–120 it
+  failed 4/4. At normal load `sign-in.yaml` passed 4/4 unchanged. Check `uptime` first.
 - `takeScreenshot` refuses a path outside the run's output folder. Use a bare name and pass
   `--test-output-dir`; PNGs land in `<dir>/takeScreenshot/` at the simulator's full resolution.
 - A simulator that has never opened `exp+shopping-list://` asks "Open in “ShoppingLoop”?" first —
   `open-app.yaml` waits and taps `Open` optionally.
 - `xcrun simctl status_bar <udid> override --time 9:41 …` matches the mockups' clock; it does not
   survive a simulator reboot.
-- A React Native perf-monitor overlay was saved on in the app's dev settings
-  (`RCTDevMenu.RCTPerfMonitorKey` in the app container's
-  `Library/Preferences/com.shoppingloop.app.plist`); if it shows up in a screenshot, turn it off
-  there with `xcrun simctl spawn booted defaults write …`.
-- On the iPhone 17 Pro Max's first launch after a boot, `open-app.yaml`'s optional `Continue` tap
-  opened the dev menu itself; close it by tapping its ✕ at `point: "89%,47%"`.
 
 **Reaching a time of day** (Auto's sunset and sunrise) takes no code — move the zone, not the clock:
 
@@ -88,8 +87,8 @@ plus `KeyboardPrediction`, `KeyboardAutocorrection`, `KeyboardCheckSpelling`,
   `SIMCTL_CHILD_TZ=<zone> xcrun simctl launch booted com.shoppingloop.app`, then
   `xcrun simctl openurl booted` with `open-app.yaml`'s deep link. Not `open-app.yaml` itself: its
   `stopApp` ends the process that carries the variable. `SIMCTL_CHILD_*` reaches the app, and
-  Hermes's `Intl` and `Date` both follow `TZ`. The first `openurl` after a fresh boot may time out
-  (`NSPOSIXErrorDomain 60`) and still load the app ~48 s later.
+  Hermes's `Intl` and `Date` both follow `TZ`. `openurl` can time out (`NSPOSIXErrorDomain 60`),
+  after a fresh boot or when the app is busy reloading, and the link still arrives.
 - **Android emulator** (a Play Store image, so no `adb root`): `adb shell cmd time_zone_detector
   set_time_zone_state_for_tests --zone_id <zone> --user_should_confirm_id false`.
   `suggest_manual_time_zone` is refused — the shell lacks `SUGGEST_MANUAL_TIME_AND_ZONE`. Press

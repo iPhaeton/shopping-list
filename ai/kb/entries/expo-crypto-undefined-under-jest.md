@@ -4,7 +4,7 @@ title: expo-crypto's randomUUID() returns undefined under jest instead of throwi
 type: gotcha
 status: current
 tags: [testing, jest, expo, ids]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, jest.setup.ts, src/lib/ids.ts]
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, jest.setup.ts, src/lib/ids.ts]
 last_verified: 2026-09-27
 verify: grep -q "jest.mock('expo-crypto'" jest.setup.ts && grep -q "jest.mock('@react-native-async-storage/async-storage'" jest.setup.ts && grep -q "jest.mock('react-native-safe-area-context'" jest.setup.ts && grep -q '"<rootDir>/jest.setup.ts"' package.json && ! grep -q 'expo-device' jest.setup.ts && grep -q "jest.mock('expo-device'" src/lib/supabaseTarget.test.ts && ! grep -q 'react-native-svg' jest.setup.ts
 related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, supabase-target-picked-at-runtime]
@@ -31,7 +31,8 @@ jest.mock() is not allowed to reference any out-of-scope variables".
 
 **The general lesson is the one worth carrying:** a jest-expo native mock can be silently *falsy*
 rather than absent, so a new native module is worth probing before writing tests against it. That is
-how this was caught — a throwaway suite that did nothing but log the return value.
+how this was caught — a throwaway suite that did nothing but log the return value. Re-probed on
+jest-expo 57 (task 21) with `jest.requireActual('expo-crypto')`: still `undefined`, no throw.
 
 **AsyncStorage is the second module in that file, and it works out better.** The outbox and the list
 cache read and write real storage, so step 4 added

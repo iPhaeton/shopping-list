@@ -4,9 +4,9 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md]
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, d58a9cf]
 last_verified: 2026-09-27
-verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx'
+verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js
 related: [maestro-drives-the-native-ui, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props]
 ---
 
@@ -30,10 +30,23 @@ shadows, safe areas, overscroll, and anything native-only — `Appearance.setCol
 
 **Where visual sign-off happens.** The **iPhone 17e** simulator: its screen is exactly the mockups'
 1170×2532 @3x (390×844 pt), so an `xcrun simctl io booted screenshot` lines up with a mockup pixel
-for pixel. Then a second look on the **iPhone 17 Pro Max** (taller) and the **`Pixel_10`** Android
-emulator. Screenshots saved under `ai/tasks/*/screenshots/` come from the simulator, not the
-browser. How to reach each screen there:
-[maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
+for pixel; it still is under the iOS 27 runtime. Then a second look on a large phone and the
+**`Pixel_10`** Android emulator. The large phone was the iPhone 17 Pro Max through task 20; the
+iOS 27 runtime has none, and its large phone, the **iPhone 18 Pro Max**, has not been run yet.
+Screenshots saved under `ai/tasks/*/screenshots/` come from the simulator, not the browser. How to
+reach each screen there: [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
+
+**Those screenshots are records of their day, like the logs, not the current design.** The user
+can hand-tune a look after the shots are taken, in the same commit. **The band rim on Lists is the
+known case: faint on purpose.** Task 20 step 3's `screenshots/step-3/lists-*` show each band's top
+edge as a bright white highlight. The user then made it fainter by hand, committed in `d58a9cf`
+alongside those shots. Task 21 read the difference as an SDK 57 regression, and that was wrong: the
+build draws exactly the committed values. The rim no longer has to separate rows, because since
+`b66e076` adjacent rows never share a colour (`src/state/bands.ts`). **Do not "restore" the bright
+edge from those shots.** The rim's brightness is `stopOpacity={0.2}` → `0` in `Band.tsx` and in
+`Horizon.tsx` (the first band). On native, react-native-svg replaces a stop colour's own alpha with
+`stopOpacity`, so the `bandRim` token's alpha (0.22 Day, 0.1 Night) changes nothing there. The
+`verify:` pins the 0.2, so a deliberate change to the rim should update this paragraph too.
 
 **Web-only flaws already accepted** — do not spend a cycle "fixing" these:
 

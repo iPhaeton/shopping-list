@@ -4,10 +4,10 @@ title: Screens take navigation/route as props, never useNavigation()
 type: convention
 status: current
 tags: [navigation, screens, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, 6ef87a2]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
 last_verified: 2026-09-27
 verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && grep -q "name=\"Lists\" component={ListsScreen} options={{ title: 'My Lists', headerShown: false }}" src/navigation/RootNavigator.tsx && grep -q 'name="ListDetail" component={ListDetailScreen} options={{ headerShown: false }}' src/navigation/RootNavigator.tsx && grep -q 'setOptions).toHaveBeenCalledWith(expect.objectContaining({ title:' src/screens/ListDetailScreen.test.tsx
-related: [rntl-14-api-changes, queries-go-through-a11y-labels, react-native-screens-past-the-sdk-pin, phone-is-the-product]
+related: [rntl-14-api-changes, queries-go-through-a11y-labels, react-native-screens-past-the-sdk-pin, expo-sdk-version, phone-is-the-product]
 ---
 
 Screens receive `navigation` and `route` as props and never call `useNavigation()` or
@@ -40,8 +40,9 @@ does nothing on web, by the user's choice ([phone-is-the-product](phone-is-the-p
 
 A **non-root** screen with its header hidden is also what triggers the iOS 26 dead-back-button bug
 in react-native-screens below 4.19
-([react-native-screens-past-the-sdk-pin](react-native-screens-past-the-sdk-pin.md)). Keep that in
-mind before hiding another header.
+([react-native-screens-past-the-sdk-pin](react-native-screens-past-the-sdk-pin.md), superseded).
+SDK 57 pins 4.26, which is past the fix ([expo-sdk-version](expo-sdk-version.md)). The bug matters
+again only if the package drops below 4.19.
 
 **If a screen ever puts a control in `setOptions({ headerRight })` again, the stub drops it.** The
 navigator renders header options, and a `jest.fn()` `setOptions` renders nothing, so the button is
