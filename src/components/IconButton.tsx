@@ -7,8 +7,8 @@ import { radius } from '../theme';
 /**
  * A round icon button — the delete/restore control on a `ListRow`, the rename/delete/restore
  * controls on an `ItemRow`, and List detail's back button. `fill`, `outline`, and the icon's own
- * color all come from the caller, since which combination is legible depends on the band, ground,
- * or sky underneath. With neither, the circle is only a hit target around its glyph.
+ * color all come from the caller, since which combination is legible depends on the band or sky
+ * underneath. With neither, the circle is only a hit target around its glyph.
  */
 export function IconButton({
   label,

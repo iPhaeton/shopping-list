@@ -5,9 +5,9 @@
  * at import: a module-scope `StyleSheet.create` would freeze whichever palette was current then.
  *
  * The sky-to-sun rows were sampled from the Lists mockups (a compressed PNG, so close approximations);
- * `groundTop` through `divider` are the exact values the List detail mockups were drawn with.
- * `bands`, the ground, `celestial`, the switch, and `iconButtonFill` are first used in
- * task 20 step 3, which built `ListsScreen` to the mockup.
+ * `divider` is the exact value the List detail mockups were drawn with. `bands`, `celestial`, the
+ * switch, and `iconButtonFill` are first used in task 20 step 3, which built `ListsScreen` to the
+ * mockup.
  */
 export type Palette = {
   /** The sky, top of the screen → near the horizon. A flat screen background uses `skyTop`. */
@@ -21,8 +21,6 @@ export type Palette = {
   text: string;
   /** Placeholders, chevrons, hints. */
   textMuted: string;
-  /** A checked-off item's title. Passes AA across the whole item ground. */
-  textDone: string;
   /** Filled buttons and checked controls. Inverts between themes: dark on light, light on dark. */
   primary: string;
   /** A label or tick on `primary`. */
@@ -34,12 +32,8 @@ export type Palette = {
   switchKnob: string;
   /** The sun by day, the moon by night. */
   celestial: string;
-  /** Horizon bands, top → bottom. */
+  /** Horizon bands, top → bottom: the rows of Lists and of List detail, through `bandAt`. */
   bands: readonly [string, string, string, string, string, string];
-  /** The stretch of land items sit on, top → bottom of the screen. */
-  groundTop: string;
-  groundBottom: string;
-  checkboxOutline: string;
   iconButtonFill: string;
   /**
    * The icon-button fill under an `onPrimary` glyph — a row-index band dark enough to need the
@@ -71,7 +65,6 @@ export const day: Palette = {
   bannerSurface: '#f8f8fc',
   text: '#2c2f4e',
   textMuted: '#75778f',
-  textDone: '#52546f',
   primary: '#2e3460',
   onPrimary: '#f7f4fb',
   primaryDisabled: '#989fb6',
@@ -80,9 +73,6 @@ export const day: Palette = {
   switchKnob: '#fefefe',
   celestial: '#feecd2',
   bands: ['#e4d8ea', '#d0c4e0', '#b2a8d2', '#5e5a92', '#4a4e82', '#2e3460'],
-  groundTop: '#e6dbee',
-  groundBottom: '#d6cae4',
-  checkboxOutline: '#6e7090',
   iconButtonFill: 'rgba(255,255,255,0.55)',
   iconButtonFillInverse: 'rgba(255,255,255,0.14)',
   bandRim: 'rgba(255,255,255,0.22)',
@@ -100,7 +90,6 @@ export const night: Palette = {
   bannerSurface: '#343c68',
   text: '#eef0fa',
   textMuted: '#a9aecb',
-  textDone: '#c3c7de',
   primary: '#e6e2fa',
   onPrimary: '#1b2137',
   primaryDisabled: '#666880',
@@ -109,9 +98,6 @@ export const night: Palette = {
   switchKnob: '#e8eaf4',
   celestial: '#f8f9fd',
   bands: ['#56628a', '#465276', '#384264', '#2c3452', '#202842', '#161c30'],
-  groundTop: '#434e78',
-  groundBottom: '#2a3252',
-  checkboxOutline: '#c9cde6',
   iconButtonFill: 'rgba(255,255,255,0.12)',
   iconButtonFillInverse: 'rgba(255,255,255,0.12)',
   bandRim: 'rgba(255,255,255,0.1)',

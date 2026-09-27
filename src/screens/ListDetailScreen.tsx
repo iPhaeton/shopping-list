@@ -7,7 +7,6 @@ import { AddBar } from '../components/AddBar';
 import { BlockedBanner } from '../components/BlockedBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { Ground } from '../components/Ground';
 import { Hillside } from '../components/Hillside';
 import { ChevronIcon } from '../components/icons';
 import { IconButton } from '../components/IconButton';
@@ -17,6 +16,7 @@ import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { SkyFill } from '../components/Sky';
 import { SyncBanner } from '../components/SyncBanner';
 import type { ListDetailScreenProps } from '../navigation/types';
+import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
 import { inCreationOrder, liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
@@ -31,7 +31,7 @@ import { fonts, radius, spacing } from '../theme';
 const HEADER_GAP = 13;
 
 /** How far the sky reaches above the header — past any pull-down bounce, so that shows sky and
- * never the ground layer behind the list. */
+ * never the band color behind the list. */
 const OVERSCROLL_SKY = 1000;
 
 /**
@@ -266,7 +266,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         {slot ? <View style={styles.slot}>{slot}</View> : null}
       </View>
 
-      <Hillside>
+      <Hillside ground={bandAt(colors, 0).color}>
         {loaded && inBin > 0 && list ? (
           <ShowDeletedToggle
             checked={showDeleted}
@@ -279,30 +279,34 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     </View>
   );
 
+  // The screen's own background, not the sky: what shows below the last row — past a short list,
+  // in an overscroll, or under an empty one — so it reads as that row's band carrying on. With no
+  // rows it is the first band, the one the hill is the top edge of.
+  const last = bandAt(colors, Math.max(visible.length, 1) - 1);
+
+  // `ink`: on a band, `textMuted` falls short of AA for the hint.
   const empty = !list ? (
     <EmptyState
       title="List not found"
       hint="Go back and pick a list from the list screen."
-      ink={colors.text}
+      ink={last.ink}
     />
   ) : !loaded ? (
     <ActivityIndicator
       accessibilityLabel="Loading list items"
-      color={colors.text}
+      color={last.ink}
       style={styles.loading}
     />
   ) : (
-    // `ink`: on the ground, `textMuted` falls short of AA for the hint.
     <EmptyState
       title="Nothing on this list"
       hint={editable ? 'Add your first item above.' : 'Nobody has added anything yet.'}
-      ink={colors.text}
+      ink={last.ink}
     />
   );
 
   return (
-    <View style={styles.screen}>
-      <Ground />
+    <View style={[styles.screen, { backgroundColor: last.color }]}>
 
       {pinned ? (
         <View style={[styles.pinned, { paddingTop: insets.top }]}>
@@ -331,7 +335,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
             loadingMore ? (
               <ActivityIndicator
                 accessibilityLabel="Loading more items"
-                color={colors.text}
+                color={last.ink}
                 style={styles.footer}
               />
             ) : null

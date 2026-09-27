@@ -43,7 +43,7 @@ const FILL_STARS: readonly [number, number, number, number][] = [
  *
  * **It measures itself rather than sizing the SVG by percent.** A `height="100%"` drawing is laid
  * out once on iOS and kept: the header first renders while its items load, without the Add bar, and
- * the sky stayed that short once the bar arrived — the ground showed through behind the bar. Until
+ * the sky stayed that short once the bar arrived — what lies behind the list showed through behind the bar. Until
  * the first layout it draws at `initialHeight`, so a pushed screen's first frame is already sky.
  */
 export function SkyFill({ initialHeight = 224 }: { initialHeight?: number }) {

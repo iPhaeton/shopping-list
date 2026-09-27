@@ -75,9 +75,8 @@ function CelestialGraphic({ isDay, colors }: { isDay: boolean; colors: Palette }
  * switch row — renders on top, on the left; the graphic itself is decorative and hidden from
  * accessibility.
  *
- * Lists only. List detail draws `Hillside` instead: its items sit on a ground fixed to the screen
- * while the hill scrolls, so a hill filled with a color of its own would seam against it. It draws
- * the same {@link HILL_EDGE}, though.
+ * Lists only. List detail draws `Hillside`, a fixed-height strip with a larger disc, over rows in the
+ * same band colors and along the same {@link HILL_EDGE}.
  */
 export function Horizon({ ground, children }: { ground: string; children?: ReactNode }) {
   const { name, colors } = useTheme();
