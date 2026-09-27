@@ -7,7 +7,7 @@ tags: [ui, web, layout, accessibility]
 sources: [ai/tasks/20-ux/implementation-log-step-3.md, src/screens/ListsScreen.tsx, src/components/Band.tsx, src/components/Horizon.tsx, src/components/SyncBanner.tsx]
 last_verified: 2026-09-26
 verify: test "$(grep -c 'pointerEvents="none"' src/screens/ListsScreen.tsx)" -ge 2 && grep -q "position: 'absolute'" src/screens/ListsScreen.tsx && for f in src/components/Band.tsx src/components/Horizon.tsx src/components/SyncBanner.tsx; do grep -q 'pointerEvents="none"' "$f" || exit 1; done
-related: [phone-is-the-product, flatlist-footer-absent-when-list-is-empty]
+related: [phone-is-the-product, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios]
 indexed: false
 ---
 

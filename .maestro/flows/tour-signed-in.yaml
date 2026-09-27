@@ -24,16 +24,17 @@ appId: com.shoppingloop.app
     visible: Sam
     timeout: 10000
 - takeScreenshot: sharing-${THEME}
-# iOS back buttons are labelled with the previous screen's title; Maestro's `back` is Android-only.
+# A native iOS back button is labelled with the previous screen's title, and Maestro's `back` is
+# Android-only. List detail draws its own, labelled `Back` on both platforms.
 - tapOn: Groceries
-- tapOn: My Lists
+- tapOn: Back
 
 - tapOn: Birthday party, shared with you
 - extendedWaitUntil:
     visible: Candles
     timeout: 10000
 - takeScreenshot: list-detail-read-only-${THEME}
-- tapOn: My Lists
+- tapOn: Back
 
 - tapOn: Account
 - takeScreenshot: account-${THEME}

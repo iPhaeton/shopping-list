@@ -56,7 +56,10 @@ function CelestialGraphic({ isDay, colors }: { isDay: boolean; colors: Palette }
  * the band directly below, whose top edge this hill *is* (`Band` draws none for its first row).
  * Sun and hill live in one component so the hill can pass in front of the sun. `children` — the
  * switch row — renders on top, on the left; the graphic itself is decorative and hidden from
- * accessibility. Reused by List detail (step 4).
+ * accessibility.
+ *
+ * Lists only. List detail draws `Hillside` instead: its items sit on a ground fixed to the screen
+ * while the hill scrolls, so a hill filled with a color of its own would seam against it.
  */
 export function Horizon({ ground, children }: { ground: string; children?: ReactNode }) {
   const { name, colors } = useTheme();

@@ -88,10 +88,16 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
           {/*
             No native header: the title row and Account button are drawn inside `ListsScreen`
             itself, as part of the scrolling sky/horizon composition. `title` stays — it is still
-            the iOS back-button label from `ListDetail`/`Account`, and the web page title.
+            the iOS back-button label on `Account`, and the web page title.
           */}
           <Stack.Screen name="Lists" component={ListsScreen} options={{ title: 'My Lists', headerShown: false }} />
-          <Stack.Screen name="ListDetail" component={ListDetailScreen} />
+          {/*
+            No native header here either: `ListDetailScreen` draws its back button, Rename/Share
+            pills and title as part of its own sky. Back still works without the native button —
+            the edge swipe on iOS and the hardware back on Android belong to the stack, not the
+            header. `title` still comes from the screen, through `setOptions`.
+          */}
+          <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Sharing" component={SharingScreen} options={{ title: 'Sharing' }} />
           <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />
         </>

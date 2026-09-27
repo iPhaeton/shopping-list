@@ -20,15 +20,18 @@ export function ErrorBanner({ message }: { message: string }) {
   );
 }
 
+// A notice card in the pill language: the sync banner's fill, rounded to `radius.lg` because the
+// message can run to several lines, and the error color carried by the ring and the text alone.
 const useStyles = themedStyles((colors) => ({
   banner: {
-    margin: spacing.lg,
-    marginBottom: 0,
-    padding: spacing.md,
-    borderRadius: radius.sm,
+    marginHorizontal: 20,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.error,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bannerSurface,
   },
   text: {
     fontFamily: fonts.sans,

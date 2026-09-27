@@ -59,11 +59,12 @@ export function ShowDeletedToggle({
 }
 
 const useStyles = themedStyles((colors) => ({
+  // 24pt in from the edge: where both mockups put the track, level with List detail's checkboxes.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 24,
     paddingVertical: spacing.sm,
     alignSelf: 'flex-start',
   },

@@ -1,31 +1,50 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import type { ListRenderItemInfo } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddBar } from '../components/AddBar';
 import { BlockedBanner } from '../components/BlockedBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { HeaderButton } from '../components/HeaderButton';
+import { Ground } from '../components/Ground';
+import { Hillside } from '../components/Hillside';
+import { ChevronIcon } from '../components/icons';
+import { IconButton } from '../components/IconButton';
 import { ItemRow } from '../components/ItemRow';
+import { PillButton } from '../components/PillButton';
 import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
+import { SkyFill } from '../components/Sky';
 import { SyncBanner } from '../components/SyncBanner';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { useLists } from '../state/ListsContext';
 import { inCreationOrder, liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
 import { themedStyles, useTheme } from '../state/ThemeContext';
-import { fonts, spacing } from '../theme';
+import type { Item } from '../state/types';
+import { fonts, radius, spacing } from '../theme';
+
+/**
+ * Between the safe-area inset and the header row: puts the row at y 60, where the mockup draws it,
+ * on the iPhone 17e.
+ */
+const HEADER_GAP = 13;
+
+/** How far the sky reaches above the header — past any pull-down bounce, so that shows sky and
+ * never the ground layer behind the list. */
+const OVERSCROLL_SKY = 1000;
+
+/**
+ * How tall the header's sky is on the mockup, top of the screen to the horizon strip. The strip
+ * over the status bar draws its slice of a sky this tall, so with the list at the top it lines up
+ * with the header's own sky underneath it.
+ */
+const DRAWN_SKY_H = 224;
 
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { listId } = route.params;
   const {
     lists,
@@ -61,8 +80,11 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const editable = list ? canEditItems(list.role) && !binned : false;
   const manageable = list ? canManageList(list.role) && !binned : false;
 
-  // Before the not-found return below, because hooks cannot be called conditionally. Memoised so the
-  // `FlatList` is not handed a new `data` array on every render.
+  // Nothing below the header reads from the database until this is true — the list was fetched, but
+  // its items were not. `loadListItems`, triggered below, is on its way.
+  const loaded = list?.itemsLoaded ?? false;
+
+  // Memoised so the `FlatList` is not handed a new `data` array on every render.
   //
   // Sorted, both views: `items` is two streams end to end plus whatever was added since, and a row
   // that moved between them — restored from the bin — keeps its place in the array. With the bin
@@ -94,182 +116,339 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     if (list && !list.itemsLoaded) void loadListItems(listId);
   }, [list, list?.itemsLoaded, listId, loadListItems]);
 
+  // The screen draws its own header — `RootNavigator` hides the native one — so this title is read
+  // only elsewhere: the browser tab on web, and the back button of the Sharing screen pushed on top.
   useLayoutEffect(() => {
-    navigation.setOptions({
-      title: list?.name ?? 'List',
-      // `Share list` is for every member, not only owners: `list_members_of` is gated on the
-      // caller's own membership and hands a reader the full roster, and "who else can see my
-      // shopping list" is a fair question for them to ask. Only renaming is an owner's to do.
-      headerRight: list
-        ? () => (
-            <View style={styles.headerButtons}>
-              {manageable ? (
-                <HeaderButton label="Rename list" onPress={() => setRenaming((open) => !open)} />
-              ) : null}
-              <HeaderButton
-                label="Share list"
-                onPress={() => navigation.navigate('Sharing', { listId })}
-              />
-            </View>
-          )
-        : undefined,
-    });
-  }, [navigation, list, list?.name, manageable, listId, styles]);
+    navigation.setOptions({ title: list?.name ?? 'List' });
+  }, [navigation, list?.name]);
 
-  if (!list) {
-    return (
-      <View style={styles.container}>
-        <EmptyState title="List not found" hint="Go back and pick a list from the list screen." />
-      </View>
-    );
-  }
+  // Ids in, so every row gets the same three functions and `ItemRow`'s `memo` holds across renders.
+  const toggle = useCallback((itemId: string) => toggleItem(listId, itemId), [toggleItem, listId]);
+  const rename = useCallback(
+    (itemId: string, title: string) => renameItem(listId, itemId, title),
+    [renameItem, listId]
+  );
+  const setDeleted = useCallback(
+    (itemId: string, deleted: boolean) => setItemDeleted(listId, itemId, deleted),
+    [setItemDeleted, listId]
+  );
+  const renderItem = useCallback(
+    ({ item, index }: ListRenderItemInfo<Item>) => (
+      <ItemRow
+        item={item}
+        index={index}
+        editable={editable}
+        onToggle={toggle}
+        onRename={editable ? rename : undefined}
+        onSetDeleted={editable ? setDeleted : undefined}
+      />
+    ),
+    [editable, toggle, rename, setDeleted]
+  );
 
-  // Nothing below this reads from the database yet — the list was fetched, but its items were
-  // not. `loadListItems`, triggered above, is on its way.
-  if (!list.itemsLoaded) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator accessibilityLabel="Loading list items" color={colors.primary} />
-      </View>
-    );
-  }
+  // A refused write or a blocked one: pinned above the list rather than scrolled with it, since the
+  // blocked banner holds up every write behind it until it is answered.
+  const pinned = Boolean(error || blocked);
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {error ? <ErrorBanner message={error} /> : null}
-      {blocked ? (
-        <BlockedBanner
-          blocked={blocked}
-          lists={lists}
-          onRestore={restoreBlocked}
-          onDiscard={discardBlocked}
-        />
-      ) : null}
-      <SyncBanner pending={pending} />
-      {binned ? (
-        <View style={styles.binned}>
-          {/*
-            Spelled out because the two tombstones are independent and the surprise is otherwise
-            silent: restore a list you binned six items inside, and you get the list back missing
-            six items with nothing on screen to say where they went.
-          */}
-          <Text style={styles.binnedText}>
-            This list is in the bin. Restoring it brings back everything except the items you
-            deleted separately — those are one tick of Show deleted away.
-          </Text>
-          {canManageList(list.role) ? (
-            <HeaderButton label={`Restore ${list.name}`} onPress={() => setListDeleted(listId, false)} />
-          ) : null}
-        </View>
-      ) : null}
-      {editable || binned ? null : (
-        <Text style={styles.readOnly}>Read only — you can see this list but not change it.</Text>
-      )}
-      {renaming ? (
-        <AddBar
-          placeholder="List name"
-          buttonLabel="Save"
-          initialValue={list.name}
-          onSubmit={(name) => {
-            renameList(list.id, name);
-            setRenaming(false);
-          }}
-        />
-      ) : null}
-      {editable ? (
+  // Where the Add bar sits on the mockup (y 172), whichever of the three the list calls for. Only
+  // once the items are in: before that nothing may write, and a notice about what you cannot do can
+  // wait for the list it is about.
+  let slot = null;
+  if (list && loaded) {
+    if (editable) {
+      slot = (
         <AddBar
           placeholder="Add an item"
           buttonLabel="Add"
           onSubmit={(title) => addItem(list.id, title)}
         />
-      ) : null}
-      {inBin > 0 ? (
-        <ShowDeletedToggle
-          checked={showDeleted}
-          count={inBin}
-          more={list.nextBin !== null}
-          onChange={setShowDeleted}
-        />
-      ) : null}
-      <FlatList
-        data={visible}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        onEndReached={more && !loadingMore ? () => void loadNextPage() : undefined}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          loadingMore ? (
-            <ActivityIndicator
-              accessibilityLabel="Loading more items"
-              color={colors.primary}
-              style={styles.footer}
-            />
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <ItemRow
-            item={item}
-            editable={editable}
-            onToggle={() => toggleItem(list.id, item.id)}
-            onRename={editable ? (title) => renameItem(list.id, item.id, title) : undefined}
-            onSetDeleted={
-              editable ? (deleted) => setItemDeleted(list.id, item.id, deleted) : undefined
-            }
-          />
-        )}
-        ListEmptyComponent={
-          <EmptyState
-            title="Nothing on this list"
-            hint={editable ? 'Add your first item above.' : 'Nobody has added anything yet.'}
-          />
-        }
+      );
+    } else if (binned) {
+      slot = (
+        <View style={styles.card}>
+          {/*
+            Spelled out because the two tombstones are independent and the surprise is otherwise
+            silent: restore a list you binned six items inside, and you get the list back missing
+            six items with nothing on screen to say where they went.
+          */}
+          <Text style={styles.noticeText}>
+            This list is in the bin. Restoring it brings back everything except the items you
+            deleted separately — those are one tick of Show deleted away.
+          </Text>
+          {canManageList(list.role) ? (
+            <View style={styles.cardAction}>
+              <PillButton
+                variant="filled"
+                label={`Restore ${list.name}`}
+                onPress={() => setListDeleted(listId, false)}
+              />
+            </View>
+          ) : null}
+        </View>
+      );
+    } else {
+      slot = (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>Read only — you can see this list but not change it.</Text>
+        </View>
+      );
+    }
+  }
+
+  // Built here as a value, never as an inline component type: a component defined in this render
+  // would be a new type on every render, remounting the Add bar and throwing away its draft.
+  const header = (
+    <View>
+      <View
+        style={styles.overscrollSky}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
       />
-    </KeyboardAvoidingView>
+      <View style={{ paddingTop: (pinned ? 0 : insets.top) + HEADER_GAP }}>
+        <View
+          style={styles.fill}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          <SkyFill />
+        </View>
+
+        <View style={styles.headerRow}>
+          <IconButton label="Back" outline={colors.outline} onPress={() => navigation.goBack()}>
+            <ChevronIcon direction="left" color={colors.text} size={18} />
+          </IconButton>
+          {/*
+            `Share list` is for every member, not only owners: `list_members_of` is gated on the
+            caller's own membership and hands a reader the full roster, and "who else can see my
+            shopping list" is a fair question for them to ask. Only renaming is an owner's to do.
+          */}
+          {list ? (
+            <View style={styles.headerPills}>
+              {manageable ? (
+                <PillButton
+                  label="Rename list"
+                  visibleLabel="Rename"
+                  onPress={() => setRenaming((open) => !open)}
+                />
+              ) : null}
+              <PillButton
+                label="Share list"
+                visibleLabel="Share"
+                onPress={() => navigation.navigate('Sharing', { listId })}
+              />
+            </View>
+          ) : null}
+        </View>
+
+        {/* The rename bar takes the title's own place — it is the title being edited — and is the
+            same height, so nothing below it moves while it is open. */}
+        {list && renaming && manageable ? (
+          <View style={styles.titleSlot}>
+            <AddBar
+              placeholder="List name"
+              buttonLabel="Save"
+              initialValue={list.name}
+              onSubmit={(name) => {
+                renameList(list.id, name);
+                setRenaming(false);
+              }}
+            />
+          </View>
+        ) : list ? (
+          <Text accessibilityRole="header" style={styles.title} numberOfLines={2}>
+            {list.name}
+          </Text>
+        ) : null}
+
+        <SyncBanner pending={pending} />
+
+        {slot ? <View style={styles.slot}>{slot}</View> : null}
+      </View>
+
+      <Hillside>
+        {loaded && inBin > 0 && list ? (
+          <ShowDeletedToggle
+            checked={showDeleted}
+            count={inBin}
+            more={list.nextBin !== null}
+            onChange={setShowDeleted}
+          />
+        ) : null}
+      </Hillside>
+    </View>
+  );
+
+  const empty = !list ? (
+    <EmptyState
+      title="List not found"
+      hint="Go back and pick a list from the list screen."
+      ink={colors.text}
+    />
+  ) : !loaded ? (
+    <ActivityIndicator
+      accessibilityLabel="Loading list items"
+      color={colors.text}
+      style={styles.loading}
+    />
+  ) : (
+    // `ink`: on the ground, `textMuted` falls short of AA for the hint.
+    <EmptyState
+      title="Nothing on this list"
+      hint={editable ? 'Add your first item above.' : 'Nobody has added anything yet.'}
+      ink={colors.text}
+    />
+  );
+
+  return (
+    <View style={styles.screen}>
+      <Ground />
+
+      {pinned ? (
+        <View style={[styles.pinned, { paddingTop: insets.top }]}>
+          {error ? <ErrorBanner message={error} /> : null}
+          {blocked ? (
+            <BlockedBanner
+              blocked={blocked}
+              lists={lists}
+              onRestore={restoreBlocked}
+              onDiscard={discardBlocked}
+            />
+          ) : null}
+        </View>
+      ) : null}
+
+      <KeyboardAvoidingView
+        style={styles.body}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <FlatList
+          data={visible}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ListHeaderComponent={header}
+          ListEmptyComponent={empty}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator
+                accessibilityLabel="Loading more items"
+                color={colors.text}
+                style={styles.footer}
+              />
+            ) : null
+          }
+          contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
+          keyboardShouldPersistTaps="handled"
+          onEndReached={more && !loadingMore ? () => void loadNextPage() : undefined}
+          onEndReachedThreshold={0.5}
+        />
+      </KeyboardAvoidingView>
+
+      {/* Keeps the status bar on sky once rows have scrolled up under it. */}
+      <View
+        style={[styles.statusBarSky, { height: insets.top }]}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants">
+        <View style={styles.statusBarSkyFill}>
+          <SkyFill />
+        </View>
+      </View>
+    </View>
   );
 }
 
 const useStyles = themedStyles((colors) => ({
-  container: {
+  screen: {
     flex: 1,
+  },
+  body: {
+    flex: 1,
+  },
+  pinned: {
+    paddingBottom: spacing.sm,
     backgroundColor: colors.skyTop,
   },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  overscrollSky: {
+    position: 'absolute',
+    top: -OVERSCROLL_SKY,
+    left: 0,
+    right: 0,
+    height: OVERSCROLL_SKY,
     backgroundColor: colors.skyTop,
   },
-  headerButtons: {
+  fill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  headerRow: {
+    height: 36,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
   },
-  readOnly: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+  headerPills: {
+    flexDirection: 'row',
+    gap: spacing.md,
   },
-  binned: {
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+  // A fixed line height, matching the rename bar that replaces it, so opening that bar moves
+  // nothing below.
+  title: {
+    marginTop: 10,
+    paddingHorizontal: 20,
+    fontFamily: fonts.serif,
+    fontSize: 40,
+    lineHeight: 52,
+    color: colors.text,
   },
-  binnedText: {
-    fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+  titleSlot: {
+    marginTop: 10,
   },
-  content: {
+  // With the title's 10 above it, this puts the Add bar at y 172, where the mockup draws it.
+  slot: {
+    marginTop: 14,
+  },
+  // The read-only line: a quiet pill in the sync banner's fill.
+  notice: {
+    marginHorizontal: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bannerSurface,
+  },
+  // The binned-list notice: the same fill, as a card, since it has a button to hold.
+  card: {
+    marginHorizontal: 20,
     padding: spacing.lg,
     gap: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bannerSurface,
+  },
+  cardAction: {
+    alignItems: 'flex-start',
+  },
+  noticeText: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    color: colors.text,
+  },
+  loading: {
+    paddingTop: spacing.xl * 2,
   },
   footer: {
     paddingVertical: spacing.md,
+  },
+  statusBarSky: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+  },
+  statusBarSkyFill: {
+    height: DRAWN_SKY_H,
   },
 }));

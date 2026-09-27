@@ -5,18 +5,22 @@ import { themedStyles } from '../state/ThemeContext';
 import { radius } from '../theme';
 
 /**
- * A round, translucent icon button — the delete/restore control on a `ListRow`, and step 4's
- * rename/delete controls on an `ItemRow`. `fill` and the icon's own color both come from the
- * caller, since which pair is legible depends on the band or surface underneath.
+ * A round icon button — the delete/restore control on a `ListRow`, the rename/delete/restore
+ * controls on an `ItemRow`, and List detail's back button. `fill`, `outline`, and the icon's own
+ * color all come from the caller, since which combination is legible depends on the band, ground,
+ * or sky underneath. With neither, the circle is only a hit target around its glyph.
  */
 export function IconButton({
   label,
   fill,
+  outline,
   onPress,
   children,
 }: {
   label: string;
-  fill: string;
+  fill?: string;
+  /** A 1pt ring in this color — the back button's outlined look, matching `PillButton`. */
+  outline?: string;
   onPress: () => void;
   children: ReactNode;
 }) {
@@ -28,7 +32,12 @@ export function IconButton({
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={4}
-      style={({ pressed }) => [styles.button, { backgroundColor: fill }, pressed && styles.pressed]}>
+      style={({ pressed }) => [
+        styles.button,
+        fill !== undefined && { backgroundColor: fill },
+        outline !== undefined && { borderWidth: 1, borderColor: outline },
+        pressed && styles.pressed,
+      ]}>
       {children}
     </Pressable>
   );

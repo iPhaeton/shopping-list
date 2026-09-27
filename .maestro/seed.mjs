@@ -96,10 +96,17 @@ const member = as(await signIn(memberEmail));
 await owner.rpc('set_name', { p_name: nameFor(ownerEmail) });
 await member.rpc('set_name', { p_name: nameFor(memberEmail) });
 
-// The owner's own lists: one done item and one in the bin, so "Show 1 deleted" appears.
-const groceries = await owner.list('Groceries', ['Milk', 'Bread', 'Eggs', 'Apples', 'Coffee']);
-await owner.rpc('set_item_done', { p_item_id: groceries.items.Bread, p_done: true });
-await owner.rpc('set_item_deleted', { p_item_id: groceries.items.Coffee, p_deleted: true });
+// The owner's own lists. Groceries is the List detail mockup's own state
+// (ai/ux/primary/list-detail-screen-quiet-horizon.png): ten items, the same three done, and one more
+// in the bin, so "Show 1 deleted" appears.
+const groceries = await owner.list('Groceries', [
+  'Oat milk', 'Sourdough bread', 'Eggs', 'Cherry tomatoes', 'Olive oil',
+  'Coffee beans', 'Bananas', 'Greek yogurt', 'Fresh basil', 'Honey', 'Paper towels',
+]);
+for (const title of ['Sourdough bread', 'Olive oil', 'Bananas']) {
+  await owner.rpc('set_item_done', { p_item_id: groceries.items[title], p_done: true });
+}
+await owner.rpc('set_item_deleted', { p_item_id: groceries.items['Paper towels'], p_deleted: true });
 await owner.list('Hardware store', []);
 await owner.list('Pharmacy', []);
 await owner.rpc('share_list', { p_list_id: groceries.id, p_user_id: member.userId, p_role: 'writer' });

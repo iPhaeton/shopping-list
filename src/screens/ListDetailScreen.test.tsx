@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect } from 'react';
 
 import {
   addItem as addItemRequest,
@@ -36,7 +36,7 @@ jest.mock('../lib/listsApi', () => ({
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
 jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
 
-const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+const navigation = { navigate: jest.fn(), setOptions: jest.fn(), goBack: jest.fn() };
 
 function detailProps(listId: string) {
   return { navigation, route: { params: { listId } } } as unknown as ListDetailScreenProps;
@@ -99,44 +99,17 @@ const SHARED: List = {
 };
 
 /**
- * Renders the screen for a list that arrived from the database with a given role, together with the
- * header the navigator would be showing.
+ * Renders the screen for a list that arrived from the database with a given role.
  *
- * In the app the header lives outside the screen — `navigation.setOptions` hands `headerRight` to
- * the navigator, which renders it. Here the stub keeps the last options in state and renders them in
- * the *same* tree, so a header button press reaches the same screen instance rather than a second
- * copy of it. That is what makes the rename bar assertable at all.
+ * The screen draws its own header — back button, Rename and Share pills, title — inside its own
+ * tree, so a header press reaches the same screen instance with no navigator stood up at all.
  */
-function Chrome({ listId }: { listId: string }) {
-  const [options, setOptions] = useState<{ headerRight?: () => ReactNode }>({});
-
-  const nav = useMemo(
-    () => ({
-      navigate: navigation.navigate,
-      setOptions: (next: object) => {
-        navigation.setOptions(next);
-        setOptions(next);
-      },
-    }),
-    []
-  );
-
-  return (
-    <>
-      {options.headerRight?.()}
-      <ListDetailScreen
-        {...({ navigation: nav, route: { params: { listId } } } as unknown as ListDetailScreenProps)}
-      />
-    </>
-  );
-}
-
 async function renderAs(role: Role) {
   jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...SHARED, role }], error: null, truncated: false });
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-      <Chrome listId="l1" />
+      <ListDetailScreen {...detailProps('l1')} />
     </ListsProvider>
   );
 
@@ -148,6 +121,7 @@ beforeEach(async () => {
   jest.mocked(fetchLists).mockResolvedValue({ lists: [], error: null, truncated: false });
   navigation.setOptions.mockClear();
   navigation.navigate.mockClear();
+  navigation.goBack.mockClear();
   jest.mocked(renameList).mockClear();
   jest.mocked(renameItem).mockClear();
   // The provider queues writes on disk now; without this each test inherits the last one's outbox.
@@ -163,8 +137,33 @@ it('shows an empty state for a list with no items', async () => {
 it('puts the list name in the header', async () => {
   await renderScreen('Hardware');
 
-  // `objectContaining` because an owner's header carries `headerRight` alongside the title.
+  // Drawn by the screen itself; the native header is hidden.
+  expect(screen.getByRole('header', { name: 'Hardware' })).toBeOnTheScreen();
+  // Still handed to the navigator too — the web tab title and the Sharing screen's back button
+  // read it. `objectContaining` so a later option travelling in the same call does not break this.
   expect(navigation.setOptions).toHaveBeenCalledWith(expect.objectContaining({ title: 'Hardware' }));
+});
+
+/** The drawn button is the visible way back; the swipe and the hardware button are the stack's own. */
+it('goes back from its own back button', async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Back'));
+
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
+});
+
+it('offers a way back from a list that is not found', async () => {
+  await render(
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <ListDetailScreen {...detailProps('does-not-exist')} />
+    </ListsProvider>
+  );
+
+  await fireEvent.press(screen.getByLabelText('Back'));
+
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  expect(screen.queryByLabelText('Share list')).not.toBeOnTheScreen();
 });
 
 it('adds items and shows them unchecked, in order', async () => {
@@ -278,7 +277,7 @@ describe('loading a list on entry', () => {
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-        <Chrome listId="l1" />
+        <ListDetailScreen {...detailProps('l1')} />
       </ListsProvider>
     );
 
@@ -303,7 +302,7 @@ describe('loading a list on entry', () => {
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-        <Chrome listId="l1" />
+        <ListDetailScreen {...detailProps('l1')} />
       </ListsProvider>
     );
 
@@ -347,7 +346,7 @@ describe('a reader', () => {
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-        <Chrome listId="l1" />
+        <ListDetailScreen {...detailProps('l1')} />
       </ListsProvider>
     );
 
@@ -497,6 +496,27 @@ describe('an owner', () => {
     expect(screen.queryByLabelText('List name')).not.toBeOnTheScreen();
     expect(renameList).not.toHaveBeenCalled();
   });
+
+  /** The pills read short, like the mockup; their labels keep saying what they act on. */
+  it('shows short pill text under the full labels', async () => {
+    await renderAs('owner');
+
+    expect(screen.getByLabelText('Rename list')).toHaveTextContent('Rename');
+    expect(screen.getByLabelText('Share list')).toHaveTextContent('Share');
+  });
+
+  /** The bar is the title being edited, so it takes the title's place rather than adding a row. */
+  it('swaps the title for the rename bar while it is open', async () => {
+    await renderAs('owner');
+
+    await fireEvent.press(screen.getByLabelText('Rename list'));
+    expect(screen.queryByRole('header', { name: 'Groceries' })).not.toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('List name'), 'Weekly shop');
+    await fireEvent.press(screen.getByLabelText('Save'));
+
+    expect(screen.getByRole('header', { name: 'Weekly shop' })).toBeOnTheScreen();
+  });
 });
 
 // --- The bin ------------------------------------------------------------------------------------
@@ -522,7 +542,7 @@ async function renderWithBin(role: Role = 'owner') {
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-      <Chrome listId="l1" />
+      <ListDetailScreen {...detailProps('l1')} />
     </ListsProvider>
   );
 
@@ -586,6 +606,8 @@ it('offers a deleted item no rename, only a restore', async () => {
   expect(screen.queryByLabelText('Rename Bread')).not.toBeOnTheScreen();
   expect(screen.getByLabelText('Restore Bread')).toBeOnTheScreen();
   expect(screen.getByLabelText('Rename Milk')).toBeOnTheScreen();
+  // Said in words too, not only by the icon that replaced the trash.
+  expect(screen.getByText('Deleted')).toBeOnTheScreen();
 });
 
 /**
@@ -607,7 +629,7 @@ it('says the list is empty when every live item has been deleted', async () => {
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-      <Chrome listId="l1" />
+      <ListDetailScreen {...detailProps('l1')} />
     </ListsProvider>
   );
 
@@ -624,7 +646,7 @@ describe('a list opened from the bin', () => {
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-        <Chrome listId="l1" />
+        <ListDetailScreen {...detailProps('l1')} />
       </ListsProvider>
     );
 
@@ -709,7 +731,7 @@ async function renderPaged() {
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
-      <Chrome listId="l1" />
+      <ListDetailScreen {...detailProps('l1')} />
     </ListsProvider>
   );
 

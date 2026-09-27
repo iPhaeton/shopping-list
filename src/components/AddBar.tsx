@@ -10,17 +10,29 @@ type Props = {
   buttonLabel: string;
   /** What the field starts with. For editing something that already has a value, like a list name. */
   initialValue?: string;
+  autoFocus?: boolean;
   onSubmit: (value: string) => void;
+  /** Adds a `Cancel` button before the submit one — for an editor that replaces something else
+   * while it is open, like `ItemRow`'s rename. */
+  onCancel?: () => void;
 };
 
 /**
- * Text field + submit button, shared by both screens. Owns its own draft text and
- * clears it once a non-blank value has been handed to `onSubmit`.
+ * Text field + submit button: adding a list or an item, renaming a list, and — through `onCancel` —
+ * `ItemRow`'s in-place rename. Owns its own draft text and clears it once a non-blank value has
+ * been handed to `onSubmit`.
  *
  * `initialValue` seeds that draft on mount only — it is a starting point, not a controlled value, so
  * a bar that is open while the underlying name changes keeps what the user is typing.
  */
-export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }: Props) {
+export function AddBar({
+  placeholder,
+  buttonLabel,
+  initialValue = '',
+  autoFocus = false,
+  onSubmit,
+  onCancel,
+}: Props) {
   const styles = useStyles();
   const { colors, scheme } = useTheme();
   const [value, setValue] = useState(initialValue);
@@ -43,10 +55,21 @@ export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }
         keyboardAppearance={scheme}
         selectionColor={colors.primary}
         accessibilityLabel={placeholder}
+        autoFocus={autoFocus}
         returnKeyType="done"
         onSubmitEditing={submit}
         autoCorrect={false}
       />
+      {onCancel ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          onPress={onCancel}
+          hitSlop={4}
+          style={({ pressed }) => [styles.cancel, pressed && styles.buttonPressed]}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={buttonLabel}
@@ -65,15 +88,16 @@ export function AddBar({ placeholder, buttonLabel, initialValue = '', onSubmit }
 }
 
 // One pill: a borderless input flush against a filled pill button, both riding inside a single
-// outlined pill container. `container` owns its own horizontal placement (`marginHorizontal`) the
-// way the pre-mockup card did; vertical spacing between it and its neighbors is the caller's, since
-// the rhythm differs between the Lists header and List detail.
+// outlined pill container. `container` owns its own horizontal placement (`marginHorizontal`, the
+// 20pt both mockups put it at) the way the pre-mockup card did; vertical spacing between it and its
+// neighbors is the caller's, since the rhythm differs between the Lists header, List detail's
+// header, and an item row.
 const useStyles = themedStyles((colors) => ({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 52,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: 20,
     gap: spacing.sm,
     paddingLeft: spacing.lg,
     paddingRight: spacing.xs,
@@ -81,6 +105,7 @@ const useStyles = themedStyles((colors) => ({
     borderWidth: 1,
     borderColor: colors.surfaceOutline,
     backgroundColor: colors.surface,
+    boxShadow: `0px 3px 16px ${colors.barShadow}`,
   },
   input: {
     flex: 1,
@@ -91,6 +116,16 @@ const useStyles = themedStyles((colors) => ({
     // Set, not left to the default: iOS reuses native text inputs, and one that was the code
     // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
     letterSpacing: 0,
+  },
+  // Plain text in the full ink, not `textMuted`: on `surface` that falls short of AA.
+  cancel: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  cancelText: {
+    color: colors.text,
+    fontFamily: fonts.sans,
+    fontSize: 17,
   },
   button: {
     height: 40,

@@ -54,6 +54,11 @@ export type Palette = {
    * ramp step past `bands.length` still read as separate bands. */
   bandRim: string;
   divider: string;
+  /**
+   * The soft shadow under the Add bar pill. Both day mockups draw one; by night the pill sits dark
+   * on dark and the mockups draw none, so it is fully transparent there rather than a black smudge.
+   */
+  barShadow: string;
   /** Passes AA as text on every surface of its own theme. */
   error: string;
   /** A label on an `error` fill. */
@@ -85,6 +90,7 @@ export const day: Palette = {
   iconButtonFillInverse: 'rgba(255,255,255,0.14)',
   bandRim: 'rgba(255,255,255,0.22)',
   divider: 'rgba(44,47,78,0.11)',
+  barShadow: 'rgba(44,47,78,0.14)',
   error: '#b3261e',
   onError: '#ffffff',
 };
@@ -114,6 +120,7 @@ export const night: Palette = {
   iconButtonFillInverse: 'rgba(255,255,255,0.12)',
   bandRim: 'rgba(255,255,255,0.1)',
   divider: 'rgba(255,255,255,0.09)',
+  barShadow: 'rgba(0,0,0,0)',
   error: '#ff9b90',
   onError: '#1b2137',
 };
@@ -147,5 +154,7 @@ export const spacing = {
 export const radius = {
   sm: 8,
   md: 12,
+  /** Notice cards — the rounder cousin of a pill, for copy that wraps to more than one line. */
+  lg: 20,
   pill: 999,
 };

@@ -1,9 +1,10 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { blockedList, restorePlan, type Blocked } from '../state/restorePlan';
 import { themedStyles } from '../state/ThemeContext';
 import type { List } from '../state/types';
 import { fonts, radius, spacing } from '../theme';
+import { PillButton } from './PillButton';
 
 /**
  * A queued write that landed on something somebody else put in the bin.
@@ -42,59 +43,32 @@ export function BlockedBanner({
           : 'That item is in the bin. Restore it and keep your change?'}
       </Text>
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Restore and keep my change"
-          onPress={onRestore}
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-          <Text style={styles.primary}>Restore and keep my change</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Discard my change"
-          onPress={onDiscard}
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-          <Text style={styles.secondary}>Discard</Text>
-        </Pressable>
+        <PillButton variant="filled" label="Restore and keep my change" onPress={onRestore} />
+        <PillButton label="Discard my change" visibleLabel="Discard" onPress={onDiscard} />
       </View>
     </View>
   );
 }
 
+// The same notice card as `ErrorBanner`, without the error color: nothing failed here. The actions
+// wrap, because the filled restore pill alone is most of a narrow phone's width.
 const useStyles = themedStyles((colors) => ({
   banner: {
-    margin: spacing.lg,
-    marginBottom: 0,
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
+    marginHorizontal: 20,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bannerSurface,
   },
   text: {
     fontFamily: fonts.sans,
-    fontSize: 15,
+    fontSize: 16,
     color: colors.text,
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.lg,
-  },
-  button: {
-    paddingVertical: spacing.xs,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  primary: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 15,
-    color: colors.primary,
-  },
-  secondary: {
-    fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 }));

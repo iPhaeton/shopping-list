@@ -7,14 +7,15 @@ Run `npm run kb:audit` to check every entry still holds.
 **Stack and environment**
 
 - [A native dev build works on both platforms](ai/kb/entries/native-build-toolchain.md) — `npm run ios`/`npm run android` build and install it, not Expo Go; after a non-clean prebuild run `pod install` yourself, and the iOS `.app` lands in DerivedData, not `ios/build`; only `eas` and the Apple Developer account remain absent (environment)
-- [Maestro drives the native app](ai/kb/entries/maestro-drives-the-native-ui.md) — `~/.maestro/bin/maestro` with `JAVA_HOME` set, not on PATH; a simulator needs its keyboards reset before `inputText` works; iOS has no `back`; flows and `seed.mjs` live in `.maestro/` (environment)
+- [Maestro drives the native app](ai/kb/entries/maestro-drives-the-native-ui.md) — `~/.maestro/bin/maestro` with `JAVA_HOME` set, not on PATH; a simulator needs its keyboards reset before `inputText` works; iOS has no `back` and no edge swipe; flows and `seed.mjs` live in `.maestro/` (environment)
+- [react-native-screens is past Expo 54's pin](ai/kb/entries/react-native-screens-past-the-sdk-pin.md) — ~4.19, not the SDK's ~4.16, which kills iOS 26's back button after a pop onto a headerless screen; `npx expo install --fix` would downgrade it (decision)
 - [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; flows are verified in the browser (environment)
 - [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
 
 **Scope**
 
 - [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items, required unique names, leaving a list, and Day/Night/Auto themes in; invites and paged lists out; `ai/suggestions/*.md` is never scope (constraint)
-- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iPhone 17e simulator, web only has to work; fix web on the web side, never bend the phone design; web shows no checked state (constraint)
+- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iPhone 17e simulator, web only has to work; fix web on the web side, never bend the phone design; web shows no checked state and has no browser back (constraint)
 
 **Auth**
 
@@ -33,7 +34,6 @@ Run `npm run kb:audit` to check every entry still holds.
 - [The database stamps `done_at`](ai/kb/entries/server-stamps-done-at.md) — the client sends a boolean through `set_item_done`, which raises on refusal, and cannot update `items` at all (decision)
 - [RLS scopes list data by membership](ai/kb/entries/list-data-scoped-by-rls.md) — reader/writer/owner, the client never filters, grants are half the story; the one delete policy is on `list_members` (constraint)
 - [The list read starts at `list_members`](ai/kb/entries/read-rooted-at-list-members.md) — uncorrelated policy subqueries, no definer helper in a policy; the items read is keyset with a redundant `gte` that decides the plan (decision)
-- [Revokes under Supabase's default grants](ai/kb/entries/supabase-default-grants-defeat-revokes.md) — column-level revokes are no-ops, `from public` leaves `anon`, and a policy's helper must keep them (gotcha)
 - [Hydration replaces list state](ai/kb/entries/first-fetch-replaces-list-state.md) — nothing may write before `status` is `'ready'`; it runs on every foreground and every nudge now, and the flush guard lives in `refresh` (gotcha)
 - [Realtime is a nudge to a per-user inbox](ai/kb/entries/realtime-is-a-nudge-to-a-per-user-inbox.md) — the database fans out `user:<uid>` broadcasts, the client answers with the fetch it already had; never a delta, never `postgres_changes` (decision)
 - [Deleting is a tombstone](ai/kb/entries/deletion-is-a-tombstone.md) — `deleted_at` stays on the row, the bin's first page ships with the fetch that opens the list, every render goes through `liveItems`/`liveLists`, and a nightly purge is the only hard delete (decision)
@@ -42,7 +42,7 @@ Run `npm run kb:audit` to check every entry still holds.
 **UI**
 
 - [Queries go through a11y labels](ai/kb/entries/queries-go-through-a11y-labels.md) — interactive elements keep role/label/state props; empty-state copy is asserted verbatim (convention)
-- [Screens take navigation props](ai/kb/entries/screens-take-navigation-props.md) — never `useNavigation()`, so tests can stub it; a stub means `headerRight` never mounts (convention)
+- [Screens take navigation props](ai/kb/entries/screens-take-navigation-props.md) — never `useNavigation()`, so tests can stub it; `Lists` and `ListDetail` draw their own headers, and a stub would drop any `headerRight` (convention)
 
 ---
 

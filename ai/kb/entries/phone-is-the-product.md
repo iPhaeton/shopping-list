@@ -4,10 +4,10 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md]
-last_verified: 2026-09-26
-verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx
-related: [maestro-drives-the-native-ui, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty]
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md]
+last_verified: 2026-09-27
+verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx'
+related: [maestro-drives-the-native-ui, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props]
 ---
 
 **Since task 20 step 1: the product is the phone app** — iOS and Android, portrait. Before that the
@@ -42,6 +42,11 @@ browser. How to reach each screen there:
   here — `ItemRow`, `ShowDeletedToggle`, `SegmentedPicker`/`RolePicker` — renders with no
   `aria-checked`. Playwright cannot assert checked state; RNTL and native can. The `verify:` pins
   this, so it fails the day RNW starts mapping the prop.
+- **The browser's back and forward buttons do nothing inside the app.** `NavigationContainer`
+  (in `RootNavigator`) gets no `linking` prop. React Navigation only enables `useLinking`, the only
+  thing that writes browser history, when `linking` is passed. So no screen has ever pushed a
+  browser history entry. The user declined a web-only `linking` config in task 20 step 4. On web,
+  the drawn `Back` is the way back, as the native header's back button was before.
 - The page is blank white before the theme gate opens, even at Night.
 - The browser's own blue focus ring.
 

@@ -4,8 +4,8 @@ title: SyncBanner debounces its own paint; gating its mount on pending > 0 defea
 type: gotcha
 status: current
 tags: [ui, state, outbox]
-sources: [ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, src/components/SyncBanner.tsx, src/screens/ListsScreen.tsx, src/screens/ListDetailScreen.tsx]
-last_verified: 2026-09-26
+sources: [ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, src/components/SyncBanner.tsx, src/screens/ListsScreen.tsx, src/screens/ListDetailScreen.tsx]
+last_verified: 2026-09-27
 verify: grep -q 'SHOW_AFTER_MS = 400' src/components/SyncBanner.tsx && grep -q '<SyncBanner pending={pending} />' src/screens/ListsScreen.tsx && grep -q '<SyncBanner pending={pending} />' src/screens/ListDetailScreen.tsx && ! grep -qE 'pending *> *0 *\? *<SyncBanner' src/screens/ListsScreen.tsx src/screens/ListDetailScreen.tsx
 related: [writes-retry-from-an-outbox, queries-go-through-a11y-labels]
 indexed: false
@@ -41,9 +41,10 @@ undebounced value; only `SyncBanner`'s own paint is delayed.
 "debounce a boolean derived from `pending`" shape, mounts unconditionally and lets the component own
 its visibility. Do not move the delay back out into a screen's conditional render.
 
-**The `verify:`'s literal string match already shaped a build once.** Task 20 step 3 rebuilt
+**The `verify:`'s literal string match has shaped two builds.** Task 20 step 3 built
 `ListsScreen`'s whole header (title row, sync banner, add bar, horizon) as one JSX value inline in
-the screen rather than factoring it into a separate `ListsHeader` component, specifically because
-doing so would move `<SyncBanner pending={pending} />` out of `ListsScreen.tsx` and silently fail
-this entry's check. Worth knowing before "cleaning up" a screen with this literal in it: the
-`verify:` is pinned to the file, not just the behavior.
+the screen. It did not factor it into a separate `ListsHeader` component, because that would move
+`<SyncBanner pending={pending} />` out of `ListsScreen.tsx` and silently fail this entry's check.
+Step 4 built `ListDetailScreen`'s header the same way, for the same reason. Worth knowing before
+"cleaning up" a screen with this literal in it: the `verify:` is pinned to the file, not just the
+behavior.

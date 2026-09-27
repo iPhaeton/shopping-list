@@ -1,11 +1,11 @@
 ---
 id: theme-reaches-native-surfaces
-title: The in-app theme reaches native surfaces through Appearance and expo-system-ui — except the Google consent sheet and the launch screen, which follow the device
+title: The in-app theme reaches native surfaces through Appearance and expo-system-ui — except the Google consent sheet, the launch screen, and Android's keyboard, which follow the device
 type: constraint
 status: current
 tags: [theme, ios, android, native, cold-start]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md]
-last_verified: 2026-09-26
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md]
+last_verified: 2026-09-27
 verify: grep -q '"userInterfaceStyle": "automatic"' app.json && grep -q 'Appearance.setColorScheme(scheme)' src/state/ThemeContext.tsx && grep -q 'SystemUI.setBackgroundColorAsync(colors.skyTop)' src/state/ThemeContext.tsx && grep -q '"expo-system-ui"' package.json && (! test -f android/app/src/main/AndroidManifest.xml || grep -q 'android:name=".MainActivity" android:configChanges="[^"]*uiMode' android/app/src/main/AndroidManifest.xml)
 related: [phone-is-the-product, theme-tokens-only, restored-session-state-waits-for-evidence, native-build-toolchain, google-native-signin-library-gaps, auto-theme-follows-the-time-zone]
 indexed: false
@@ -19,7 +19,8 @@ headers also on `Pixel_10`):
 
 | surface | follows the app? |
 |---|---|
-| status bar, native header, keyboard (`keyboardAppearance`), caret | yes |
+| status bar, native header, iOS keyboard (`keyboardAppearance`), caret | yes |
+| **Android keyboard** (Gboard, `Pixel_10`) | **no** — stays light at Night. `keyboardAppearance` is an iOS-only prop, and `setColorScheme` does not reach the input method, which follows the device. Accepted |
 | in-process system UI — the text edit menu (Paste/Select/AutoFill) | yes, via `setColorScheme` — dark at Night with the device light. The app has no `Alert.alert` of its own to check |
 | root view behind the app, including **before JS runs** | yes, via `expo-system-ui` — see below |
 | **Google sign-in consent alert** ("Wants to Use accounts.google.com") | **no** — drawn out of process by AuthenticationServices; follows the device. No app API reaches it. Accepted |

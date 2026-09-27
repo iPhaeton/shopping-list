@@ -4,8 +4,8 @@ title: Every color and font comes from src/theme.ts, read at render through them
 type: convention
 status: current
 tags: [styling, theme, fonts]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, src/state/bands.test.ts]
-last_verified: 2026-09-26
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, src/state/bands.test.ts]
+last_verified: 2026-09-27
 verify: test -z "$(grep -rnE '#[0-9a-fA-F]{3,8}|rgba?\(' src --include='*.ts' --include='*.tsx' | grep -v src/theme.ts)" && test "$(grep -rl 'StyleSheet.create' src --include='*.tsx' | grep -v '\.test\.')" = src/state/ThemeContext.tsx && ! grep -rq 'fontWeight' src --include='*.tsx' && ! grep -rqE "from '@expo-google-fonts/[a-z0-9-]+'" src && ! grep -q 'export const colors' src/theme.ts
 related: [queries-go-through-a11y-labels, theme-reaches-native-surfaces, recycled-text-input-keeps-letter-spacing, phone-is-the-product, theme-provider-suites-fake-the-clock]
 indexed: false
@@ -19,8 +19,10 @@ indexed: false
 [src/theme.ts](../../../src/theme.ts) is the only file in `src/` holding a color literal, hex or
 `rgba()`. Since task 20 step 1 it exports **two palettes with identical, role-named keys** —
 `day` and `night` ("Moonlit"), typed `Palette`, gathered in `palettes` — plus `fonts`, `spacing`, and
-`radius` (`pill: 999` added). **There is no `colors` export any more**, on purpose: a module-scope
-`StyleSheet.create({ … colors.x … })` froze whichever palette was current at import.
+`radius` (`lg: 20` for notice cards, `pill: 999`). A shadow's color is a token too: `AddBar`'s
+`boxShadow` reads `barShadow`, which is fully transparent at night. **There is no `colors` export
+any more**, on purpose: a module-scope `StyleSheet.create({ … colors.x … })` froze whichever palette
+was current at import.
 
 **Colors are read at render, through one pattern.** `themedStyles(factory)` in
 [ThemeContext.tsx](../../../src/state/ThemeContext.tsx), at module scope in place of
@@ -37,8 +39,8 @@ every screen suite render without a `ThemeProvider`, never wait on fonts, and ne
 time of day: it stays a fixed Day although the provider's own default is now Auto
 ([theme-provider-suites-fake-the-clock](theme-provider-suites-fake-the-clock.md)).
 
-**Fonts: one family per weight, never `fontWeight`.** `fonts.sans`, `sansSemiBold`, `sansBold`
-(Nunito Sans) and `fonts.serif` (Source Serif 4, screen titles). Android does not pick a weight
+**Fonts: one family per weight, never `fontWeight`.** `fonts.sans`, `sansMedium`, `sansSemiBold`,
+`sansBold` (Nunito Sans) and `fonts.serif` (Source Serif 4, screen titles). Android does not pick a weight
 inside a custom family, so `fontWeight: '700'` on `fonts.sans` renders regular there. Font files are
 imported by subpath (`@expo-google-fonts/nunito-sans/700Bold`) — each package index `require`s all
 16 weights and Metro would bundle every one.

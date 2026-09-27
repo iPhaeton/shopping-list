@@ -5,9 +5,9 @@ type: reference
 status: current
 tags: [expo, versions, docs]
 sources: [4d55c18, ai/tasks/1/implementation-log-step-1.md]
-last_verified: 2026-09-11
+last_verified: 2026-09-27
 verify: grep -q '"expo": "\^54' package.json
-related: [native-build-toolchain]
+related: [native-build-toolchain, react-native-screens-past-the-sdk-pin]
 indexed: false
 ---
 
@@ -26,6 +26,7 @@ The stack, as of commit `4d55c18` ("Downgrade expo go sdk to 54"):
 | React | 19.1.0 |
 | TypeScript | ~5.9.2 |
 | jest-expo | ~54.0.18 |
+| react-native-screens | ~4.19.0 — deliberately past the SDK's ~4.16.0: [react-native-screens-past-the-sdk-pin](react-native-screens-past-the-sdk-pin.md) |
 
 **Read the versioned docs at https://docs.expo.dev/versions/v54.0.0/ before writing Expo code.**
 The unversioned docs track the newest SDK and will describe APIs this project does not have.

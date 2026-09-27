@@ -5,18 +5,17 @@ type IconProps = {
   size?: number;
 };
 
-/** A trash can, open lid: the delete action on a live row. */
+/** A trash can — lid, handle, and a tapering bin, as both mockups draw it: the delete action. */
 export function TrashIcon({ color, size = 16 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"
+        d="M4 6.5h16M9.5 6.5V4.5h5v2M6.5 6.5l1.1 12.6a1 1 0 0 0 1 .9h6.8a1 1 0 0 0 1-.9l1.1-12.6"
         stroke={color}
-        strokeWidth={1.6}
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <Path d="M10 11v6M14 11v6" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -28,21 +27,56 @@ export function RestoreIcon({ color, size = 16 }: IconProps) {
       <Path
         d="M4.5 10a7.5 7.5 0 1 1 1.9 6.6"
         stroke={color}
-        strokeWidth={1.6}
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <Path d="M4.5 5v5h5" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M4.5 5v5h5" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
 
-/** The row's own affordance to open it. */
-export function ChevronIcon({ color, size = 16 }: IconProps) {
+/** A pencil: rename an item in place. */
+export function PencilIcon({ color, size = 16 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M9 5l7 7-7 7"
+        d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M14.5 5.5l3 3" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** The tick inside a checked checkbox. */
+export function CheckIcon({ color, size = 14 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M5 12.5l4.5 4.5L19 7.5"
+        stroke={color}
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** The row's own affordance to open it (`right`), or the way back out of a screen (`left`). */
+export function ChevronIcon({
+  color,
+  size = 16,
+  direction = 'right',
+}: IconProps & { direction?: 'right' | 'left' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d={direction === 'right' ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'}
         stroke={color}
         strokeWidth={2}
         strokeLinecap="round"

@@ -4,16 +4,15 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md]
-last_verified: 2026-09-26
-verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs
-related: [phone-is-the-product, native-build-toolchain, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone]
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md]
+last_verified: 2026-09-27
+verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml
+related: [phone-is-the-product, native-build-toolchain, react-native-screens-past-the-sdk-pin, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone]
 ---
 
-Since task 20 step 1, **Maestro 2.10.0** is how an agent reaches a screen and state on the iOS
-simulator or Android emulator — sign in, navigate, flip the theme, screenshot. Before it, nothing
-could drive the native UI (no Maestro, idb, or Detox), which is why the iOS dev build went unproven
-past launch for so long ([native-build-toolchain](native-build-toolchain.md)).
+**Maestro 2.10.0** is how an agent reaches a screen and state on the iOS simulator or Android
+emulator: sign in, navigate, flip the theme, screenshot. It is the only UI driver installed; there
+is no idb or Detox ([native-build-toolchain](native-build-toolchain.md)).
 
 **Run it by full path, with Java 17+:**
 
@@ -43,17 +42,33 @@ plus `KeyboardPrediction`, `KeyboardAutocorrection`, `KeyboardCheckSpelling`,
 
 **Traps in writing flows:**
 
-- `back` is Android-only. On iOS the native-stack back button's label is the **previous screen's
-  title**, so flows `tapOn: My Lists` / `tapOn: Groceries`. Flows tap by visible text and a11y label
-  throughout, so a renamed header title or label breaks them as surely as it breaks the RNTL suites
-  ([queries-go-through-a11y-labels](queries-go-through-a11y-labels.md)).
-- **A `tapOn: <previous screen title>` back-navigation step only works on iOS.** iOS's native-stack
-  back button keeps the previous screen's `title` as its own a11y label regardless of `headerShown`
-  on the *current* screen — confirmed by `maestro hierarchy` on both platforms in task 20 step 3,
-  with `Lists`' native header hidden. Android's back button never carries it: its label is always the
-  OS-generic **"Navigate up"**, a plain Android accessibility convention, nothing to do with
-  `headerShown`. `set-theme.yaml`'s last step (`tapOn: My Lists`) fails on Android for exactly this
-  reason and almost certainly always would have; use `tapOn: "Navigate up"` there instead, or `back`.
+- **Going back.** `back` is Android-only. `Lists` and `ListDetail` draw their own header, so leaving
+  List detail is `tapOn: Back` on both platforms. `Sharing` and `Account` keep the native header.
+  On iOS, their back button's a11y label is the **previous screen's title**: `Groceries` on
+  Sharing, `My Lists` on Account. It keeps that label even when the current screen hides its
+  header. On Android the label is always the OS-generic **"Navigate up"**, so a
+  `tapOn: <previous title>` step works only on iOS. `set-theme.yaml`'s last `tapOn: My Lists` fails
+  on Android for this reason. Use `tapOn: "Navigate up"` or `back` there.
+- **Tapping a title can hit the screen underneath.** After a theme switch on Account,
+  `tapOn: My Lists` matched Lists' own drawn `My Lists` title, which stays in the hierarchy below
+  Account, instead of the back button. Tap the back button by point (`point: "18%,8%"`).
+  Flows find things by visible text and a11y label throughout, so renaming either breaks them the
+  same way it breaks the RNTL suites ([queries-go-through-a11y-labels](queries-go-through-a11y-labels.md)).
+- **Maestro cannot perform the iOS edge-swipe back.** A `swipe` starting at x 0–1% (fast or slow)
+  popped neither List detail nor Sharing. Sharing has a native header, so the problem is Maestro's
+  synthesized touch, not the app. The touch also lands on the content: one attempt checked off the
+  row under it. Test the swipe by hand.
+- **A tap during scroll momentum only stops the scroll.** `scrollUntilVisible` returns while the
+  list is still coasting, so add `waitForAnimationToEnd` before the next tap. Scrolling back up a
+  very long list times out; `tapOn: { point: "50%,1%" }` taps the status bar, which scrolls to the
+  top.
+- **The dev client's blue "Refreshing…" banner** (top ~58pt, over the back button) sometimes
+  appears by itself on a push that fetches, with no file changed. It is not in the app's
+  hierarchy. Maestro cannot see it, so `extendedWaitUntil: notVisible` will not wait for it. A tap
+  that lands on it does nothing, which looked exactly like the
+  [react-native-screens-past-the-sdk-pin](react-native-screens-past-the-sdk-pin.md) bug until a
+  screenshot showed the banner. Screenshot around a tap that "did nothing" before blaming the app.
+  Release builds do not have this banner.
 - `takeScreenshot` refuses a path outside the run's output folder. Use a bare name and pass
   `--test-output-dir`; PNGs land in `<dir>/takeScreenshot/` at the simulator's full resolution.
 - A simulator that has never opened `exp+shopping-list://` asks "Open in “ShoppingLoop”?" first —

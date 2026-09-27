@@ -8,6 +8,7 @@ sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/imple
 last_verified: 2026-09-10
 verify: ! grep -rn 'revoke execute' supabase/migrations | grep -qv 'from public, anon' && ! grep -rqE 'revoke +(update|select|insert) *\(' supabase/migrations && grep -q '^revoke update on public.lists from anon, authenticated;' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^revoke execute on function public.purge_deleted(interval) from public, anon, authenticated;' supabase/migrations/20260910000000_deletion.sql
 related: [server-stamps-done-at, list-data-scoped-by-rls, select-policy-gates-update-and-delete, deletion-is-a-tombstone, supabase-local-stack]
+indexed: false
 ---
 
 Both of these `revoke` statements succeed, print no warning, and change nothing. Each cost a cycle
