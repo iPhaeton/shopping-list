@@ -4,8 +4,8 @@ import { Defs, LinearGradient, Rect, Stop, Svg } from 'react-native-svg';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 
 /**
- * Where the land starts on screen with the list scrolled to the top, measured on the List detail
- * mockup (its front edge runs y 283–300 at 390×844). The gradient holds `groundTop` down to here
+ * Where the land starts on screen with the list scrolled to the top (its edge, `Hillside`'s, runs
+ * y 290–304 at 390×844). The gradient holds `groundTop` down to here
  * and only then starts toward `groundBottom`, so the stretch just under the hill is the exact
  * `groundTop` the mockup was drawn with.
  */

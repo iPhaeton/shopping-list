@@ -5,28 +5,45 @@ import { Circle, Defs, G, LinearGradient, Path, RadialGradient, Stop, Svg } from
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Palette } from '../theme';
 
-const HILL_H = 20;
+/** The height of the box the hill's top edge is drawn in, along the strip's bottom. */
+export const HILL_H = 20;
 
 /**
- * The first band's top edge, in a 0–100 × 0–{@link HILL_H} box stretched across the strip's bottom:
- * low under the switch on the left, then a broad, nearly flat crest (y ≈ 4.5–5.5) across roughly
- * 72–88% of the width. The sun's center is a fixed 75pt from the right edge (`right: 20` plus
- * `CEL_W - 55`), which lands inside that crest on every phone width, so the hill cuts it at the same
- * height wherever it sits.
+ * The first band's top edge — a start point, then cubic segments of three points each — in a
+ * 0–100 × 0–{@link HILL_H} box stretched across the strip's bottom: low under the switch on the
+ * left, then a broad, nearly flat crest (y ≈ 4.5–5.5) across roughly 72–88% of the width. The sun's
+ * center is a fixed {@link SUN_FROM_RIGHT}pt from the right edge, which lands inside that crest on
+ * every phone width, so the hill cuts it at the same height wherever it sits. List detail's
+ * `Hillside` draws this same edge, so both screens share one horizon.
  */
-const HILL = `M0,18 C25,18 45,14 62,8 C72,4.5 88,3 100,6 L100,${HILL_H} L0,${HILL_H} Z`;
+export const HILL_EDGE: readonly number[] = [0, 18, 25, 18, 45, 14, 62, 8, 72, 4.5, 88, 3, 100, 6];
+
+/** How far the sun's center sits from the strip's right edge. */
+export const SUN_FROM_RIGHT = 75;
 
 /** How far above the strip's bottom the sun's center sits: on the hill's crest line, so the hill
  * hides exactly its lower half. */
-const SUN_LIFT = HILL_H - 5;
+export const SUN_LIFT = HILL_H - 5;
 
+/** {@link HILL_EDGE} as SVG path data, its x stretched by `sx` and its y moved down by `dy`. */
+export function hillEdge(sx: number, dy = 0): string {
+  const at = (i: number) => `${+(HILL_EDGE[i] * sx).toFixed(2)},${HILL_EDGE[i + 1] + dy}`;
+  let d = `M${at(0)}`;
+  for (let i = 2; i < HILL_EDGE.length; i += 6) d += ` C${at(i)} ${at(i + 2)} ${at(i + 4)}`;
+  return d;
+}
+
+const HILL = `${hillEdge(1)} L100,${HILL_H} L0,${HILL_H} Z`;
+
+/** The celestial box's inset from the strip's right edge. */
+const CEL_RIGHT = 20;
 const CEL_W = 170;
 const CEL_R = 25;
 /** Tall enough for the glow (radius `CEL_R * 2.2`) above a center lifted {@link SUN_LIFT}. */
 const CEL_H = 72;
 
 function CelestialGraphic({ isDay, colors }: { isDay: boolean; colors: Palette }) {
-  const cx = CEL_W - 55;
+  const cx = CEL_W - (SUN_FROM_RIGHT - CEL_RIGHT);
   const cy = CEL_H - SUN_LIFT;
 
   return (
@@ -59,7 +76,8 @@ function CelestialGraphic({ isDay, colors }: { isDay: boolean; colors: Palette }
  * accessibility.
  *
  * Lists only. List detail draws `Hillside` instead: its items sit on a ground fixed to the screen
- * while the hill scrolls, so a hill filled with a color of its own would seam against it.
+ * while the hill scrolls, so a hill filled with a color of its own would seam against it. It draws
+ * the same {@link HILL_EDGE}, though.
  */
 export function Horizon({ ground, children }: { ground: string; children?: ReactNode }) {
   const { name, colors } = useTheme();
@@ -105,7 +123,7 @@ const useStyles = themedStyles(() => ({
   },
   celestial: {
     position: 'absolute',
-    right: 20,
+    right: CEL_RIGHT,
     bottom: 0,
   },
   hill: {
