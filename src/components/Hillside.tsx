@@ -46,12 +46,14 @@ function curve(points: readonly number[], sx: number): string {
  * sitting behind a far hill and the front of the land. `children` — the Show deleted switch —
  * renders on top, on the left.
  *
- * **The land here is a hole, not a shape.** Everything this draws is clipped to the region *above*
- * the land's front edge; below it the strip is transparent, and what shows through is `Ground`, the
- * screen-fixed layer behind the whole list. That is the difference from `Horizon` on the Lists
- * screen, whose hill is filled in the first band's color: there the bands are opaque and scroll with
- * the hill, here the ground stays put while the hill scrolls over it, so any hill with its own fill
- * would seam against the ground at every scroll offset but one.
+ * **The land here is a hole, not a shape — the far hill included.** Everything this draws is
+ * clipped to the region above *both* the far hill and the land's front edge; below them the strip is
+ * transparent, and what shows through is `Ground`, the screen-fixed layer behind the whole list.
+ * That is the difference from `Horizon` on the Lists screen, whose hill is filled in the first
+ * band's color: there the bands are opaque and scroll with the hill, here the ground stays put while
+ * the hill scrolls over it, so any hill with its own fill would seam against the ground at every
+ * scroll offset but one. The mockups did fill the far hill, a shade off the ground — invisible by
+ * day, but by night lighter, which drew the land's front edge as a line across it.
  *
  * One SVG at the real width, not a stretched viewBox, so the disc stays a circle on every phone; the
  * curves are traced at the mockup's 390pt and stretched horizontally. Ids are prefixed because on
@@ -66,9 +68,9 @@ export function Hillside({ children }: { children?: ReactNode }) {
   const cx = width - CEL_FROM_RIGHT;
   const r = isDay ? 36 : 34;
 
-  const land = curve(LAND, sx);
-  const sky = `${land} L${width},0 L0,0 Z`;
-  const farHill = `${curve(FAR_HILL, sx)} L${(250 * sx).toFixed(2)},${STRIP_H} L0,${STRIP_H} Z`;
+  const aboveLand = `${curve(LAND, sx)} L${width},0 L0,0 Z`;
+  // Above the far hill where it runs, and the full height past its end, where the land hides it.
+  const aboveFarHill = `${curve(FAR_HILL, sx)} L${(250 * sx).toFixed(2)},${STRIP_H} L${width},${STRIP_H} L${width},0 L0,0 Z`;
 
   return (
     <View style={styles.strip}>
@@ -80,7 +82,10 @@ export function Hillside({ children }: { children?: ReactNode }) {
         <Svg width={width} height={STRIP_H}>
           <Defs>
             <ClipPath id="hsAboveLand">
-              <Path d={sky} />
+              <Path d={aboveLand} />
+            </ClipPath>
+            <ClipPath id="hsAboveFarHill">
+              <Path d={aboveFarHill} />
             </ClipPath>
             <RadialGradient id="hsGlow" cx={cx} cy={CEL_Y} r={r * 1.6} gradientUnits="userSpaceOnUse">
               <Stop offset="0" stopColor={colors.celestial} stopOpacity={isDay ? 0.6 : 0.22} />
@@ -88,22 +93,23 @@ export function Hillside({ children }: { children?: ReactNode }) {
             </RadialGradient>
           </Defs>
           <G clipPath="url(#hsAboveLand)">
-            <Rect x={0} y={0} width={width} height={STRIP_H} fill={colors.skyHorizon} />
-            {isDay
-              ? null
-              : LOW_STARS.map(([fromRight, y, starR, opacity], i) => (
-                  <Circle key={i} cx={width - fromRight} cy={y} r={starR} fill={colors.celestial} opacity={opacity} />
-                ))}
-            <Circle cx={cx} cy={CEL_Y} r={r * 1.6} fill="url(#hsGlow)" />
-            <Circle cx={cx} cy={CEL_Y} r={r} fill={colors.celestial} />
-            {isDay ? (
-              <G stroke={colors.textMuted} strokeWidth={1.4} strokeLinecap="round" fill="none">
-                {BIRDS.map(([fromRight, y], i) => (
-                  <Path key={i} d={`M${width - fromRight},${y} q3.25,-3.5 6.5,0 q3.25,-3.5 6.5,0`} />
-                ))}
-              </G>
-            ) : null}
-            <Path d={farHill} fill={colors.farHill} opacity={0.85} />
+            <G clipPath="url(#hsAboveFarHill)">
+              <Rect x={0} y={0} width={width} height={STRIP_H} fill={colors.skyHorizon} />
+              {isDay
+                ? null
+                : LOW_STARS.map(([fromRight, y, starR, opacity], i) => (
+                    <Circle key={i} cx={width - fromRight} cy={y} r={starR} fill={colors.celestial} opacity={opacity} />
+                  ))}
+              <Circle cx={cx} cy={CEL_Y} r={r * 1.6} fill="url(#hsGlow)" />
+              <Circle cx={cx} cy={CEL_Y} r={r} fill={colors.celestial} />
+              {isDay ? (
+                <G stroke={colors.textMuted} strokeWidth={1.4} strokeLinecap="round" fill="none">
+                  {BIRDS.map(([fromRight, y], i) => (
+                    <Path key={i} d={`M${width - fromRight},${y} q3.25,-3.5 6.5,0 q3.25,-3.5 6.5,0`} />
+                  ))}
+                </G>
+              ) : null}
+            </G>
           </G>
         </Svg>
       </View>

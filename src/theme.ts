@@ -6,7 +6,7 @@
  *
  * The sky-to-sun rows were sampled from the Lists mockups (a compressed PNG, so close approximations);
  * `groundTop` through `divider` are the exact values the List detail mockups were drawn with.
- * `bands`, the ground, `farHill`, `celestial`, the switch, and `iconButtonFill` are first used in
+ * `bands`, the ground, `celestial`, the switch, and `iconButtonFill` are first used in
  * task 20 step 3, which built `ListsScreen` to the mockup.
  */
 export type Palette = {
@@ -39,8 +39,6 @@ export type Palette = {
   /** The stretch of land items sit on, top → bottom of the screen. */
   groundTop: string;
   groundBottom: string;
-  /** Drawn at 85% opacity. */
-  farHill: string;
   checkboxOutline: string;
   iconButtonFill: string;
   /**
@@ -84,7 +82,6 @@ export const day: Palette = {
   bands: ['#e4d8ea', '#d0c4e0', '#b2a8d2', '#5e5a92', '#4a4e82', '#2e3460'],
   groundTop: '#e6dbee',
   groundBottom: '#d6cae4',
-  farHill: '#e3d8ec',
   checkboxOutline: '#6e7090',
   iconButtonFill: 'rgba(255,255,255,0.55)',
   iconButtonFillInverse: 'rgba(255,255,255,0.14)',
@@ -114,7 +111,6 @@ export const night: Palette = {
   bands: ['#56628a', '#465276', '#384264', '#2c3452', '#202842', '#161c30'],
   groundTop: '#434e78',
   groundBottom: '#2a3252',
-  farHill: '#56628a',
   checkboxOutline: '#c9cde6',
   iconButtonFill: 'rgba(255,255,255,0.12)',
   iconButtonFillInverse: 'rgba(255,255,255,0.12)',
