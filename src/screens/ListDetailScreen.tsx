@@ -200,8 +200,10 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   //
   // Sticky, so the Add bar is always in reach, and opaque top to bottom — `SkyFill` behind the
   // padded block, `Hillside`'s own sky under the hill — because the rows scroll up behind it.
+  // `styles.header` fills whatever those two leave uncovered: on Android, a pixel row where they
+  // meet, which without it shows the band color behind the list as a light line.
   const header = (
-    <View>
+    <View style={styles.header}>
       <View
         style={styles.overscrollSky}
         pointerEvents="none"
@@ -381,6 +383,10 @@ const useStyles = themedStyles((colors) => ({
   pinned: {
     paddingBottom: spacing.sm,
     backgroundColor: colors.skyTop,
+  },
+  // `SkyFill` ends on `skyHorizon` and `Hillside` starts on it, so a gap between them vanishes.
+  header: {
+    backgroundColor: colors.skyHorizon,
   },
   overscrollSky: {
     position: 'absolute',

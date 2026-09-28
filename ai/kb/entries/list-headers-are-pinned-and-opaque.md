@@ -4,9 +4,9 @@ title: Lists and List detail pin their whole header inside the FlatList, so each
 type: decision
 status: current
 tags: [ui, layout, flatlist, ios, design]
-sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md]
+sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md]
 last_verified: 2026-09-28
-verify: grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListsScreen.tsx && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListDetailScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListsScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListDetailScreen.tsx && grep -q 'style={styles.headerSky}' src/screens/ListsScreen.tsx && test "$(grep -c '<Sky height={SKY_HEIGHT} />' src/screens/ListsScreen.tsx)" = 2 && ! grep -q statusBarSky src/screens/ListsScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/ListDetailScreen.tsx
+verify: grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListsScreen.tsx && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListDetailScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListsScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListDetailScreen.tsx && grep -q 'style={styles.headerSky}' src/screens/ListsScreen.tsx && test "$(grep -c '<Sky height={SKY_HEIGHT} />' src/screens/ListsScreen.tsx)" = 2 && ! grep -q statusBarSky src/screens/ListsScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/ListDetailScreen.tsx && grep -q '<View style={styles.header}>' src/screens/ListDetailScreen.tsx && grep -A1 '^  header: {' src/screens/ListDetailScreen.tsx | grep -q 'backgroundColor: colors.skyHorizon'
 related: [phone-is-the-product, screens-take-navigation-props, maestro-drives-the-native-ui, svg-percent-size-frozen-on-ios, absolute-decoration-needs-pointer-events-on-its-wrapper]
 indexed: false
 ---
@@ -33,8 +33,16 @@ layer, List detail's `overscrollSky`) fills the space above it unchanged.
   [svg-percent-size-frozen-on-ios](svg-percent-size-frozen-on-ios.md), and its wrapper carries
   `pointerEvents="none"` per
   [absolute-decoration-needs-pointer-events-on-its-wrapper](absolute-decoration-needs-pointer-events-on-its-wrapper.md).
-- [ListDetailScreen](../../../src/screens/ListDetailScreen.tsx)'s header was already opaque:
-  `SkyFill` behind the padded block, `Hillside`'s own sky rect under the hill.
+- [ListDetailScreen](../../../src/screens/ListDetailScreen.tsx)'s header has three layers:
+  `SkyFill` behind the padded block, `Hillside`'s own sky rect under the hill, and a
+  `skyHorizon` fill on the outer `View` (`styles.header`) under both. **The fill also looks
+  redundant, and iOS proves it invisible: a HEAD-vs-fix relaunch on the iPhone 17e was
+  pixel-identical. It is not redundant.** On Android at 2.625× (`Pixel_10`), the two drawings
+  leave one pixel row uncovered where they meet. That row shows the root View's colour, the band
+  of the last visible row, as a light line across the screen under the Add bar (pixel row 606 on
+  the seeded Groceries). `skyHorizon` is the colour on both sides of that seam, so the gap reads as sky.
+  Which drawing leaves the row was never pinned down, and the fill makes it moot. Lists has no
+  such seam, because its header sky is one clipped drawing.
 - Anything added to either header has to keep it that way. A transparent gap is a window onto the
   rows.
 
@@ -68,4 +76,5 @@ exercised. For Maestro, rows behind the header are still in the hierarchy at the
 coordinates: see [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
 
 The `verify:` asserts both lists pin index 0 of their `ListHeaderComponent`, Lists' header draws its
-own `Sky` beside the screen-wide one, Lists has no status-bar strip, and List detail still has one.
+own `Sky` beside the screen-wide one, Lists has no status-bar strip, List detail still has one, and
+List detail's header `View` still carries the `skyHorizon` fill.

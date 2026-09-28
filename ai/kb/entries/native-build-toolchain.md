@@ -4,9 +4,9 @@ title: A native dev build works end to end on both platforms — `npm run ios`/`
 type: environment
 status: current
 tags: [environment, verification, expo, ios, android, java, xcode, cocoapods]
-sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md]
-last_verified: 2026-09-27
-verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q 'iPhone 17e' && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator && command -v pod >/dev/null && grep -q '"expo-dev-client"' package.json && test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = com.shoppingloop.app && test "$(node -p "require('./app.json').expo.android.package")" = com.shoppingloop.app && grep -q '"android": "expo run:android"' package.json && grep -q '"ios": "expo run:ios"' package.json && test -x /opt/homebrew/opt/openjdk/bin/java && /opt/homebrew/opt/openjdk/bin/java -version 2>&1 | grep -qE '"(1[7-9]|[2-9][0-9])' && (! test -f android/app/build.gradle || grep -q "storeFile file('debug.keystore')" android/app/build.gradle) && env -u LANG -u LC_ALL -u LC_CTYPE /opt/homebrew/opt/ruby/bin/ruby -e 'exit(Encoding.default_external == Encoding::UTF_8 ? 1 : 0)'
+sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md]
+last_verified: 2026-09-28
+verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q 'iPhone 17e' && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator && command -v pod >/dev/null && grep -q '"expo-dev-client"' package.json && test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = com.shoppingloop.app && test "$(node -p "require('./app.json').expo.android.package")" = com.shoppingloop.app && grep -q '"android": "expo run:android"' package.json && grep -q '"ios": "expo run:ios"' package.json && test -x /opt/homebrew/opt/openjdk/bin/java && /opt/homebrew/opt/openjdk/bin/java -version 2>&1 | grep -qE '"(1[7-9]|[2-9][0-9])' && (! test -f android/app/build.gradle || grep -q "storeFile file('debug.keystore')" android/app/build.gradle) && grep -q 'return !_env.env.CI;' node_modules/expo/node_modules/@expo/cli/build/src/start/server/metro/instantiateMetro.js && env -u LANG -u LC_ALL -u LC_CTYPE /opt/homebrew/opt/ruby/bin/ruby -e 'exit(Encoding.default_external == Encoding::UTF_8 ? 1 : 0)'
 related: [expo-sdk-version, ios-scene-support-is-opt-in, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only, suggestions-are-proposals, expo-crypto-undefined-under-jest, scope-boundaries, google-native-signin-library-gaps, maestro-drives-the-native-ui, dev-client-draws-over-the-app, phone-is-the-product, theme-reaches-native-surfaces, jest-cold-cache-timeouts]
 ---
 
@@ -27,6 +27,11 @@ the product and visual sign-off happens on these builds
 `~/Library/Android/sdk`, exported from `~/.zshrc`. Reprobe devices with `adb devices` /
 `xcrun simctl list` rather than trusting a list written here. Driving either app's UI:
 [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
+
+**Start Metro with no `CI` in its environment.** Under `CI=1` or `CI=true`, Expo CLI turns Metro's
+watcher off ("reloads are disabled"). No edit reaches the app, and a before/after made by swapping a
+file compares one bundle with itself. If you expect *no* change, relaunch the app for each version.
+Identical pixels cannot show that a refresh landed.
 
 **iOS — what has cost a cycle:**
 
@@ -60,8 +65,7 @@ export JAVA_HOME="/opt/homebrew/opt/openjdk"
 export PATH="$JAVA_HOME/bin:$PATH"
 ```
 
-The audit runs `verify:` under `/bin/sh`, which never sources `~/.zshrc`, so the check probes that
-Homebrew path directly rather than the env var. Maestro needs the same Java.
+Maestro needs the same Java. The `verify:` probes that path, as the audit's `/bin/sh` skips `~/.zshrc`.
 
 **What is set up:**
 
@@ -111,7 +115,6 @@ Defer `eas` and the Apple account until a feature needs a physical-device or sto
 **About the `verify:`.** Most clauses assert *presence* on this machine: full Xcode plus the
 iPhone 17e simulator, `adb`/`emulator`, CocoaPods, both identifiers, `expo-dev-client`, the
 `expo run:*` scripts, Java 17+ at the Homebrew path, and the project-local debug keystore. A FAIL on
-another machine is expected. The last clause asserts that CocoaPods' Ruby still falls back to a
-non-UTF-8 encoding with no locale set; once it stops, the locale bullet above can go. The Running
-section of [README.md](../../../README.md) has not been swept for the `expo run:*` change; trust
-this entry over it.
+another machine is expected. Two clauses assert behaviour: Expo CLI still disables the watcher
+under `CI`, and CocoaPods' Ruby still falls back to non-UTF-8 with no locale (once it stops, the
+locale bullet can go). README's Running section predates `expo run:*`; trust this entry over it.
