@@ -15,4 +15,7 @@
 14. Limit the cache
 15. Check vulnerabilities
 16. Internationalization
-Search lists / items
+17. Search lists / items
+18. "You no longer have permissions" error stays forever
+19. Sorting
+20. Header should stay
