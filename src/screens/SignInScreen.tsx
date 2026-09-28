@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
+import { AuthFrame } from '../components/AuthFrame';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { GoogleIcon } from '../components/icons';
+import { PillButton } from '../components/PillButton';
+import { TextField } from '../components/TextField';
 import type { SignInScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
-import { themedStyles, useTheme } from '../state/ThemeContext';
+import { themedStyles } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
 
 /** Supabase allows one code request per minute; the countdown makes that visible. */
@@ -20,7 +25,6 @@ const CODE_LENGTH = 6;
  */
 export function SignInScreen(_props: SignInScreenProps) {
   const styles = useStyles();
-  const { colors, scheme } = useTheme();
   const { requestCode, verifyCode, signInWithGoogle, state } = useSession();
   const revoked = state.status === 'signedOut' && state.reason === 'revoked';
 
@@ -98,203 +102,177 @@ export function SignInScreen(_props: SignInScreenProps) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.card}>
-        {revoked && <Text style={styles.hint}>You were signed out on another device.</Text>}
+    <AuthFrame>
+      {revoked && (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>You were signed out on another device.</Text>
+        </View>
+      )}
 
-        {phase === 'email' ? (
-          <>
-            <Text style={styles.title}>Sign in</Text>
-            <Text style={styles.hint}>We'll email you a six-digit code. No password needed.</Text>
+      {phase === 'email' ? (
+        <>
+          <Text style={styles.title}>Sign in</Text>
+          <Text style={styles.hint}>We'll email you a six-digit code. No password needed.</Text>
 
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.textMuted}
-              keyboardAppearance={scheme}
-              selectionColor={colors.primary}
-              accessibilityLabel="Email address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="send"
-              onSubmitEditing={send}
+          {error ? <ErrorBanner message={error} style={styles.error} /> : null}
+
+          <TextField
+            style={styles.field}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            accessibilityLabel="Email address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            returnKeyType="send"
+            onSubmitEditing={send}
+          />
+
+          <PillButton
+            label="Send code"
+            variant="filled"
+            size="lg"
+            disabled={!canSend}
+            onPress={send}
+            style={styles.action}
+          />
+
+          {Platform.OS !== 'web' && (
+            <PillButton
+              label="Continue with Google"
+              size="lg"
+              icon={<GoogleIcon />}
+              disabled={pending}
+              onPress={continueWithGoogle}
+              style={styles.action}
             />
+          )}
+        </>
+      ) : (
+        <>
+          <Text style={styles.title}>Check your email</Text>
+          <Text style={styles.hint}>We sent a six-digit code to {email.trim()}.</Text>
 
-            <PrimaryButton label="Send code" enabled={canSend} onPress={send} />
+          {error ? <ErrorBanner message={error} style={styles.error} /> : null}
 
-            {Platform.OS !== 'web' && (
-              <PrimaryButton
-                label="Continue with Google"
-                enabled={!pending}
-                onPress={continueWithGoogle}
-              />
-            )}
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Check your email</Text>
-            <Text style={styles.hint}>We sent a six-digit code to {email.trim()}.</Text>
+          <TextField
+            style={[styles.field, styles.codeField]}
+            value={code}
+            onChangeText={setCode}
+            placeholder="123456"
+            accessibilityLabel="Six-digit code"
+            keyboardType="number-pad"
+            maxLength={CODE_LENGTH}
+            autoCorrect={false}
+            returnKeyType="go"
+            onSubmitEditing={verify}
+          />
 
-            <TextInput
-              style={[styles.input, styles.codeInput]}
-              value={code}
-              onChangeText={setCode}
-              placeholder="123456"
-              placeholderTextColor={colors.textMuted}
-              keyboardAppearance={scheme}
-              selectionColor={colors.primary}
-              accessibilityLabel="Six-digit code"
-              keyboardType="number-pad"
-              maxLength={CODE_LENGTH}
-              autoCorrect={false}
-              returnKeyType="go"
-              onSubmitEditing={verify}
-            />
+          <PillButton
+            label="Sign in"
+            variant="filled"
+            size="lg"
+            disabled={!canVerify}
+            onPress={verify}
+            style={styles.action}
+          />
 
-            <PrimaryButton label="Sign in" enabled={canVerify} onPress={verify} />
+          {/*
+            The a11y label stays "Resend code" while the visible text counts down, so the
+            countdown cannot break a query the way a composed label would.
+          */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Resend code"
+            accessibilityState={{ disabled: !canResend }}
+            disabled={!canResend}
+            onPress={send}
+            hitSlop={4}
+            style={[styles.link, styles.firstLink]}>
+            <Text style={[styles.linkText, !canResend && styles.linkTextDisabled]}>
+              {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+            </Text>
+          </Pressable>
 
-            {/*
-              The a11y label stays "Resend code" while the visible text counts down, so the
-              countdown cannot break a query the way a composed label would.
-            */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Resend code"
-              accessibilityState={{ disabled: !canResend }}
-              disabled={!canResend}
-              onPress={send}
-              style={styles.link}>
-              <Text style={[styles.linkText, !canResend && styles.linkTextDisabled]}>
-                {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Use a different email"
-              onPress={startOver}
-              style={styles.link}>
-              <Text style={styles.linkText}>Use a different email</Text>
-            </Pressable>
-          </>
-        )}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </View>
-    </KeyboardAvoidingView>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Use a different email"
+            onPress={startOver}
+            hitSlop={4}
+            style={[styles.link, styles.lastLink]}>
+            <Text style={styles.linkText}>Use a different email</Text>
+          </Pressable>
+        </>
+      )}
+    </AuthFrame>
   );
 }
 
-function PrimaryButton({
-  label,
-  enabled,
-  onPress,
-}: {
-  label: string;
-  enabled: boolean;
-  onPress: () => void;
-}) {
-  const styles = useStyles();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        !enabled && styles.buttonDisabled,
-        pressed && enabled && styles.buttonPressed,
-      ]}>
-      <Text style={styles.buttonText}>{label}</Text>
-    </Pressable>
-  );
-}
-
+// Inside `AuthFrame`'s card. Measured off the two sign-in mockups: the title's capitals 31pt below
+// the card's top edge, the field at y 507, each 52pt pill 14pt below the one above.
 const useStyles = themedStyles((colors) => ({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: colors.skyTop,
-    padding: spacing.lg,
+  notice: {
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bannerSurface,
   },
-  card: {
-    gap: spacing.md,
-    padding: spacing.xl,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.surfaceOutline,
+  noticeText: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    color: colors.text,
   },
   title: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 24,
+    fontFamily: fonts.serif,
+    fontSize: 30,
+    lineHeight: 38,
     color: colors.text,
   },
   hint: {
+    marginTop: 8,
     fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+    fontSize: 15.5,
+    lineHeight: 22,
+    color: colors.textSecondary,
   },
-  input: {
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
-    // field below would keep its letter spacing — every placeholder after it came out spaced.
-    letterSpacing: 0,
+  error: {
+    marginHorizontal: 0,
+    marginTop: spacing.lg,
   },
-  codeInput: {
-    letterSpacing: 6,
-    fontSize: 20,
+  field: {
+    marginTop: 20,
   },
-  button: {
-    height: 44,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // The mockup's digits: the field's own 17pt, 22pt apart. `TextField` resets the spacing to 0 for
+  // every other field, since iOS recycles native inputs.
+  codeField: {
+    textAlign: 'center',
+    letterSpacing: 12,
   },
-  buttonDisabled: {
-    backgroundColor: colors.primaryDisabled,
-  },
-  buttonPressed: {
-    opacity: 0.8,
-  },
-  buttonText: {
-    color: colors.onPrimary,
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 16,
+  action: {
+    marginTop: 14,
   },
   link: {
-    alignItems: 'center',
+    alignSelf: 'center',
     paddingVertical: spacing.xs,
+  },
+  firstLink: {
+    marginTop: 18,
+  },
+  lastLink: {
+    marginTop: 4,
+    marginBottom: 2,
   },
   linkText: {
     color: colors.primary,
-    fontFamily: fonts.sans,
-    fontSize: 15,
+    fontFamily: fonts.sansMedium,
+    fontSize: 15.5,
+    lineHeight: 22,
   },
   linkTextDisabled: {
-    color: colors.textMuted,
-  },
-  error: {
-    color: colors.error,
     fontFamily: fonts.sans,
-    fontSize: 15,
+    color: colors.textMuted,
   },
 }));

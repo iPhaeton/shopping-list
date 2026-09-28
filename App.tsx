@@ -1,3 +1,4 @@
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,6 +7,16 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { ListsProvider } from './src/state/ListsContext';
 import { SessionProvider, useSession } from './src/state/SessionContext';
 import { ThemeProvider, useTheme } from './src/state/ThemeContext';
+
+/**
+ * The native launch screen stays up until the app's first screen is fully drawn — `hideSplash`
+ * (`src/navigation/splash.ts`), called from `RootNavigator`, which renders only once `ThemeProvider`'s
+ * gate has read the preference and the fonts, so what it uncovers is already in the right theme. The
+ * launch screen itself follows the device's appearance until JS sets the app's own; what this rules
+ * out is anything in between, like the root view in last session's colour.
+ */
+void SplashScreen.preventAutoHideAsync();
+SplashScreen.setOptions({ fade: true, duration: 250 });
 
 export default function App() {
   return (

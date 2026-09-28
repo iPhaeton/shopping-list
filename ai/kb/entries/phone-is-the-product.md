@@ -4,8 +4,8 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, d58a9cf]
-last_verified: 2026-09-27
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, d58a9cf, 962533c]
+last_verified: 2026-09-29
 verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js
 related: [maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props]
 ---
@@ -31,12 +31,25 @@ shadows, safe areas, overscroll, and anything native-only — `Appearance.setCol
 **Where visual sign-off happens.** The **iPhone 17e** simulator: its screen is exactly the mockups'
 1170×2532 @3x (390×844 pt), so an `xcrun simctl io booted screenshot` lines up with a mockup pixel
 for pixel; it still is under the iOS 27 runtime. Then a second look on a large phone and the
-**`Pixel_10`** Android emulator. The large phone was the iPhone 17 Pro Max through task 20; the
-iOS 27 runtime has none, and its large phone, the **iPhone 18 Pro Max**, has not been run yet.
+**`Pixel_10`** Android emulator. The iOS 27 runtime has no 17 Pro Max, and its large phone, the
+**iPhone 18 Pro Max**, has never been run — task 20 step 5 skipped it by the user's decision.
 Screenshots saved under `ai/tasks/*/screenshots/` come from the simulator, not the browser. How to
 reach each screen there: [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
 
-**Those screenshots are records of their day, like the logs, not the current design.** The user
+**Android is a step behind.** Task 20 step 5's screens — Sign in, Set name, Account, Sharing, the
+launch screen — have not been seen on `Pixel_10`: the build that would have added `expo-blur` and
+the splash filled the disk, and the user said to skip it. So these are **unverified on Android**:
+the `BlurTargetView` blur and its scroll cost on Account and Sharing, the splash emblem under
+Android 12+'s circular mask, hardware back from Account and Sharing, and `useKeyboardReveal` with
+Android's keyboard (its code assumes the window shrinks). The installed dev client predates both
+native modules ([native-build-toolchain](native-build-toolchain.md)).
+
+**The design is the mockups in `ai/ux/primary/`** — each screen, some in several states, day and
+moonlit, measured by pixel against the simulator. Step 5's 18 arrived in commit `962533c`, after its
+description said no image covered those screens: the images replaced that prose about looks, while
+the description's constraints and done-when still governed.
+
+**Task screenshots are records of their day, like the logs, not the current design.** The user
 can hand-tune a look after the shots are taken, in the same commit. **The band rim on Lists is the
 known case: faint on purpose.** Task 20 step 3's `screenshots/step-3/lists-*` show each band's top
 edge as a bright white highlight. The user then made it fainter by hand, committed in `d58a9cf`
@@ -72,4 +85,7 @@ visible on web — a tap-eating layering bug
 ([absolute-decoration-needs-pointer-events-on-its-wrapper](absolute-decoration-needs-pointer-events-on-its-wrapper.md))
 and a seam below a short list
 ([flatlist-footer-absent-when-list-is-empty](flatlist-footer-absent-when-list-is-empty.md)). Both
-would have shipped invisibly past RNTL and were only found by driving the actual browser DOM.
+would have shipped invisibly past RNTL and were only found by driving the actual browser DOM. Step 5
+found the same family again: react-native-web's text input is not positioned, so a `Card`'s absolute
+blur layer painted over — and blurred — the field inside it (hence `TextField`'s
+`position: 'relative'`, a no-op on native).

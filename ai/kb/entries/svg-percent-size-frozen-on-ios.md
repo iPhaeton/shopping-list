@@ -4,9 +4,9 @@ title: On iOS, a react-native-svg drawing sized "100%" keeps its first-layout si
 type: gotcha
 status: current
 tags: [ui, svg, ios, layout, react-native-svg]
-sources: [ai/tasks/20-ux/implementation-log-step-4.md, src/components/Sky.tsx, src/components/Ground.tsx]
-last_verified: 2026-09-27
-verify: grep -q 'onLayout=' src/components/Sky.tsx && grep -q '<Svg width={size.width} height={size.height}' src/components/Sky.tsx
+sources: [ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, src/components/Sky.tsx, a7416fd]
+last_verified: 2026-09-29
+verify: grep -q 'onLayout=' src/components/Sky.tsx && grep -q '<Svg width={size.width} height={size.height}' src/components/Sky.tsx && ! grep -rqE '^ +height="100%"|<Svg[^>]*height="100%"' src --include='*.tsx'
 related: [absolute-decoration-needs-pointer-events-on-its-wrapper, phone-is-the-product]
 indexed: false
 ---
@@ -28,10 +28,12 @@ drawing then has to be positioned in points, not as a fraction of the height. `S
 stars are placed from the top in points (`FILL_STARS`). If they were placed by fraction, they would
 jump every time the region grew, for example when a sync banner appeared.
 
-**When percent is still fine:** when the box never changes size after mount. `Ground`
-([Ground.tsx](../../../src/components/Ground.tsx)) keeps `width="100%" height="100%"`. It is an
-absolute, full-screen layer, so nothing it holds can grow. The `ItemRow` divider uses
-`width="100%"` with a fixed numeric height, and a row's width never changes.
+**When percent is still fine:** for a width that never changes after mount, beside a numeric
+height. `Sky`'s own drawing, `Band`'s wave and `Horizon`'s hill are `width="100%"` with a fixed
+height and a `viewBox`; the app is portrait-only, so a row's or a screen's width does not move. No
+drawing is sized by a percent **height** any more — `Ground`, the last, went in `a7416fd` — and
+task 20 step 5's full-screen art (`Landscape`, `ScreenSky`, `HorizonFooter`) takes numbers from
+`useWindowDimensions`. The `verify:` keeps a percent height out of `src/`.
 
 **What to do:** give any new SVG background numeric sizes from `onLayout` if its region can
 change height after first paint: loading states, banners that come and go, an editor that opens.

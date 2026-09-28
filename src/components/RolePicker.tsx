@@ -16,16 +16,21 @@ type Props = {
    */
   labelFor: (role: Role) => string;
   disabled?: boolean;
+  /** A member card's picker is the card's own (`card`); the invite form's sits on the sky. */
+  track?: 'card' | 'surface';
+  size?: 'regular' | 'compact';
   onChange: (role: Role) => void;
 };
 
-export function RolePicker({ value, labelFor, disabled = false, onChange }: Props) {
+export function RolePicker({ value, labelFor, disabled = false, track, size, onChange }: Props) {
   return (
     <SegmentedPicker
       options={ROLES}
       value={value}
       labelFor={labelFor}
       disabled={disabled}
+      track={track}
+      size={size}
       onChange={onChange}
     />
   );

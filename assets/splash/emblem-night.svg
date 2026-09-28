@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="152" height="152" viewBox="0 0 152 152">
+  <!-- The launch emblem (night), traced off ai/ux/primary/launch-screen-quiet-horizon-moonlit.png.
+       Source of emblem-night.png: the native splash image, and RootNavigator's loading view. -->
+  <defs>
+    <clipPath id="disc"><circle cx="76" cy="76" r="75.25"/></clipPath>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141a36"/><stop offset="1" stop-color="#1b2143"/></linearGradient>
+    <radialGradient id="glow" cx="76" cy="76" r="54" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f8f9fd" stop-opacity="0.22"/><stop offset="1" stop-color="#f8f9fd" stop-opacity="0"/></radialGradient>
+    <radialGradient id="body" cx="73" cy="70" r="23.1" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f8f9fd"/><stop offset="1" stop-color="#e6e9f5"/></radialGradient>
+    <linearGradient id="rim0" x1="0" y1="78" x2="0" y2="94.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.1"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="rim1" x1="0" y1="97.4" x2="0" y2="112" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.1"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="rim2" x1="0" y1="117" x2="0" y2="133.3" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.1"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="rim3" x1="0" y1="130" x2="0" y2="143.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.1"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <g clip-path="url(#disc)">
+    <rect x="0" y="0" width="152" height="152" fill="url(#sky)"/>
+    <circle cx="38" cy="27.7" r="1.2" fill="#f8f9fd" opacity="0.9"/>
+    <circle cx="64" cy="13.8" r="0.9" fill="#f8f9fd" opacity="0.7"/>
+    <circle cx="104" cy="21.8" r="1.3" fill="#f8f9fd" opacity="0.95"/>
+    <circle cx="86" cy="38" r="0.6" fill="#f8f9fd" opacity="0.5"/>
+    <circle cx="49.8" cy="46" r="1" fill="#f8f9fd" opacity="0.8"/>
+    <circle cx="28" cy="56" r="0.7" fill="#f8f9fd" opacity="0.6"/>
+    <circle cx="122" cy="46" r="0.8" fill="#f8f9fd" opacity="0.7"/>
+    <circle cx="76" cy="76" r="54" fill="url(#glow)"/>
+    <circle cx="76" cy="76" r="21" fill="url(#body)"/>
+    <path d="M-2,84.5 C1.67,84 9.83,82.58 20,81.5 C30.17,80.42 47.33,78.33 59,78 C70.67,77.67 79.83,78.83 90,79.5 C100.17,80.17 109.33,81.5 120,82 C130.67,82.5 148.33,82.42 154,82.5 L154,154 L-2,154 Z" fill="#56628a"/>
+    <path d="M-2,84.5 C1.67,84 9.83,82.58 20,81.5 C30.17,80.42 47.33,78.33 59,78 C70.67,77.67 79.83,78.83 90,79.5 C100.17,80.17 109.33,81.5 120,82 C130.67,82.5 148.33,82.42 154,82.5 L154,154 L-2,154 Z" fill="url(#rim0)"/>
+    <path d="M-2,100.5 C3.5,100.13 19,98.82 31,98.3 C43,97.78 55,96.83 70,97.4 C85,97.97 107,100.93 121,101.7 C135,102.47 148.5,101.95 154,102 L154,154 L-2,154 Z" fill="#465276"/>
+    <path d="M-2,100.5 C3.5,100.13 19,98.82 31,98.3 C43,97.78 55,96.83 70,97.4 C85,97.97 107,100.93 121,101.7 C135,102.47 148.5,101.95 154,102 L154,154 L-2,154 Z" fill="url(#rim1)"/>
+    <path d="M-2,121.5 C3.5,121.75 18,122.7 31,123 C44,123.3 61,123.97 76,123.3 C91,122.63 108,120.05 121,119 C134,117.95 148.5,117.33 154,117 L154,154 L-2,154 Z" fill="#384264"/>
+    <path d="M-2,121.5 C3.5,121.75 18,122.7 31,123 C44,123.3 61,123.97 76,123.3 C91,122.63 108,120.05 121,119 C134,117.95 148.5,117.33 154,117 L154,154 L-2,154 Z" fill="url(#rim2)"/>
+    <path d="M-2,131.5 C3.5,131.42 18,131.25 31,131 C44,130.75 61,129.78 76,130 C91,130.22 108,131.72 121,132.3 C134,132.88 148.5,133.3 154,133.5 L154,154 L-2,154 Z" fill="#2c3452"/>
+    <path d="M-2,131.5 C3.5,131.42 18,131.25 31,131 C44,130.75 61,129.78 76,130 C91,130.22 108,131.72 121,132.3 C134,132.88 148.5,133.3 154,133.5 L154,154 L-2,154 Z" fill="url(#rim3)"/>
+  </g>
+  <circle cx="76" cy="76" r="75.25" fill="none" stroke="#3a405c" stroke-width="1.5"/>
+</svg>

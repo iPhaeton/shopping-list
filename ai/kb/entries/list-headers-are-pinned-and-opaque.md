@@ -5,7 +5,7 @@ type: decision
 status: current
 tags: [ui, layout, flatlist, ios, design]
 sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md]
-last_verified: 2026-09-28
+last_verified: 2026-09-29
 verify: grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListsScreen.tsx && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListDetailScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListsScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListDetailScreen.tsx && grep -q 'style={styles.headerSky}' src/screens/ListsScreen.tsx && test "$(grep -c '<Sky height={SKY_HEIGHT} />' src/screens/ListsScreen.tsx)" = 2 && ! grep -q statusBarSky src/screens/ListsScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/ListDetailScreen.tsx && grep -q '<View style={styles.header}>' src/screens/ListDetailScreen.tsx && grep -A1 '^  header: {' src/screens/ListDetailScreen.tsx | grep -q 'backgroundColor: colors.skyHorizon'
 related: [phone-is-the-product, screens-take-navigation-props, maestro-drives-the-native-ui, svg-percent-size-frozen-on-ios, absolute-decoration-needs-pointer-events-on-its-wrapper]
 indexed: false

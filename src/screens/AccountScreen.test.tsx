@@ -43,7 +43,8 @@ const auth = supabase.auth as unknown as {
   signOut: jest.Mock;
 };
 
-const props = { navigation: {}, route: {} } as unknown as AccountScreenProps;
+const navigation = { goBack: jest.fn() };
+const props = { navigation, route: {} } as unknown as AccountScreenProps;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -67,6 +68,15 @@ async function renderScreen() {
   // Nothing renders until the restored session settles.
   await screen.findByLabelText('Sign out');
 }
+
+it('goes back through its own drawn Back button', async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Back'));
+
+  expect(navigation.goBack).toHaveBeenCalled();
+  expect(screen.getByRole('header', { name: 'Account' })).toBeOnTheScreen();
+});
 
 it('signs out this device only', async () => {
   await renderScreen();
@@ -219,7 +229,7 @@ describe('the appearance picker', () => {
     expect(screen.getByLabelText('Auto')).toBeChecked();
     expect(screen.getByLabelText('Day')).not.toBeChecked();
     expect(screen.getByLabelText('Night')).not.toBeChecked();
-    expect(screen.getByText('Sign out')).toHaveStyle({ color: day.primary });
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: day.text });
   });
 
   it('says under Auto when the next change comes', async () => {
@@ -233,7 +243,7 @@ describe('the appearance picker', () => {
 
     await renderThemed();
 
-    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.text });
     expect(screen.getByText(/^Day from \d/)).toBeOnTheScreen();
   });
 
@@ -255,7 +265,7 @@ describe('the appearance picker', () => {
 
     expect(screen.getByLabelText('Night')).toBeChecked();
     expect(screen.getByLabelText('Day')).not.toBeChecked();
-    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.text });
     await waitFor(async () =>
       expect(JSON.parse((await AsyncStorage.getItem('theme-preference')) ?? 'null')).toEqual({
         v: 1,
@@ -270,7 +280,7 @@ describe('the appearance picker', () => {
     await renderThemed();
 
     expect(screen.getByLabelText('Night')).toBeChecked();
-    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.primary });
+    expect(screen.getByText('Sign out')).toHaveStyle({ color: night.text });
     expect(screen.queryByText(/ from \d/)).toBeNull();
   });
 });

@@ -116,8 +116,8 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     if (list && !list.itemsLoaded) void loadListItems(listId);
   }, [list, list?.itemsLoaded, listId, loadListItems]);
 
-  // The screen draws its own header — `RootNavigator` hides the native one — so this title is read
-  // only elsewhere: the browser tab on web, and the back button of the Sharing screen pushed on top.
+  // The screen draws its own header — `RootNavigator` hides the native one on every screen — so this
+  // title is read only by the browser tab on web.
   useLayoutEffect(() => {
     navigation.setOptions({ title: list?.name ?? 'List' });
   }, [navigation, list?.name]);

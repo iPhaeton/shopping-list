@@ -4,10 +4,10 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md]
-last_verified: 2026-09-28
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, a572bd3]
+last_verified: 2026-09-29
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && grep -q 'is already defined and IS NOT overwritten' node_modules/@expo/env/build/index.js && grep -qF "mode !== 'test' && \`.env.local\`, \`.env.\${mode}\`, \`.env\`" node_modules/@expo/env/build/index.js
-related: [cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
+related: [trigram-index-needs-three-characters, cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
 
 **There are two Supabase environments since step 5.**
@@ -25,8 +25,7 @@ The branch is made at runtime, not at build — [supabase-target-picked-at-runti
 | Postgres | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
 | Mailpit (all outbound mail) | http://127.0.0.1:54324 |
 
-Start Docker Desktop, then `npx supabase start`. The CLI is a devDependency, so always `npx
-supabase` — a globally installed one may be a different version.
+Start Docker Desktop, then `npx supabase start` — always `npx`: the CLI is a devDependency.
 
 **Why local is still the verification path:** the six-digit sign-in code is machine-readable in
 Mailpit, so the whole OTP flow can be driven end to end — by Playwright on web, by Maestro on a
@@ -44,12 +43,9 @@ invariant, so `verify:` deliberately asserts none of it. Step 9's purge schedule
 because `create extension pg_cron` is confirmed only on this Docker stack and may be refused on
 cloud ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)); **an unapplied migration
 wedges every later `db push`** — the CLI retries from the earliest unapplied file — and `npx supabase
-migration repair --status applied <timestamp>` is the way out. Two earlier worries proved groundless:
-the unique index on `lower(email)` did not collide on cloud, and a policy on `realtime.messages`
-(owned by `supabase_realtime_admin`) did not bite on ownership — schema-level proof only; no client
-has used the cloud realtime socket
-([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)). Cloud
-*auth config* has no read-back at all, and config is a separate push with different rules —
+migration repair --status applied <timestamp>` is the way out. No client has used the cloud
+realtime socket yet ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
+Cloud *auth config* has no read-back at all, and config is a separate push with different rules —
 [supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md).
 
 **Env vars.** Copy [.env.example](../../../.env.example) to `.env` (gitignored). There are two
@@ -72,23 +68,27 @@ Three things bite here:
 - The dev server must be **restarted** after editing `.env` — sometimes with `--clear` — because the
   values are inlined at build time.
 - **Which value wins is measured, not read off the code, and it has flipped once.** Today (SDK 57,
-  served ios and web bundles, 2026-09-28) it is **shell > `.env.local` > `.env`**. `@expo/env` loads
-  `.env.local` before `.env` into the CLI's `process.env` and never overwrites a key already set, so
-  a shell value is missing from the `env: export` line, and the bundle's env polyfill carries the
-  result. The dev-only `expo/virtual/env` still holds code that spreads the `.env*` files *over*
-  `process.env`, and on 2026-09-09 (SDK 54) that made the file beat the shell. Its `require.context`
-  for those files now comes out as Metro's empty context, so the spread never runs. The cause is not
-  identified, so read the bundle before trusting either order. The `verify:` pins `@expo/env`'s
-  order; no static check can see the empty context.
+  ios and web bundles, 2026-09-28) it is **shell > `.env.local` > `.env`**: `@expo/env` never
+  overwrites a key already set, so a shell value is missing from the `env: export` line. On
+  2026-09-09 (SDK 54) the file beat the shell, through the dev-only `expo/virtual/env` spreading the
+  `.env*` files over `process.env`; that code is still there, but its `require.context` now comes out
+  empty, for an unidentified reason. Read the bundle before trusting either order. The `verify:` pins
+  `@expo/env`'s order; no static check can see the empty context.
 
-**After editing a migration or `supabase/config.toml`:** `npx supabase start` on already-running
-containers prints status and does *not* apply migrations, and the auth container does not reread
-`config.toml` while it is up. Both symptoms — "my table isn't there", "my template override did
-nothing" — clear with:
+**After editing a migration or `supabase/config.toml`:** `npx supabase start` on running containers
+applies no migrations, and the auth container does not reread `config.toml` while it is up. Both
+symptoms — "my table isn't there", "my template override did nothing" — clear with:
 
 ```bash
 npx supabase stop && npx supabase start && npx supabase db reset
 ```
+
+**The local stack may hold 1,000,000 load-test users** — `supabase/scripts/seed-1m-users.sql`
+(commit `a572bd3`), emails `%@loadtest.invalid`, present on 2026-09-29. With them,
+`search_users_by_name` takes ~3.5 s cold (245 ms warm), and under build load it hit the
+authenticated role's 8 s `statement_timeout` (HTTP 500, `57014`). Their names also sort ahead of
+seeded ones: "Jor" answers `Aaliyah Jordan 107351`… before `seed.mjs`'s Jordan. Count them before a
+sharing test; the script's own cleanup line or a `db reset` removes them.
 
 **`db reset` wipes the `auth` schema too, and the browser does not know that.** A tab still holding
 a session from before the reset fails its next token refresh with a 400 on `/auth/v1/token`. Nothing

@@ -8,9 +8,9 @@ import { themedStyles, useTheme } from '../state/ThemeContext';
  * Fixed star positions — percent of width, points from the top, radius, opacity. Hand-picked once
  * rather than `Math.random()`'d, so the sky never re-randomizes on a render
  * ([ai/tasks/20-ux/description-step-3.md] calls this out explicitly). The exact positions aren't
- * load-bearing; only that they stay put.
+ * load-bearing; only that they stay put. `Landscape` scatters the same field over the sign-in sky.
  */
-const STARS: readonly [number, number, number, number][] = [
+export const STARS: readonly [number, number, number, number][] = [
   [7, 18, 1.1, 0.8], [18, 42, 0.7, 0.5], [24, 12, 0.9, 0.65], [33, 58, 1.3, 0.9],
   [41, 24, 0.6, 0.4], [52, 46, 1, 0.7], [61, 15, 0.8, 0.55], [68, 66, 1.2, 0.85],
   [77, 30, 0.7, 0.5], [85, 10, 1, 0.75], [92, 50, 0.9, 0.6], [12, 70, 0.8, 0.45],
@@ -92,9 +92,20 @@ const useFillStyles = themedStyles(() => ({
 }));
 
 /**
+ * The whole screen's sky, stars and all, for a `Backdrop` — Account's and Sharing's, which scroll
+ * their cards and `HorizonFooter` over it.
+ */
+export function ScreenSky() {
+  const { width, height } = useWindowDimensions();
+  return <Sky height={height} width={width} />;
+}
+
+/**
  * The sky gradient behind the header and first bands — bounded to `height`, not full-screen, so
  * the screen's own background (the last band's color) is what a bottom overscroll reveals, and
- * this is what a top overscroll reveals. Night draws a fixed star field on top. Purely decorative.
+ * this is what a top overscroll reveals. Night draws a fixed star field on top. Purely decorative:
+ * the caller's wrapper hides it from screen readers — on web these props on the `<Svg>` itself reach
+ * a DOM element, which React warns about.
  */
 export function Sky({ height, width = 400 }: { height: number; width?: number }) {
   const { name, colors } = useTheme();
@@ -105,9 +116,7 @@ export function Sky({ height, width = 400 }: { height: number; width?: number })
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
-      pointerEvents="none"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants">
+      pointerEvents="none">
       <Defs>
         <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={colors.skyTop} />

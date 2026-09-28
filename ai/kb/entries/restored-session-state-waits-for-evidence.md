@@ -5,9 +5,9 @@ type: gotcha
 status: current
 tags: [auth, state]
 sources: [ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, src/state/SessionContext.tsx, src/state/SessionContext.test.tsx]
-last_verified: 2026-09-26
+last_verified: 2026-09-29
 verify: test "$(awk '/^  function enterSignedIn/,/^  }/' src/state/SessionContext.tsx | grep -c 'setState(')" = 1 && grep -q "async function resolveRestoredSignIn" src/state/SessionContext.tsx && grep -q "never shows the full app for a restored session before a cache or fetch backs it up" src/state/SessionContext.test.tsx
-related: [signed-in-event-fires-on-restore-too, first-fetch-replaces-list-state]
+related: [signed-in-event-fires-on-restore-too, first-fetch-replaces-list-state, theme-reaches-native-surfaces]
 ---
 
 A real, user-reported bug, reproduced against the local stack before being fixed: sign up, leave
@@ -32,7 +32,9 @@ app" rather than a flicker.
 **The fix:** `enterSignedIn`'s restored branch no longer calls `setState` at all — it delegates
 outright to `resolveRestoredSignIn`, which tries the on-device name cache first, then a fetch, and
 never applies "assume set" to a state nothing has evidenced. Until one of those actually answers,
-`AuthState` stays `{ status: 'loading' }` — mounting nothing, the same as first boot. `signedIn` is
+`AuthState` stays `{ status: 'loading' }` — mounting no stack, only `RootNavigator`'s loading view
+(since task 20 step 5 the launch emblem on the sky, which the native splash hides onto), the same
+as first boot. `signedIn` is
 now reached optimistically only from a *cache hit*, or from a *failed fetch* (the one place the app
 still assumes a name exists with no evidence, deliberately, because a returning offline user must not
 be locked out of cached lists over a name nobody has found missing) — never from "haven't checked

@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { themedStyles } from '../state/ThemeContext';
-import { fonts, radius, spacing } from '../theme';
+import { fonts, radius } from '../theme';
 
 export type SegmentedOption<T extends string> = { value: T; title: string };
 
@@ -14,21 +14,41 @@ type Props<T extends string> = {
    */
   labelFor: (value: T) => string;
   disabled?: boolean;
+  /**
+   * What the track sits on. `card` (the default) tints whatever card holds it — Account's
+   * Appearance, a Sharing member row. `surface` is the invite row's, drawn straight on the sky, so
+   * it takes a text field's fill and rim instead.
+   */
+  track?: 'card' | 'surface';
+  /** `compact` is a Sharing member row's, 4pt shorter than the rest. */
+  size?: 'regular' | 'compact';
   onChange: (value: T) => void;
 };
 
-/** A row of radio buttons, one of them checked. `RolePicker` and `AccountScreen`'s Appearance. */
+/**
+ * A pill track of radio buttons, the checked one an inset `primary` pill. `RolePicker` and
+ * `AccountScreen`'s Appearance. Segments share the width equally, so the checked pill does not
+ * change size as it moves. Disabled fades the whole control — the sole owner's own role.
+ */
 export function SegmentedPicker<T extends string>({
   options,
   value,
   labelFor,
   disabled = false,
+  track = 'card',
+  size = 'regular',
   onChange,
 }: Props<T>) {
   const styles = useStyles();
 
   return (
-    <View style={styles.group}>
+    <View
+      style={[
+        styles.track,
+        size === 'compact' && styles.trackCompact,
+        track === 'surface' && styles.trackSurface,
+        disabled && styles.disabled,
+      ]}>
       {options.map((option) => {
         const checked = option.value === value;
 
@@ -40,8 +60,10 @@ export function SegmentedPicker<T extends string>({
             accessibilityLabel={labelFor(option.value)}
             disabled={disabled}
             onPress={() => onChange(option.value)}
-            style={[styles.option, checked && styles.optionChecked, disabled && styles.optionDisabled]}>
-            <Text style={[styles.text, checked && styles.textChecked]}>{option.title}</Text>
+            style={[styles.option, checked && styles.optionChecked]}>
+            <Text numberOfLines={1} style={[styles.text, checked && styles.textChecked]}>
+              {option.title}
+            </Text>
           </Pressable>
         );
       })}
@@ -50,32 +72,42 @@ export function SegmentedPicker<T extends string>({
 }
 
 const useStyles = themedStyles((colors) => ({
-  group: {
+  track: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    height: 44,
+    padding: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: colors.controlFill,
+  },
+  trackCompact: {
+    height: 40,
+  },
+  trackSurface: {
+    borderColor: colors.surfaceOutline,
+    backgroundColor: colors.surface,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   option: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.outline,
-    backgroundColor: colors.surface,
+    flex: 1,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   optionChecked: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  optionDisabled: {
-    opacity: 0.5,
   },
   text: {
     fontFamily: fonts.sans,
-    fontSize: 14,
+    fontSize: 17,
     color: colors.text,
   },
   textChecked: {
-    fontFamily: fonts.sansSemiBold,
+    fontFamily: fonts.sansMedium,
     color: colors.onPrimary,
   },
 }));

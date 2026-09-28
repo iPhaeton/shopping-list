@@ -4,10 +4,10 @@ title: pg_trgm's GIN index cannot accelerate a query under 3 characters — clie
 type: gotcha
 status: current
 tags: [supabase, postgres, pg_trgm, performance, search]
-sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/18-share-by-name/seed-1m-users.sql, ai/tasks/18-share-by-name/seed-1m-users-output.txt, supabase/migrations/20260922000000_share_by_name.sql, supabase/migrations/20260923000000_set_name_min_length.sql, src/components/UserAutocomplete.tsx]
-last_verified: 2026-09-26
+sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/18-share-by-name/seed-1m-users.sql, ai/tasks/18-share-by-name/seed-1m-users-output.txt, supabase/migrations/20260922000000_share_by_name.sql, supabase/migrations/20260923000000_set_name_min_length.sql, src/components/UserAutocomplete.tsx, ai/tasks/20-ux/implementation-log-step-5.md]
+last_verified: 2026-09-29
 verify: grep -q 'const MIN_QUERY_LENGTH = 3;' src/components/UserAutocomplete.tsx && grep -q 'using gin (lower(name) gin_trgm_ops)' supabase/migrations/20260922000000_share_by_name.sql && grep -q 'char_length(trimmed) < 3' supabase/migrations/20260923000000_set_name_min_length.sql
-related: [scope-boundaries, read-rooted-at-list-members, session-still-valid-guards-writes]
+related: [scope-boundaries, read-rooted-at-list-members, session-still-valid-guards-writes, supabase-local-stack]
 indexed: false
 ---
 
@@ -24,6 +24,9 @@ character query (`'ann'`, `'Olivia Smith'`) plans as a `Bitmap Index Scan` on th
 warm query reproduces a `Parallel Seq Scan` roughly 4.5x slower. A 2-character query (`'an'`) plans
 as a `Parallel Seq Scan` over the whole table regardless of cache state — ~270ms at 1M rows,
 reproduced twice — because there is no trigram-backed plan to fall back from; none exists.
+Through the app (task 20 step 5, a million generated rows loaded), `"Jor"` took ~3.5 s cold and 245 ms
+warm, and under build load hit the 8 s `statement_timeout`: the index keeps a warm search fast, not
+a cold one ([supabase-local-stack](supabase-local-stack.md)).
 
 **As of step 18's second half this is closed, on both ends.**
 [UserAutocomplete](../../../src/components/UserAutocomplete.tsx)'s `MIN_QUERY_LENGTH` moved from 2

@@ -92,7 +92,7 @@ jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.f
 const ALICE: Member = { userId: 'u1', email: 'alice@example.com', name: null, role: 'owner' };
 const BOB: Member = { userId: 'u2', email: 'bob@example.com', name: null, role: 'reader' };
 
-const navigation = { navigate: jest.fn(), popToTop: jest.fn(), setOptions: jest.fn() };
+const navigation = { navigate: jest.fn(), popToTop: jest.fn(), setOptions: jest.fn(), goBack: jest.fn() };
 
 function sharingProps(listId: string) {
   return { navigation, route: { params: { listId } } } as unknown as SharingScreenProps;
@@ -207,10 +207,21 @@ it('says the roster is on its way before it arrives', async () => {
   expect(screen.getByLabelText('Loading who has access')).toBeOnTheScreen();
 });
 
-it('falls back to a not-found state for an unknown list', async () => {
+it('falls back to a not-found state for an unknown list, which still has a way back', async () => {
   await render(withProviders(<SharingScreen {...sharingProps('does-not-exist')} />));
 
   expect(screen.getByText('List not found')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByLabelText('Back'));
+  expect(navigation.goBack).toHaveBeenCalled();
+});
+
+it('goes back through its own drawn Back button', async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Back'));
+
+  expect(navigation.goBack).toHaveBeenCalled();
+  expect(screen.getByRole('header', { name: 'Sharing' })).toBeOnTheScreen();
 });
 
 /**
@@ -226,6 +237,14 @@ describe('somebody who is not an owner', () => {
     expect(screen.getByText('Only an owner can change who has access.')).toBeOnTheScreen();
     expect(screen.queryByLabelText('Name')).not.toBeOnTheScreen();
     expect(screen.queryByLabelText('Remove bob@example.com')).not.toBeOnTheScreen();
+  });
+
+  it("sees each other member's role, and no way to change it", async () => {
+    await renderScreen('reader');
+
+    // Bob's badge. Drawn capitalized; the text itself is the role as the database names it.
+    expect(screen.getByText('reader')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Set bob@example.com to writer')).not.toBeOnTheScreen();
   });
 
   it('is offered a way to leave, on their own row only', async () => {
@@ -316,9 +335,34 @@ describe('an owner', () => {
     expect(fetchMembers).toHaveBeenCalledTimes(2);
   });
 
+  it('offers a role and Share only once a name is being typed', async () => {
+    await renderScreen();
+
+    expect(screen.queryByLabelText('Share')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Name'), 'Car');
+    expect(screen.getByLabelText('Share as writer')).toBeChecked();
+
+    await fireEvent.changeText(screen.getByLabelText('Name'), '');
+    expect(screen.queryByLabelText('Share')).not.toBeOnTheScreen();
+  });
+
+  it('keeps the picked role while the field is emptied and typed into again', async () => {
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Name'), 'Car');
+    await fireEvent.press(screen.getByLabelText('Share as owner'));
+    await fireEvent.changeText(screen.getByLabelText('Name'), '');
+    await fireEvent.changeText(screen.getByLabelText('Name'), 'Carol');
+
+    expect(screen.getByLabelText('Share as owner')).toBeChecked();
+  });
+
   it('will not share without picking a suggestion', async () => {
     await renderScreen();
 
+    await fireEvent.changeText(screen.getByLabelText('Name'), 'Carol');
     expect(screen.getByLabelText('Share')).toBeDisabled();
 
     await fireEvent.press(screen.getByLabelText('Share'));

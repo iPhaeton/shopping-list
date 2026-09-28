@@ -3,7 +3,6 @@
 import { NunitoSans_400Regular } from '@expo-google-fonts/nunito-sans/400Regular';
 import { NunitoSans_500Medium } from '@expo-google-fonts/nunito-sans/500Medium';
 import { NunitoSans_600SemiBold } from '@expo-google-fonts/nunito-sans/600SemiBold';
-import { NunitoSans_700Bold } from '@expo-google-fonts/nunito-sans/700Bold';
 import { SourceSerif4_400Regular } from '@expo-google-fonts/source-serif-4/400Regular';
 import { useFonts } from 'expo-font';
 import * as SystemUI from 'expo-system-ui';
@@ -29,7 +28,6 @@ const FONT_FILES = {
   [fonts.sans]: NunitoSans_400Regular,
   [fonts.sansMedium]: NunitoSans_500Medium,
   [fonts.sansSemiBold]: NunitoSans_600SemiBold,
-  [fonts.sansBold]: NunitoSans_700Bold,
 };
 
 /**

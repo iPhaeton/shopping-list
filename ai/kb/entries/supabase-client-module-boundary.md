@@ -5,8 +5,8 @@ type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
 sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, src/lib/supabase.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
-last_verified: 2026-09-27
-verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts && grep -q "from '../lib/membersApi'" src/components/UserAutocomplete.tsx && for f in src/components/ItemRow.tsx src/components/ListRow.tsx src/components/RolePicker.tsx; do ! grep -q "from '../lib/" "$f" || exit 1; done
+last_verified: 2026-09-29
+verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts && grep -q "from '../lib/membersApi'" src/components/UserAutocomplete.tsx && for f in $(ls src/components/*.ts src/components/*.tsx | grep -v 'UserAutocomplete' | grep -v '\.test\.'); do ! grep -q "from '../lib/" "$f" || exit 1; done
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 ---
 
@@ -61,8 +61,7 @@ deliver a nudge or a reconnect by hand, wrapped in `act` because it is an extern
 / `shareList` / `setMemberRole` / `removeMember` / `leaveList` itself rather than going through `ListsContext`,
 because the roster is not in `State`, is not cached, and has nothing for `replay` to fold. The seam
 is unchanged by that — the screen still imports a query module, never `supabase` — it is just
-`membersApi.ts` for those four now, plus `type Result` from `listsApi.ts`. Its suite mocks
-`../lib/listsApi` and `../lib/membersApi` separately, like every other suite that touches both. The
+`membersApi.ts` for all five, plus `type Result` from `listsApi.ts`; its suite mocks both. The
 rule to carry: state that the reducer owns goes through the provider; state that only one screen has
 goes in that screen's `useState`, calling the query module directly.
 
@@ -71,8 +70,10 @@ goes in that screen's `useState`, calling the query module directly.
 calls `membersApi.searchUsers` itself rather than taking suggestions as a prop, because the effect
 (timer, in-flight-response race) is the component's own state, with nothing for a parent to hold.
 Read "screens and providers import the query module" as "whatever owns the state that triggers the
-call does" — a presentational component (`ItemRow`, `ListRow`, `RolePicker`) takes its data as
-props, reads only the theme from context, and imports nothing from `lib/`.
+call does" — a presentational component (`ItemRow`, `ListRow`, `RolePicker`, all of task 20's) takes
+its data as props, reads only the theme from context (and, for `Card`, `Backdrop`'s blur target),
+and imports nothing from `lib/`. The `verify:` holds every file in `src/components/` but
+`UserAutocomplete` to that.
 
 **One suite is the exception, and it has to be: `listsApi`'s own — and `membersApi`'s is the same
 exception a second time.** [src/lib/listsApi.test.ts](../../../src/lib/listsApi.test.ts) mocks

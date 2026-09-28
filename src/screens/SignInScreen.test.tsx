@@ -104,6 +104,12 @@ function ForceRevokedSignOut() {
   );
 }
 
+it("names the app above the form, which the header used to", async () => {
+  await renderScreen();
+
+  expect(screen.getByRole('header', { name: 'ShoppingLoop' })).toBeOnTheScreen();
+});
+
 it('will not send a code without an email address', async () => {
   await renderScreen();
 

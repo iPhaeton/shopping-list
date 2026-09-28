@@ -6,7 +6,7 @@ import { fonts, spacing } from '../theme';
 /**
  * `ink` overrides both lines' color — for a caller rendering this over a horizon band, where a
  * contrast-picked ink (`bandAt`, `src/state/bands.ts`) is what stays AA-legible, not the default
- * `text`/`textMuted` pair meant for a plain surface.
+ * `text`/`textSecondary` pair meant for a plain surface.
  */
 export function EmptyState({ title, hint, ink }: { title: string; hint: string; ink?: string }) {
   const styles = useStyles();
@@ -34,7 +34,7 @@ const useStyles = themedStyles((colors) => ({
   hint: {
     fontFamily: fonts.sans,
     fontSize: 15,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 }));

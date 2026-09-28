@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { searchUsers, type UserSuggestion } from '../lib/membersApi';
-import { themedStyles, useTheme } from '../state/ThemeContext';
-import { fonts, radius, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, spacing } from '../theme';
+import { Avatar } from './Avatar';
+import { Card } from './Card';
+import { TextField } from './TextField';
 
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 300;
@@ -26,7 +29,6 @@ type Props = {
  */
 export function UserAutocomplete({ value, onChangeText, onSelect, selected, disabled = false }: Props) {
   const styles = useStyles();
-  const { colors, scheme } = useTheme();
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
 
   useEffect(() => {
@@ -57,20 +59,17 @@ export function UserAutocomplete({ value, onChangeText, onSelect, selected, disa
 
   return (
     <View>
-      <TextInput
-        style={styles.input}
+      <TextField
+        on="sky"
         value={value}
         onChangeText={onChangeText}
         placeholder="Start typing a name"
-        placeholderTextColor={colors.textMuted}
-        keyboardAppearance={scheme}
-        selectionColor={colors.primary}
         accessibilityLabel="Name"
         autoCapitalize="words"
         autoCorrect={false}
       />
       {suggestions.length > 0 ? (
-        <View style={styles.suggestions}>
+        <Card style={styles.suggestions}>
           {suggestions.map((user, index) => (
             <Pressable
               key={user.userId}
@@ -79,50 +78,47 @@ export function UserAutocomplete({ value, onChangeText, onSelect, selected, disa
               accessibilityState={{ disabled }}
               disabled={disabled}
               onPress={() => onSelect(user)}
-              style={[styles.suggestion, index > 0 && styles.suggestionDivider]}>
-              <Text style={styles.suggestionText}>{user.name}</Text>
+              style={({ pressed }) => [
+                styles.suggestion,
+                index > 0 && styles.suggestionDivider,
+                pressed && styles.pressed,
+              ]}>
+              <Avatar id={user.userId} name={user.name} size={30} />
+              <Text style={styles.suggestionText} numberOfLines={1}>
+                {user.name}
+              </Text>
             </Pressable>
           ))}
-        </View>
+        </Card>
       ) : null}
     </View>
   );
 }
 
+// The field on the sky, in `AddBar`'s surface; the suggestions a frosted card of 44pt rows under it,
+// as the owner's Sharing mockup draws them.
 const useStyles = themedStyles((colors) => ({
-  input: {
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
-    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
-    letterSpacing: 0,
-  },
   suggestions: {
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
+    marginTop: 6,
   },
   suggestion: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: 15,
   },
   suggestionDivider: {
     borderTopWidth: 1,
     borderTopColor: colors.divider,
   },
+  pressed: {
+    opacity: 0.6,
+  },
   suggestionText: {
+    flex: 1,
     fontFamily: fonts.sans,
-    fontSize: 16,
+    fontSize: 17,
     color: colors.text,
   },
 }));

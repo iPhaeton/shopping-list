@@ -33,7 +33,26 @@
       ],
       "expo-font",
       "expo-status-bar",
-      ["expo-build-properties", { "ios": { "enableSceneSupport": true } }]
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#dee6f0",
+          "image": "./assets/splash/emblem-day.png",
+          "imageWidth": 152,
+          "dark": {
+            "backgroundColor": "#10162e",
+            "image": "./assets/splash/emblem-night.png"
+          }
+        }
+      ]
     ]
   }
 }

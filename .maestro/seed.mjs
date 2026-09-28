@@ -117,4 +117,14 @@ const party = await member.list('Birthday party', ['Candles', 'Balloons', 'Cake'
 await member.rpc('share_list', { p_list_id: bbq.id, p_user_id: owner.userId, p_role: 'writer' });
 await member.rpc('share_list', { p_list_id: party.id, p_user_id: owner.userId, p_role: 'reader' });
 
+// The Sharing mockups' people (ai/ux/primary/sharing-screen-*): Priya reads Groceries and the
+// member's Birthday party, and three names starting "Jor" answer the invite field's suggestions.
+const priya = as(await signIn('priya@example.com'));
+await priya.rpc('set_name', { p_name: 'Priya' });
+await owner.rpc('share_list', { p_list_id: groceries.id, p_user_id: priya.userId, p_role: 'reader' });
+await member.rpc('share_list', { p_list_id: party.id, p_user_id: priya.userId, p_role: 'reader' });
+for (const name of ['Jordan', 'Jorge', 'Jorja']) {
+  await as(await signIn(`${name.toLowerCase()}@example.com`)).rpc('set_name', { p_name: name });
+}
+
 console.log(`seeded ${ownerEmail} (${nameFor(ownerEmail)}) and ${memberEmail} (${nameFor(memberEmail)})`);

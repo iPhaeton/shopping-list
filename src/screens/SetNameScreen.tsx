@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text } from 'react-native';
 
+import { AuthFrame } from '../components/AuthFrame';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { PillButton } from '../components/PillButton';
+import { TextField } from '../components/TextField';
 import type { SetNameScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
-import { themedStyles, useTheme } from '../state/ThemeContext';
-import { fonts, radius, spacing } from '../theme';
+import { themedStyles } from '../state/ThemeContext';
+import { fonts, spacing } from '../theme';
 
 /**
  * The gate a signed-in account with no confirmed name is routed to — see `AuthState`'s
- * `nameRequired` case and `screensFor` in `RootNavigator`. Same shape as `SignInScreen`: a local
- * `PrimaryButton`, theme tokens only, takes `_props` unused because `RootNavigator` swaps this screen
- * away on its own once `setName` succeeds.
+ * `nameRequired` case and `screensFor` in `RootNavigator`. Same shape as `SignInScreen` — the same
+ * `AuthFrame` card, the land and the rising sun behind it — and takes `_props` unused because
+ * `RootNavigator` swaps this screen away on its own once `setName` succeeds.
  */
 export function SetNameScreen(_props: SetNameScreenProps) {
   const styles = useStyles();
-  const { colors, scheme } = useTheme();
   const { state, setName, retryName, signOut } = useSession();
   const session = state.status === 'nameRequired' ? state.session : null;
 
@@ -57,33 +59,33 @@ export function SetNameScreen(_props: SetNameScreenProps) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Pick a name</Text>
-        <Text style={styles.hint}>Other people in your lists will see this. It has to be unique.</Text>
+    <AuthFrame>
+      <Text style={styles.title}>Pick a name</Text>
+      <Text style={styles.hint}>Other people in your lists will see this. It has to be unique.</Text>
 
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setNameDraft}
-          placeholder="Your name"
-          placeholderTextColor={colors.textMuted}
-          keyboardAppearance={scheme}
-          selectionColor={colors.primary}
-          accessibilityLabel="Your name"
-          autoCapitalize="words"
-          autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={() => void submit()}
-        />
+      {error ? <ErrorBanner message={error} style={styles.error} /> : null}
 
-        <PrimaryButton label="Continue" enabled={canSubmit} onPress={() => void submit()} />
+      <TextField
+        style={styles.field}
+        value={name}
+        onChangeText={setNameDraft}
+        placeholder="Your name"
+        accessibilityLabel="Your name"
+        autoCapitalize="words"
+        autoCorrect={false}
+        returnKeyType="done"
+        onSubmitEditing={() => void submit()}
+      />
 
-        {error ? <ErrorBanner message={error} /> : null}
-      </View>
-    </KeyboardAvoidingView>
+      <PillButton
+        label="Continue"
+        variant="filled"
+        size="lg"
+        disabled={!canSubmit}
+        onPress={() => void submit()}
+        style={styles.action}
+      />
+    </AuthFrame>
   );
 }
 
@@ -94,89 +96,29 @@ function prefillFrom(session: { user: { user_metadata?: Record<string, unknown> 
   return typeof fullName === 'string' ? fullName : '';
 }
 
-function PrimaryButton({
-  label,
-  enabled,
-  onPress,
-}: {
-  label: string;
-  enabled: boolean;
-  onPress: () => void;
-}) {
-  const styles = useStyles();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        !enabled && styles.buttonDisabled,
-        pressed && enabled && styles.buttonPressed,
-      ]}>
-      <Text style={styles.buttonText}>{label}</Text>
-    </Pressable>
-  );
-}
-
+// The same card as `SignInScreen`'s, measured off the same mockups.
 const useStyles = themedStyles((colors) => ({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: colors.skyTop,
-    padding: spacing.lg,
-  },
-  card: {
-    gap: spacing.md,
-    padding: spacing.xl,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.surfaceOutline,
-  },
   title: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 24,
+    fontFamily: fonts.serif,
+    fontSize: 30,
+    lineHeight: 38,
     color: colors.text,
   },
   hint: {
+    marginTop: 8,
     fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+    fontSize: 15.5,
+    lineHeight: 22,
+    color: colors.textSecondary,
   },
-  input: {
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    // Set, not left to the default: iOS reuses native text inputs, and one that was the code
-    // field keeps its letter spacing unless told otherwise. See `codeInput` in `SignInScreen`.
-    letterSpacing: 0,
+  error: {
+    marginHorizontal: 0,
+    marginTop: spacing.lg,
   },
-  button: {
-    height: 44,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  field: {
+    marginTop: 20,
   },
-  buttonDisabled: {
-    backgroundColor: colors.primaryDisabled,
-  },
-  buttonPressed: {
-    opacity: 0.8,
-  },
-  buttonText: {
-    color: colors.onPrimary,
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 16,
+  action: {
+    marginTop: 14,
   },
 }));

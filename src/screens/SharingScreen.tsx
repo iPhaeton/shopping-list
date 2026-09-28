@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
+import { Avatar } from '../components/Avatar';
+import { Backdrop } from '../components/Backdrop';
+import { Card } from '../components/Card';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { HorizonFooter } from '../components/HorizonFooter';
+import { IconButton } from '../components/IconButton';
+import { TrashIcon } from '../components/icons';
+import { PillButton } from '../components/PillButton';
 import { RolePicker } from '../components/RolePicker';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { ScreenSky } from '../components/Sky';
+import { useKeyboardReveal } from '../components/useKeyboardReveal';
 import { UserAutocomplete } from '../components/UserAutocomplete';
 import type { Result } from '../lib/listsApi';
 import {
@@ -58,6 +68,16 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const [inviteRole, setInviteRole] = useState<Role>('writer');
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [confirmingRemoveUserId, setConfirmingRemoveUserId] = useState<string | null>(null);
+
+  // With the keyboard up, the invite field, its suggestions and the Share row — all of it, not just
+  // the field — sit above the keyboard. Its bottom edge, in the scroll content's coordinates, is the
+  // body's offset plus the invite block's own.
+  const reveal = useKeyboardReveal();
+  const bodyY = useRef(0);
+  const inviteBottom = useRef<number | null>(null);
+  const revealInvite = () => {
+    if (inviteBottom.current !== null) reveal.setTarget(bodyY.current + inviteBottom.current);
+  };
 
   const load = useCallback(async () => {
     const { members: rows, error: failure } = await fetchMembers(listId);
@@ -131,311 +151,341 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
 
   if (!list) {
     return (
-      <View style={styles.container}>
-        <EmptyState title="List not found" hint="Go back and pick a list from the list screen." />
-      </View>
+      <Backdrop art={<ScreenSky />}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <ScreenHeader title="Sharing" onBack={() => navigation.goBack()} />
+          <EmptyState title="List not found" hint="Go back and pick a list from the list screen." />
+          <View style={styles.spacer} />
+          <HorizonFooter />
+        </ScrollView>
+      </Backdrop>
     );
   }
 
   const canInvite = selected !== null && !pending;
 
+  /** Cancel and the one destructive step, under the sentence saying what that step costs. */
+  const confirm = (
+    sentence: string,
+    label: string,
+    visibleLabel: string,
+    onConfirm: () => void,
+    onCancel: () => void
+  ) => (
+    <View style={styles.confirm}>
+      <Text style={styles.confirmText}>{sentence}</Text>
+      <View style={styles.confirmActions}>
+        <PillButton label="Cancel" size="md" disabled={pending} onPress={onCancel} style={styles.half} />
+        {/* The label stays fixed while the visible text toggles during the request, same
+            convention as AccountScreen's "Sign out of all devices" confirm. */}
+        <PillButton
+          label={label}
+          visibleLabel={visibleLabel}
+          variant="danger"
+          size="md"
+          disabled={pending}
+          onPress={onConfirm}
+          style={styles.half}
+        />
+      </View>
+    </View>
+  );
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {error ? <ErrorBanner message={error} /> : null}
+    <Backdrop art={<ScreenSky />}>
+      <ScrollView
+        ref={reveal.ref}
+        onLayout={reveal.onLayout}
+        onScroll={reveal.onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets>
+        <ScreenHeader title="Sharing" onBack={() => navigation.goBack()} />
 
-      <Text style={styles.heading}>People with access</Text>
+        {error ? <ErrorBanner message={error} /> : null}
 
-      {members === null ? (
-        <ActivityIndicator accessibilityLabel="Loading who has access" color={colors.primary} />
-      ) : (
-        members.map((member) => {
-          const you = member.userId === userId;
-          const locked = pending || (you && soleOwner);
+        <View
+          style={styles.body}
+          onLayout={({ nativeEvent: { layout } }) => {
+            bodyY.current = layout.y;
+            revealInvite();
+          }}>
+          <Text accessibilityRole="header" style={styles.heading}>
+            People with access
+          </Text>
 
-          return (
-            <View key={member.userId} style={styles.member}>
-              <Text style={styles.email}>
-                {you ? `${displayNameFor(member)} (you)` : displayNameFor(member)}
-              </Text>
+          {members === null ? (
+            <ActivityIndicator
+              accessibilityLabel="Loading who has access"
+              color={colors.primary}
+              style={styles.loading}
+            />
+          ) : (
+            <View style={styles.members}>
+              {members.map((member) => {
+                const you = member.userId === userId;
+                const locked = pending || (you && soleOwner);
+                const name = displayNameFor(member);
+                const confirmingRemove = confirmingRemoveUserId === member.userId;
 
-              {manageable ? (
-                confirmingRemoveUserId === member.userId ? (
-                  <View style={styles.confirm}>
-                    <Text style={styles.confirmText}>
-                      {you
-                        ? "You'll lose access to this list until someone shares it with you again."
-                        : `${displayNameFor(member)} will lose access to this list until someone shares it with them again.`}
-                    </Text>
-                    <View style={styles.confirmActions}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel"
-                        accessibilityState={{ disabled: pending }}
-                        disabled={pending}
-                        onPress={() => setConfirmingRemoveUserId(null)}
-                        style={styles.cancelButton}>
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Confirm remove ${displayNameFor(member)}`}
-                        accessibilityState={{ disabled: pending }}
-                        disabled={pending}
-                        onPress={() => {
-                          // Cleared either way, not just on refusal: on success this member's row
-                          // is simply gone next render, but the id would otherwise sit in state
-                          // and wrongly re-open the confirm view if the same account is re-invited
-                          // later and lands back on the same userId.
-                          void run(() => removeMember(listId, member.userId)).then(() => {
-                            setConfirmingRemoveUserId(null);
-                          });
-                        }}
-                        style={styles.dangerButton}>
-                        <Text style={styles.dangerButtonText}>
-                          {pending ? 'Removing…' : 'Remove'}
-                        </Text>
-                      </Pressable>
+                return (
+                  <Card key={member.userId} style={styles.member}>
+                    <View style={styles.memberRow}>
+                      <Avatar id={member.userId} name={name} />
+                      <Text style={styles.name} numberOfLines={1}>
+                        {you ? `${name} (you)` : name}
+                      </Text>
+
+                      {manageable ? (
+                        confirmingRemove ? null : (
+                          <IconButton
+                            label={`Remove ${displayNameFor(member)}`}
+                            fill={colors.controlFill}
+                            disabled={locked}
+                            onPress={() => setConfirmingRemoveUserId(member.userId)}>
+                            <TrashIcon color={colors.text} />
+                          </IconButton>
+                        )
+                      ) : you ? (
+                        confirmingLeave ? null : (
+                          <PillButton
+                            label="Leave list"
+                            tone="danger"
+                            disabled={pending}
+                            onPress={() => setConfirmingLeave(true)}
+                          />
+                        )
+                      ) : (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{member.role}</Text>
+                        </View>
+                      )}
                     </View>
-                  </View>
-                ) : (
-                  <View style={styles.controls}>
-                    <RolePicker
-                      value={member.role}
-                      labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
-                      disabled={locked}
-                      onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
-                    />
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${displayNameFor(member)}`}
-                      accessibilityState={{ disabled: locked }}
-                      disabled={locked}
-                      onPress={() => setConfirmingRemoveUserId(member.userId)}
-                      style={styles.remove}>
-                      <Text style={[styles.removeText, locked && styles.mutedText]}>Remove</Text>
-                    </Pressable>
-                  </View>
-                )
-              ) : you ? (
-                !confirmingLeave ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Leave list"
-                    accessibilityState={{ disabled: pending }}
-                    disabled={pending}
-                    onPress={() => setConfirmingLeave(true)}
-                    style={styles.remove}>
-                    <Text style={[styles.removeText, pending && styles.mutedText]}>Leave list</Text>
-                  </Pressable>
-                ) : (
-                  <View style={styles.confirm}>
-                    <Text style={styles.confirmText}>
-                      You'll lose access to this list until someone shares it with you again.
-                    </Text>
-                    <View style={styles.confirmActions}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel"
-                        accessibilityState={{ disabled: pending }}
-                        disabled={pending}
-                        onPress={() => setConfirmingLeave(false)}
-                        style={styles.cancelButton}>
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </Pressable>
-                      {/* The label stays fixed while the visible text toggles during the request,
-                          same convention as AccountScreen's "Sign out of all devices" confirm. */}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Confirm leave list"
-                        accessibilityState={{ disabled: pending }}
-                        disabled={pending}
-                        onPress={() => {
+
+                    {manageable ? (
+                      confirmingRemove ? (
+                        confirm(
+                          you
+                            ? "You'll lose access to this list until someone shares it with you again."
+                            : `${name} will lose access to this list until someone shares it with them again.`,
+                          `Confirm remove ${displayNameFor(member)}`,
+                          pending ? 'Removing…' : 'Remove',
+                          () => {
+                            // Cleared either way, not just on refusal: on success this member's row
+                            // is simply gone next render, but the id would otherwise sit in state
+                            // and wrongly re-open the confirm view if the same account is re-invited
+                            // later and lands back on the same userId.
+                            void run(() => removeMember(listId, member.userId)).then(() => {
+                              setConfirmingRemoveUserId(null);
+                            });
+                          },
+                          () => setConfirmingRemoveUserId(null)
+                        )
+                      ) : (
+                        <View style={styles.memberPicker}>
+                          <RolePicker
+                            value={member.role}
+                            labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
+                            disabled={locked}
+                            size="compact"
+                            onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
+                          />
+                        </View>
+                      )
+                    ) : you && confirmingLeave ? (
+                      confirm(
+                        "You'll lose access to this list until someone shares it with you again.",
+                        'Confirm leave list',
+                        pending ? 'Leaving…' : 'Leave list',
+                        () => {
                           void run(() => leaveList(listId)).then((ok) => {
                             if (!ok) setConfirmingLeave(false);
                           });
-                        }}
-                        style={styles.dangerButton}>
-                        <Text style={styles.dangerButtonText}>
-                          {pending ? 'Leaving…' : 'Leave list'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )
-              ) : (
-                <Text style={styles.role}>{member.role}</Text>
-              )}
+                        },
+                        () => setConfirmingLeave(false)
+                      )
+                    ) : null}
+                  </Card>
+                );
+              })}
             </View>
-          );
-        })
-      )}
+          )}
 
-      {manageable && soleOwner ? <Text style={styles.hint}>{LAST_OWNER}</Text> : null}
+          {manageable && soleOwner ? <Text style={styles.hint}>{LAST_OWNER}</Text> : null}
 
-      {manageable ? (
-        <>
-          <Text style={styles.heading}>Invite someone</Text>
-          <UserAutocomplete
-            value={query}
-            onChangeText={(text) => {
-              setQuery(text);
-              setSelected(null);
-            }}
-            onSelect={(user) => {
-              setSelected(user);
-              setQuery(user.name);
-            }}
-            selected={selected}
-            disabled={pending}
-          />
-          {/* Re-sharing someone who is already a member is an upsert in `share_list`, so this form
-              doubles as a promote and there is nothing extra to build for it. */}
-          <View style={styles.invite}>
-            <RolePicker
-              value={inviteRole}
-              labelFor={(role) => `Share as ${role}`}
-              disabled={pending}
-              onChange={setInviteRole}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Share"
-              accessibilityState={{ disabled: !canInvite }}
-              disabled={!canInvite}
-              onPress={() => {
-                if (!selected) return;
-                void run(async () => {
-                  const result = await shareList(listId, selected.userId, inviteRole);
-                  if (!result.error) {
-                    setQuery('');
+          {manageable ? (
+            <View
+              onLayout={({ nativeEvent: { layout } }) => {
+                inviteBottom.current = layout.y + layout.height;
+                revealInvite();
+              }}>
+              <Text accessibilityRole="header" style={[styles.heading, styles.inviteHeading]}>
+                Invite someone
+              </Text>
+              <View style={styles.inviteField}>
+                <UserAutocomplete
+                  value={query}
+                  onChangeText={(text) => {
+                    setQuery(text);
                     setSelected(null);
-                  }
-                  return result;
-                });
-              }}
-              style={[styles.button, !canInvite && styles.buttonDisabled]}>
-              <Text style={styles.buttonText}>Share</Text>
-            </Pressable>
-          </View>
-        </>
-      ) : (
-        <Text style={styles.hint}>Only an owner can change who has access.</Text>
-      )}
-    </ScrollView>
+                  }}
+                  onSelect={(user) => {
+                    setSelected(user);
+                    setQuery(user.name);
+                  }}
+                  selected={selected}
+                  disabled={pending}
+                />
+              </View>
+              {/* Only once a name is being typed, as the mockups draw it: an empty field has nobody
+                  to give a role to. Re-sharing someone who is already a member is an upsert in
+                  `share_list`, so this form doubles as a promote and there is nothing extra to
+                  build for it. */}
+              {query.trim().length > 0 ? (
+                <View style={styles.invite}>
+                  <View style={styles.invitePicker}>
+                    <RolePicker
+                      value={inviteRole}
+                      labelFor={(role) => `Share as ${role}`}
+                      disabled={pending}
+                      track="surface"
+                      onChange={setInviteRole}
+                    />
+                  </View>
+                  <PillButton
+                    label="Share"
+                    variant="filled"
+                    size="md"
+                    disabled={!canInvite}
+                    onPress={() => {
+                      if (!selected) return;
+                      void run(async () => {
+                        const result = await shareList(listId, selected.userId, inviteRole);
+                        if (!result.error) {
+                          setQuery('');
+                          setSelected(null);
+                        }
+                        return result;
+                      });
+                    }}
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <Text style={styles.hint}>Only an owner can change who has access.</Text>
+          )}
+        </View>
+
+        <View style={styles.spacer} />
+        <HorizonFooter />
+      </ScrollView>
+    </Backdrop>
   );
 }
 
+// Measured off the three Sharing mockups: cards at x 20–370, 10pt apart, their content 15pt in; a
+// 36pt avatar, the name 13pt after it, the remove button at the card's right edge; the role picker
+// 10pt below.
 const useStyles = themedStyles((colors) => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.skyTop,
-  },
   content: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    flexGrow: 1,
+  },
+  body: {
+    paddingHorizontal: 20,
   },
   heading: {
-    fontFamily: fonts.sansSemiBold,
+    marginTop: 11,
+    fontFamily: fonts.serif,
+    fontSize: 24,
+    lineHeight: 32,
+    color: colors.text,
+  },
+  inviteHeading: {
+    marginTop: 16,
+  },
+  inviteField: {
+    marginTop: 8,
+  },
+  loading: {
+    marginTop: spacing.xl,
+  },
+  members: {
+    marginTop: 10,
+    gap: 10,
+  },
+  member: {
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+  },
+  name: {
+    flex: 1,
+    fontFamily: fonts.sans,
     fontSize: 17,
     color: colors.text,
   },
-  member: {
-    gap: spacing.sm,
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
+  badge: {
+    height: 28,
+    paddingHorizontal: 13,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.surfaceOutline,
+    borderColor: colors.outline,
+    justifyContent: 'center',
   },
-  email: {
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    color: colors.text,
-  },
-  role: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  remove: {
-    paddingVertical: spacing.xs,
-  },
-  removeText: {
+  // The node still reads `owner`; only the eye sees `Owner`.
+  badgeText: {
     fontFamily: fonts.sans,
     fontSize: 15,
-    color: colors.error,
+    color: colors.text,
+    textTransform: 'capitalize',
   },
-  mutedText: {
-    color: colors.textMuted,
+  memberPicker: {
+    marginTop: 10,
   },
   hint: {
+    marginTop: 10,
+    paddingHorizontal: spacing.xs,
     fontFamily: fonts.sans,
-    fontSize: 15,
-    color: colors.textMuted,
+    fontSize: 15.5,
+    lineHeight: 22,
+    color: colors.textSecondary,
   },
   confirm: {
-    gap: spacing.sm,
+    marginTop: 10,
   },
   confirmText: {
     fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.textMuted,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.textSecondary,
   },
   confirmActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 11,
+    marginTop: 10,
   },
-  cancelButton: {
+  half: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.outline,
-  },
-  cancelButtonText: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.text,
-  },
-  dangerButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    borderRadius: radius.sm,
-    backgroundColor: colors.error,
-  },
-  dangerButtonText: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 14,
-    color: colors.onError,
   },
   invite: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: 11,
+    marginTop: 10,
   },
-  button: {
-    height: 44,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  invitePicker: {
+    flex: 1,
   },
-  buttonDisabled: {
-    backgroundColor: colors.primaryDisabled,
-  },
-  buttonText: {
-    color: colors.onPrimary,
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 16,
+  // At least enough that the sun stays below the fold when the page only just fills the screen, as
+  // the long owner mockups draw it — the horizon closes the page, it does not crowd its last field.
+  spacer: {
+    flex: 1,
+    minHeight: 64,
   },
 }));

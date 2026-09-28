@@ -4,8 +4,8 @@ title: The project is on Expo SDK 57 — read the v57 docs; SDK 54 cannot launch
 type: reference
 status: current
 tags: [expo, versions, docs, react-native-screens, hermes]
-sources: [ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, 4d55c18, ai/tasks/20-ux/implementation-log-step-4.md]
-last_verified: 2026-09-27
+sources: [ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, 4d55c18, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md]
+last_verified: 2026-09-29
 verify: grep -q '"expo": "~57' package.json && grep -q 'docs.expo.dev/versions/v57.0.0/' AGENTS.md && grep -q '"@react-native/jest-preset"' package.json && test "$(node -p "require('./package.json').dependencies['react-native-screens']")" = "$(node -p "require('expo/bundledNativeModules.json')['react-native-screens']")"
 related: [ios-scene-support-is-opt-in, native-build-toolchain, expo-sdk-54-pinned, react-native-screens-past-the-sdk-pin, jest-cold-cache-timeouts, auto-theme-follows-the-time-zone]
 indexed: false
@@ -34,8 +34,8 @@ of the scene life cycle ([ios-scene-support-is-opt-in](ios-scene-support-is-opt-
 
 **Things that look wrong and are not:**
 
-- `expo-crypto`, `expo-font`, `expo-dev-client`, … all sit at `~57.0.x`. SDK 55 made every Expo
-  package share the SDK major.
+- `expo-crypto`, `expo-font`, `expo-dev-client`, … all sit at `~57.0.x`, task 20 step 5's
+  `expo-blur` and `expo-splash-screen` included. SDK 55 made every Expo package share the SDK major.
 - **`@react-native/jest-preset` is a required peer of jest-expo 57.** Nothing in the project
   imports it, so it looks unused. jest-expo's `jest-preset.js` loads it and throws without it,
   so removing it breaks every suite.

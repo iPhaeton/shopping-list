@@ -19,3 +19,6 @@
 18. "You no longer have permissions" error stays forever
 19. Sorting
 20. Header should stay
+21. Invitations
+22. Share input always on screen
+23. Filter out already invited users in the share list

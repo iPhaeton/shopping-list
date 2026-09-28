@@ -1,3 +1,4 @@
+import type { StyleProp, ViewStyle } from 'react-native';
 import { Text, View } from 'react-native';
 
 import { themedStyles } from '../state/ThemeContext';
@@ -10,18 +11,20 @@ import { fonts, radius, spacing } from '../theme';
  * By the time this renders, the state behind it has been re-fetched, so what the user sees
  * underneath is what the database holds.
  */
-export function ErrorBanner({ message }: { message: string }) {
+export function ErrorBanner({ message, style }: { message: string; style?: StyleProp<ViewStyle> }) {
   const styles = useStyles();
 
   return (
-    <View accessibilityRole="alert" style={styles.banner}>
+    <View accessibilityRole="alert" style={[styles.banner, style]}>
       <Text style={styles.text}>{message}</Text>
     </View>
   );
 }
 
 // A notice card in the pill language: the sync banner's fill, rounded to `radius.lg` because the
-// message can run to several lines, and the error color carried by the ring and the text alone.
+// message can run to several lines, and the error color carried by the ring and the text alone. The
+// margins suit a banner across a screen; one inside a card (Account's name, the sign-in forms) passes
+// `style` to drop them.
 const useStyles = themedStyles((colors) => ({
   banner: {
     marginHorizontal: 20,

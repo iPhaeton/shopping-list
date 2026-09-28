@@ -1,5 +1,5 @@
-# Screenshots every signed-in screen as the seeded owner (Groceries with a binned item and a member
-# named Sam; "Birthday party" shared read-only). Starts on Lists. Pass THEME (day or night, used in
+# Screenshots every signed-in screen as the seeded owner (Groceries with a binned item, Sam writing
+# and Priya reading; "Birthday party" shared read-only; Jordan, Jorge and Jorja to suggest). Starts on Lists. Pass THEME (day or night, used in
 # file names). Screenshots go to <--test-output-dir>/takeScreenshot/.
 appId: com.shoppingloop.app
 ---
@@ -24,9 +24,32 @@ appId: com.shoppingloop.app
     visible: Sam
     timeout: 10000
 - takeScreenshot: sharing-${THEME}
-# A native iOS back button is labelled with the previous screen's title, and Maestro's `back` is
-# Android-only. List detail draws its own, labelled `Back` on both platforms.
-- tapOn: Groceries
+# The owner's Remove confirm, on the member's card.
+- tapOn: Remove Sam
+- takeScreenshot: sharing-remove-${THEME}
+- tapOn: Cancel
+# The invite field's suggestions, then the field emptied again. A fresh stack's seed answers "Jor"
+# with Jordan, Jorge and Jorja; a stack also holding generated users may answer with theirs.
+- tapOn: Name
+- waitForAnimationToEnd
+- inputText: Jor
+- extendedWaitUntil:
+    visible: "Share with .*"
+    timeout: 15000
+- takeScreenshot: sharing-suggestions-${THEME}
+# The keyboard stays up — `hideKeyboard` on iOS swipes the content — and covers nothing tapped next.
+- eraseText
+# Revealing the invite block above the keyboard scrolled the header off the top; drag it back,
+# above where the keyboard is. `scrollUntilVisible` stops at once: the title's descender still
+# shows under the status bar, which counts as visible.
+- swipe:
+    start: "50%,25%"
+    end: "50%,60%"
+- waitForAnimationToEnd
+# Every screen draws its own `Back`, and Maestro's `back` is Android-only. On Sharing, List detail's
+# `Back` is still in the hierarchy underneath, so tap Sharing's by where it is drawn.
+- tapOn:
+    point: "10%,9%"
 - tapOn: Back
 
 - tapOn: Birthday party, shared with you
@@ -34,8 +57,25 @@ appId: com.shoppingloop.app
     visible: Candles
     timeout: 10000
 - takeScreenshot: list-detail-read-only-${THEME}
+# The same list's roster as a reader sees it, with their own Leave confirm open.
+- tapOn: Share list
+- extendedWaitUntil:
+    visible: Leave list
+    timeout: 10000
+- takeScreenshot: sharing-member-${THEME}
+- tapOn: Leave list
+- takeScreenshot: sharing-leave-${THEME}
+- tapOn: Cancel
+- tapOn:
+    point: "10%,9%"
 - tapOn: Back
 
 - tapOn: Account
 - takeScreenshot: account-${THEME}
-- tapOn: My Lists
+# Editing the name, and the sign-out-everywhere confirm, together as the editing mockup draws them.
+- tapOn: Edit name
+- tapOn: Sign out of all devices
+- takeScreenshot: account-editing-${THEME}
+- tapOn: Cancel editing name
+- tapOn: Cancel
+- tapOn: Back

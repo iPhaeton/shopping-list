@@ -10,7 +10,11 @@
  * mockup.
  */
 export type Palette = {
-  /** The sky, top of the screen → near the horizon. A flat screen background uses `skyTop`. */
+  /**
+   * The sky, top of the screen → near the horizon. A flat screen background uses `skyTop`.
+   * `app.json`'s splash `backgroundColor` (and its `dark` twin) repeats `skyTop` by hand — native
+   * config cannot import this file.
+   */
   skyTop: string;
   skyHorizon: string;
   /** Inputs, cards, rows. */
@@ -18,9 +22,23 @@ export type Palette = {
   surfaceOutline: string;
   /** The sync banner, one step apart from `surface`. */
   bannerSurface: string;
+  /**
+   * A card's own fill, laid over the blurred sky or land behind it (`Card`): `surface`, a quarter
+   * see-through. Sampled from the step-5 mockups, where both themes composite at ~74%.
+   */
+  cardFill: string;
+  /** A text field inside a card — a shade apart from the card around it. */
+  fieldFill: string;
+  fieldOutline: string;
+  /** The track of a segmented control and the circle behind a card's icon button: a faint tint of
+   * the ink over whatever surface holds them. */
+  controlFill: string;
   text: string;
-  /** Placeholders, chevrons, hints. */
+  /** Placeholders, disabled text, and decoration (the birds). Not for body copy: by day it falls
+   * short of AA on every surface. */
   textMuted: string;
+  /** Hints and field labels — the quieter body text. Passes AA on every surface of its theme. */
+  textSecondary: string;
   /** Filled buttons and checked controls. Inverts between themes: dark on light, light on dark. */
   primary: string;
   /** A label or tick on `primary`. */
@@ -63,8 +81,13 @@ export const day: Palette = {
   surface: '#f6f6fa',
   surfaceOutline: '#ffffff',
   bannerSurface: '#f8f8fc',
+  cardFill: 'rgba(246,246,250,0.74)',
+  fieldFill: '#fcfcfd',
+  fieldOutline: '#e2e2e8',
+  controlFill: 'rgba(44,47,78,0.06)',
   text: '#2c2f4e',
   textMuted: '#75778f',
+  textSecondary: '#5d5f7a',
   primary: '#2e3460',
   onPrimary: '#f7f4fb',
   primaryDisabled: '#989fb6',
@@ -88,8 +111,13 @@ export const night: Palette = {
   surface: '#282e48',
   surfaceOutline: '#4a4f64',
   bannerSurface: '#343c68',
+  cardFill: 'rgba(40,46,72,0.74)',
+  fieldFill: '#1e2440',
+  fieldOutline: '#4a4f64',
+  controlFill: 'rgba(255,255,255,0.06)',
   text: '#eef0fa',
   textMuted: '#a9aecb',
+  textSecondary: '#a9aecb',
   primary: '#e6e2fa',
   onPrimary: '#1b2137',
   primaryDisabled: '#666880',
@@ -109,6 +137,17 @@ export const night: Palette = {
 
 export type ThemeName = 'day' | 'night';
 
+/**
+ * Google's own "G", the same in both themes — its branding asks for the four colours as they are.
+ * Not part of `Palette` for that reason.
+ */
+export const google = {
+  blue: '#4285f4',
+  green: '#34a853',
+  yellow: '#fbbc05',
+  red: '#ea4335',
+};
+
 export const palettes: Record<ThemeName, Palette> = { day, night };
 
 /**
@@ -122,7 +161,6 @@ export const fonts = {
   sans: 'NunitoSans_400Regular',
   sansMedium: 'NunitoSans_500Medium',
   sansSemiBold: 'NunitoSans_600SemiBold',
-  sansBold: 'NunitoSans_700Bold',
 };
 
 export const spacing = {
@@ -134,9 +172,7 @@ export const spacing = {
 };
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  /** Notice cards — the rounder cousin of a pill, for copy that wraps to more than one line. */
+  /** Cards and notice cards — the rounder cousin of a pill, for content more than a line tall. */
   lg: 20,
   pill: 999,
 };
