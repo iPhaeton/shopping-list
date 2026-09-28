@@ -36,8 +36,8 @@ const OVERSCROLL_SKY = 1000;
 
 /**
  * How tall the header's sky is on the mockup, top of the screen to the horizon strip. The strip
- * over the status bar draws its slice of a sky this tall, so with the list at the top it lines up
- * with the header's own sky underneath it.
+ * over the status bar draws its slice of a sky this tall, so it lines up with the header's own sky
+ * underneath it.
  */
 const DRAWN_SKY_H = 224;
 
@@ -146,8 +146,8 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     [editable, toggle, rename, setDeleted]
   );
 
-  // A refused write or a blocked one: pinned above the list rather than scrolled with it, since the
-  // blocked banner holds up every write behind it until it is answered.
+  // A refused write or a blocked one: pinned above the list, header included, rather than inside
+  // the header, since the blocked banner holds up every write behind it until it is answered.
   const pinned = Boolean(error || blocked);
 
   // Where the Add bar sits on the mockup (y 172), whichever of the three the list calls for. Only
@@ -197,6 +197,9 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
 
   // Built here as a value, never as an inline component type: a component defined in this render
   // would be a new type on every render, remounting the Add bar and throwing away its draft.
+  //
+  // Sticky, so the Add bar is always in reach, and opaque top to bottom — `SkyFill` behind the
+  // padded block, `Hillside`'s own sky under the hill — because the rows scroll up behind it.
   const header = (
     <View>
       <View
@@ -330,6 +333,8 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           ListHeaderComponent={header}
+          // With a `ListHeaderComponent`, index 0 is the header itself.
+          stickyHeaderIndices={[0]}
           ListEmptyComponent={empty}
           ListFooterComponent={
             loadingMore ? (
@@ -347,7 +352,12 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         />
       </KeyboardAvoidingView>
 
-      {/* Keeps the status bar on sky once rows have scrolled up under it. */}
+      {/*
+        Keeps the status bar on clean sky. Nothing scrolls under it now that the header is pinned,
+        but iOS 26 draws a light blur there over this screen's list, pinned or not — never over
+        Lists' — and the header cannot hide it from inside that list. react-native-screens'
+        `scrollEdgeEffects` does not reach it, `hidden` or `hard`. Drawn above the list, this does.
+      */}
       <View
         style={[styles.statusBarSky, { height: insets.top }]}
         pointerEvents="none"

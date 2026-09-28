@@ -4,8 +4,8 @@ title: The Supabase environment is chosen at runtime by platform, not compiled i
 type: decision
 status: current
 tags: [supabase, environment, expo, config, architecture]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
-last_verified: 2026-09-18
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
+last_verified: 2026-09-28
 verify: grep -q "Platform.OS === 'web'" src/lib/supabaseTarget.ts && grep -q "Device.isDevice ? 'cloud' : 'local'" src/lib/supabaseTarget.ts && test "$(grep -c 'process\.env\.EXPO_PUBLIC_SUPABASE_\(URL\|ANON_KEY\)_\(LOCAL\|CLOUD\)' src/lib/supabaseTarget.ts)" = 4 && test "$(grep -rl 'process\.env\.EXPO_PUBLIC_SUPABASE' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.')" = src/lib/supabaseTarget.ts && grep -q "from './supabaseTarget'" src/lib/supabase.ts && grep -q "10.0.2.2" src/lib/supabaseTarget.ts
 related: [supabase-local-stack, supabase-client-module-boundary, native-build-toolchain, supabase-config-push-sends-the-whole-root, expo-crypto-undefined-under-jest]
 ---
@@ -20,13 +20,18 @@ start, which Supabase the client talks to:
 | Android emulator | local | same target, a patched address — see below |
 | physical device | cloud | a phone cannot reach this machine's `127.0.0.1:54321` at all |
 
-`EXPO_PUBLIC_SUPABASE_TARGET=local|cloud` overrides all of it, which is how you put two clients on
-one database — **set it in `.env` or a gitignored `.env.local`, not in the shell**, for the reason at
-the bottom of this entry. Addresses and keys are in
+`EXPO_PUBLIC_SUPABASE_TARGET=local|cloud` overrides all of it, the browser and the simulator
+included. That is how you put two clients on one database, and it is a trap: **this machine's `.env`
+held `EXPO_PUBLIC_SUPABASE_TARGET=cloud` on 2026-09-28**, which sent the simulator to production.
+Maestro's `sign-in.yaml` asked cloud for a code to `maya@example.com` and got "Error sending magic
+link email", which says nothing about the target. Before a run that reads Mailpit, check `.env` and
+`.env.local` for the key. To force local without editing the user's `.env`, put it in the shell:
+`EXPO_PUBLIC_SUPABASE_TARGET=local npx expo start --dev-client --clear`. A shell value beats every
+`.env*` file today. That order has flipped once. Its mechanics, and the addresses and keys, are in
 [supabase-local-stack](supabase-local-stack.md).
 
-**Decision: runtime, not build time.** One `expo start` serves the browser and Expo Go from the same
-server and the same env — press `w` in an `npm start` session and both runtimes are live at once.
+**Decision: runtime, not build time.** One `expo start` serves the browser and the dev client from the
+same server and the same env — press `w` in an `npm start` session and both runtimes are live at once.
 Anything baked in at build time therefore has to be *wrong* for one of them. `Platform.OS` and
 `Device.isDevice` are read where the app actually runs and cannot mismatch that way.
 
@@ -42,8 +47,6 @@ form is closest to that older sketch, arrived at for a new reason.)
 **`expo-device` is a dependency bought to keep the simulator on local.** `Platform.OS` is `'ios'`
 for a simulator and a phone alike, so the cheap one-liner (`web ? local : cloud`) would have pointed
 `npm run ios` at the production database. `Device.isDevice` is the only thing that separates them.
-It is an Expo SDK module and ships inside Expo Go, so this still costs no native dev build —
-[native-build-toolchain](native-build-toolchain.md) is unaffected.
 
 Two properties of that flag are load-bearing and easy to break while tidying:
 
@@ -76,28 +79,10 @@ there would drag `@supabase/supabase-js` into a jest run, which
 [supabase-client-module-boundary](supabase-client-module-boundary.md) forbids. `supabase.ts` imports
 `targets` and `pickTarget` from it and stays the thin client seam it was.
 
-**Proving which target a native runtime picked takes making the wrong answer fail.** Booting Expo Go
-and seeing the app work proves nothing when both pairs are filled in — either branch would render.
-
-**The recipe this entry used to give for that does not work, and the correction is step 8's.** It
-said "a shell variable beats `.env`, so blank the pair the app should not be using" and printed
-`EXPO_PUBLIC_SUPABASE_URL_CLOUD= npx expo start`. Two separate mechanisms defeat it, both read out of
-the installed Expo packages and confirmed against a served bundle on 2026-09-09
-([supabase-local-stack](supabase-local-stack.md) has the details and pins the merge order with a
-check):
-
-1. **In the dev server the `.env` file wins over the shell.** The virtual `expo/virtual/env` module
-   spreads the `.env*` files *over* `process.env`. Only a production export inlines from
-   `process.env`, and this project never runs one.
-2. **A blank value in a `.env*` file is dropped, not set.** Expo's transform keeps a parsed key only
-   when its value is truthy, so `EXPO_PUBLIC_SUPABASE_URL_CLOUD=` in a file removes nothing — the
-   lower-precedence file's value is still there.
-
-So there is no "blank it and watch it throw" available. What works: put a **different, non-empty**
-value (or `EXPO_PUBLIC_SUPABASE_TARGET`) in a gitignored `.env.local`, which does beat `.env`,
-restart with `--clear`; and read the answer out of the served bundle rather than out of the shell —
-`curl -s 'http://localhost:8081/index.bundle?platform=ios' | grep -o 'EXPO_PUBLIC_SUPABASE_TARGET[^,}]*'`
-shows both the value the polyfill carries and the value the `.env` module supplies. The client still
-throws on a *missing* pair, naming the target it chose, which remains the loudest signal when a pair
-genuinely is not there. The simulator's branch was confirmed under the old reading; a physical phone
-has still never been run.
+**Proving which target a runtime picked takes reading the served bundle.** Seeing the app work
+proves nothing when both pairs are filled in, since either branch would render, and a value in the
+shell or a `.env*` file proves nothing until the bundle carries it. The `curl` recipe is in
+[supabase-local-stack](supabase-local-stack.md). Do not count on blanking a pair to force a failure:
+when step 8 tried it, a blank `.env*` value was dropped rather than set, and that has not been
+re-measured since. The client still throws on a *missing* pair, naming the target it chose. The
+simulator's and the browser's branches are confirmed; a physical phone has still never been run.

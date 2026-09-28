@@ -71,8 +71,18 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
     [openList, setListDeleted]
   );
 
+  // Sticky, so the Create bar is always in reach — and so it carries its own sky: the rows scroll up
+  // behind it, and the screen's `Sky` layer below would let them show through, above the hill's
+  // curve most of all. The same drawing from the same top, so at rest nothing changes.
   const header = (
     <View>
+      <View
+        style={styles.headerSky}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants">
+        <Sky height={SKY_HEIGHT} />
+      </View>
       <View style={[styles.titleRow, { paddingTop: insets.top + spacing.lg }]}>
         <Text accessibilityRole="header" style={styles.title}>
           My Lists
@@ -133,6 +143,8 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
         keyboardShouldPersistTaps="handled"
         renderItem={renderItem}
         ListHeaderComponent={header}
+        // With a `ListHeaderComponent`, index 0 is the header itself.
+        stickyHeaderIndices={[0]}
         ListEmptyComponent={
           // `ListFooterComponent` does not render alongside `ListEmptyComponent` — confirmed by
           // inspection, not assumed — so the empty state has to guarantee its own minimum height
@@ -155,14 +167,6 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
         // rows there are, so it never peeks through underneath.
         ListFooterComponent={loading || visible.length === 0 ? null : <View style={[styles.footer, { backgroundColor: groundColor }]} />}
       />
-
-      <View
-        style={[styles.statusBarSky, { height: insets.top }]}
-        pointerEvents="none"
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants">
-        <Sky height={insets.top} />
-      </View>
     </View>
   );
 }
@@ -180,11 +184,13 @@ const useStyles = themedStyles((colors) => ({
     left: 0,
     right: 0,
   },
-  statusBarSky: {
+  headerSky: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
+    overflow: 'hidden',
   },
   titleRow: {
     flexDirection: 'row',

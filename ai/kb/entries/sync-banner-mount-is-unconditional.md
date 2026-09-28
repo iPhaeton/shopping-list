@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [ui, state, outbox]
 sources: [ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, src/components/SyncBanner.tsx, src/screens/ListsScreen.tsx, src/screens/ListDetailScreen.tsx]
-last_verified: 2026-09-27
+last_verified: 2026-09-28
 verify: grep -q 'SHOW_AFTER_MS = 400' src/components/SyncBanner.tsx && grep -q '<SyncBanner pending={pending} />' src/screens/ListsScreen.tsx && grep -q '<SyncBanner pending={pending} />' src/screens/ListDetailScreen.tsx && ! grep -qE 'pending *> *0 *\? *<SyncBanner' src/screens/ListsScreen.tsx src/screens/ListDetailScreen.tsx
 related: [writes-retry-from-an-outbox, queries-go-through-a11y-labels]
 indexed: false

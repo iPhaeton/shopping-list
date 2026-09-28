@@ -10,7 +10,7 @@ Run `npm run kb:audit` to check every entry still holds.
 - [Maestro drives the native app](ai/kb/entries/maestro-drives-the-native-ui.md) — `~/.maestro/bin/maestro` with `JAVA_HOME` set, not on PATH; a simulator needs its keyboards reset before `inputText` works; the SDK 57 dev client's floating button covers the top-right pills until turned off; iOS has no `back` and no edge swipe; flows live in `.maestro/` (environment)
 - [iOS 27 needs the scene life cycle](ai/kb/entries/ios-scene-support-is-opt-in.md) — `expo-build-properties`' `ios.enableSceneSupport` in `app.json` is what keeps the app from being killed at launch; SDK 57 leaves it opt-in, SDK 58 makes it redundant, so remove it then (decision)
 - [Two Supabase environments](ai/kb/entries/supabase-local-stack.md) — a local Docker stack whose sign-in code lands in Mailpit, plus a linked cloud project; flows are verified in the browser (environment)
-- [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud; no build-time split works (decision)
+- [The target is picked at runtime](ai/kb/entries/supabase-target-picked-at-runtime.md) — browser and simulator get local, a physical device gets cloud, unless `EXPO_PUBLIC_SUPABASE_TARGET` overrides it — check `.env` before a Mailpit run; no build-time split works (decision)
 
 **Scope**
 

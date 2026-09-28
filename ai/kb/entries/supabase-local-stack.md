@@ -4,9 +4,9 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md]
-last_verified: 2026-09-25
-verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && test -n "$(grep -rl "'.env', '.env.development', '.env.local', '.env.development.local'" node_modules/expo node_modules/@expo 2>/dev/null | head -1)"
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md]
+last_verified: 2026-09-28
+verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && grep -q 'is already defined and IS NOT overwritten' node_modules/@expo/env/build/index.js && grep -qF "mode !== 'test' && \`.env.local\`, \`.env.\${mode}\`, \`.env\`" node_modules/@expo/env/build/index.js
 related: [cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
 
@@ -15,7 +15,7 @@ related: [cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-dri
 | | where | what reaches it |
 |---|---|---|
 | **local** | Docker on this machine, `npx supabase start` | the browser (`npm run web`), the iOS simulator, and the Android emulator (`npm run ios`/`npm run android`) |
-| **cloud** | project ref `gvosanjceygakbubjfkv`, eu-west-1 | a physical device in Expo Go (`npm start`) |
+| **cloud** | project ref `gvosanjceygakbubjfkv`, eu-west-1 | a physical device on the dev build (`npm start`) — Expo Go cannot run the app |
 
 The branch is made at runtime, not at build — [supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md) has the rule and the `EXPO_PUBLIC_SUPABASE_TARGET` override that points either runtime at either environment.
 
@@ -30,21 +30,19 @@ supabase` — a globally installed one may be a different version.
 
 **Why local is still the verification path:** the six-digit sign-in code is machine-readable in
 Mailpit, so the whole OTP flow can be driven end to end — by Playwright on web, by Maestro on a
-simulator. On cloud the code lands in a
-real inbox and a human has to relay it. Nothing local is ever sent to a real address; **cloud mail is
-real mail, sent through Resend from a verified domain to any address** —
-[cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md) has the block, the
-From constraint and what is still unproven about delivery.
+simulator. On cloud the code lands in a real inbox and a human has to relay it. Nothing local is
+ever sent to a real address; **cloud mail is real mail, sent through Resend from a verified domain
+to any address** — [cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)
+has the block, the From constraint and what is still unproven about delivery.
 
 **The cloud schema is kept current with `npx supabase db push`, lags whenever a step adds a
 migration, and reads back from the CLI.** `npx supabase migration list --linked` and `npx supabase
 db dump --linked [-s <schema>]` need only the stored login (they open a database connection, and
 `db dump` reports objects the role does not own, so a `realtime.messages` policy shows in
 `-s realtime`). Ask them rather than assuming — remote state is a dated observation, not an
-invariant, so `verify:` deliberately asserts none of it (last seen 2026-09-10: step 9's
-`20260910000000_deletion.sql` and `20260910000001_purge_schedule.sql` were local only). The schedule
-is its own file because `create extension pg_cron` is confirmed only on this Docker stack and may be
-refused on cloud ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)); **an unapplied migration
+invariant, so `verify:` deliberately asserts none of it. Step 9's purge schedule is its own migration
+because `create extension pg_cron` is confirmed only on this Docker stack and may be refused on
+cloud ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)); **an unapplied migration
 wedges every later `db push`** — the CLI retries from the earliest unapplied file — and `npx supabase
 migration repair --status applied <timestamp>` is the way out. Two earlier worries proved groundless:
 the unique index on `lower(email)` did not collide on cloud, and a policy on `realtime.messages`
@@ -66,20 +64,22 @@ but `sb_secret_…` must never enter `src/` or `.env.example`.
 
 Three things bite here:
 
-- Metro substitutes `process.env.EXPO_PUBLIC_*` by **literal text match**. `process.env[name]` with
-  a computed key is never replaced and arrives as `undefined`, so every variable is spelled out in
-  full. To prove what a bundle really received, fetch it and grep —
-  `curl -s 'http://localhost:8081/index.bundle?platform=ios' | grep -c EXPO_PUBLIC_SUPABASE_URL_CLOUD`
-  (`platform=web&dev=true` for the browser bundle) — rather than trusting the shell.
+- Metro substitutes `process.env.EXPO_PUBLIC_*` by **literal text match**, so a computed
+  `process.env[name]` arrives `undefined` and every variable is spelled out in full. To prove what a
+  bundle received, fetch it and grep rather than trusting the shell —
+  `curl -s 'http://localhost:8081/index.bundle?platform=ios&dev=true' | grep -o '"EXPO_PUBLIC_SUPABASE_TARGET": { enumerable: true, value: "[a-z]*"'`
+  (`platform=web` for the browser).
 - The dev server must be **restarted** after editing `.env` — sometimes with `--clear` — because the
   values are inlined at build time.
-- **In the dev server a `.env` *file* beats the shell** (measured 2026-09-09 from the served bundle;
-  this entry once said the opposite). `@expo/env` will not overwrite a key already in `process.env`,
-  then the dev-only `expo/virtual/env` computes `{ ...process.env, ...['.env', '.env.development',
-  '.env.local', '.env.development.local'] }` — the file wins, later files over earlier (only a
-  production export, which this project never runs, inlines `process.env` directly). So a shell
-  variable named in no `.env` file does reach the bundle, and the way to override a key that *is* in
-  `.env` is a gitignored **`.env.local`** plus `--clear`. The `verify:` pins that merge order.
+- **Which value wins is measured, not read off the code, and it has flipped once.** Today (SDK 57,
+  served ios and web bundles, 2026-09-28) it is **shell > `.env.local` > `.env`**. `@expo/env` loads
+  `.env.local` before `.env` into the CLI's `process.env` and never overwrites a key already set, so
+  a shell value is missing from the `env: export` line, and the bundle's env polyfill carries the
+  result. The dev-only `expo/virtual/env` still holds code that spreads the `.env*` files *over*
+  `process.env`, and on 2026-09-09 (SDK 54) that made the file beat the shell. Its `require.context`
+  for those files now comes out as Metro's empty context, so the spread never runs. The cause is not
+  identified, so read the bundle before trusting either order. The `verify:` pins `@expo/env`'s
+  order; no static check can see the empty context.
 
 **After editing a migration or `supabase/config.toml`:** `npx supabase start` on already-running
 containers prints status and does *not* apply migrations, and the auth container does not reread
