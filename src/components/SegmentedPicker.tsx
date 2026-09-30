@@ -10,18 +10,19 @@ type Props<T extends string> = {
   value: T;
   /**
    * How to name one option, so two pickers on the same screen never collide in a query:
-   * `Share as reader` in the invite form, `Set bob@example.com to writer` on a member row.
+   * `Share as reader` in Sharing's header, `Set bob@example.com to writer` on a member row.
    */
   labelFor: (value: T) => string;
   disabled?: boolean;
   /**
    * What the track sits on. `card` (the default) tints whatever card holds it — Account's
-   * Appearance, a Sharing member row. `surface` is the invite row's, drawn straight on the sky, so
-   * it takes a text field's fill and rim instead.
+   * Appearance, a Sharing member row. `surface` is the invite role's, drawn straight on the sky in
+   * Sharing's header, so it takes the invite bar's fill and rim instead.
    */
   track?: 'card' | 'surface';
-  /** `compact` is a Sharing member row's, 4pt shorter than the rest. */
-  size?: 'regular' | 'compact';
+  /** `compact` is a Sharing member row's, 4pt shorter than the rest. `small` is the invite role's,
+   * narrow enough to share the header's horizon strip with the sun and its birds. */
+  size?: 'regular' | 'compact' | 'small';
   onChange: (value: T) => void;
 };
 
@@ -46,6 +47,7 @@ export function SegmentedPicker<T extends string>({
       style={[
         styles.track,
         size === 'compact' && styles.trackCompact,
+        size === 'small' && styles.trackSmall,
         track === 'surface' && styles.trackSurface,
         disabled && styles.disabled,
       ]}>
@@ -60,8 +62,18 @@ export function SegmentedPicker<T extends string>({
             accessibilityLabel={labelFor(option.value)}
             disabled={disabled}
             onPress={() => onChange(option.value)}
-            style={[styles.option, checked && styles.optionChecked]}>
-            <Text numberOfLines={1} style={[styles.text, checked && styles.textChecked]}>
+            style={[
+              styles.option,
+              size === 'small' && styles.optionSmall,
+              checked && styles.optionChecked,
+            ]}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.text,
+                size === 'small' && styles.textSmall,
+                checked && styles.textChecked,
+              ]}>
               {option.title}
             </Text>
           </Pressable>
@@ -84,6 +96,9 @@ const useStyles = themedStyles((colors) => ({
   trackCompact: {
     height: 40,
   },
+  trackSmall: {
+    height: 36,
+  },
   trackSurface: {
     borderColor: colors.surfaceOutline,
     backgroundColor: colors.surface,
@@ -98,6 +113,11 @@ const useStyles = themedStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // A third of a 204pt track is 65pt: 6 a side leaves "Reader" at 15.5pt (about 49) its room, where
+  // the regular 10 would cut it short.
+  optionSmall: {
+    paddingHorizontal: 6,
+  },
   optionChecked: {
     backgroundColor: colors.primary,
   },
@@ -105,6 +125,9 @@ const useStyles = themedStyles((colors) => ({
     fontFamily: fonts.sans,
     fontSize: 17,
     color: colors.text,
+  },
+  textSmall: {
+    fontSize: 15.5,
   },
   textChecked: {
     fontFamily: fonts.sansMedium,

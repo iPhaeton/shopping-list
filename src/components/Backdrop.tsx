@@ -16,7 +16,7 @@ export function useBlurTarget(): RefObject<View | null> | null {
 }
 
 /**
- * A screen drawn over fixed art — the sign-in landscape, Account's and Sharing's sky: the art fills
+ * A screen drawn over fixed art — the sign-in landscape, Account's sky: the art fills
  * the screen and never scrolls, and `children` (the screen's own scrolling content) lie on top.
  *
  * The art sits in a `BlurTargetView`, which is what Android's blur samples (expo-blur's `blurTarget`);

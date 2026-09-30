@@ -335,26 +335,34 @@ describe('an owner', () => {
     expect(fetchMembers).toHaveBeenCalledTimes(2);
   });
 
-  it('offers a role and Share only once a name is being typed', async () => {
+  it('keeps Share in the bar, disabled, and offers a role only once somebody is picked', async () => {
+    jest.useFakeTimers();
     await renderScreen();
 
-    expect(screen.queryByLabelText('Share')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Share')).toBeDisabled();
     expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
 
     await fireEvent.changeText(screen.getByLabelText('Name'), 'Car');
-    expect(screen.getByLabelText('Share as writer')).toBeChecked();
+    expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
 
-    await fireEvent.changeText(screen.getByLabelText('Name'), '');
-    expect(screen.queryByLabelText('Share')).not.toBeOnTheScreen();
+    await pickSuggestion({ userId: 'u3', name: 'Carol' });
+    expect(screen.getByLabelText('Share as writer')).toBeChecked();
+    expect(screen.getByLabelText('Share')).not.toBeDisabled();
+
+    // Editing the name drops the pick, and the role goes with it.
+    await fireEvent.changeText(screen.getByLabelText('Name'), 'Caro');
+    expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Share')).toBeDisabled();
   });
 
-  it('keeps the picked role while the field is emptied and typed into again', async () => {
+  it('keeps the picked role while the pick is dropped and made again', async () => {
+    jest.useFakeTimers();
     await renderScreen();
 
-    await fireEvent.changeText(screen.getByLabelText('Name'), 'Car');
+    await pickSuggestion({ userId: 'u3', name: 'Carol' });
     await fireEvent.press(screen.getByLabelText('Share as owner'));
     await fireEvent.changeText(screen.getByLabelText('Name'), '');
-    await fireEvent.changeText(screen.getByLabelText('Name'), 'Carol');
+    await pickSuggestion({ userId: 'u3', name: 'Carol' });
 
     expect(screen.getByLabelText('Share as owner')).toBeChecked();
   });

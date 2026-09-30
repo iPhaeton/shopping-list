@@ -8,8 +8,8 @@ import { radius } from '../theme';
 import { useBlurTarget } from './Backdrop';
 
 /**
- * A frosted card: whatever lies behind it — the land on Sign in, the sky and its stars on Account
- * and Sharing — blurred, then `cardFill` over that, a white rim by day, and a soft shadow (none by
+ * A frosted card: whatever lies behind it — the land on Sign in and Sharing, the sky and its stars
+ * on Account — blurred, then `cardFill` over that, a white rim by day, and a soft shadow (none by
  * night, where `barShadow` is transparent). Every step-5 mockup draws its cards this way; over the
  * sign-in bands, the blur is what keeps a band's edge from showing through the card as a hard line.
  *

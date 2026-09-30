@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, postgres, pg_trgm, performance, search]
 sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/18-share-by-name/seed-1m-users.sql, ai/tasks/18-share-by-name/seed-1m-users-output.txt, supabase/migrations/20260922000000_share_by_name.sql, supabase/migrations/20260923000000_set_name_min_length.sql, src/components/UserAutocomplete.tsx, ai/tasks/20-ux/implementation-log-step-5.md]
-last_verified: 2026-09-29
+last_verified: 2026-09-30
 verify: grep -q 'const MIN_QUERY_LENGTH = 3;' src/components/UserAutocomplete.tsx && grep -q 'using gin (lower(name) gin_trgm_ops)' supabase/migrations/20260922000000_share_by_name.sql && grep -q 'char_length(trimmed) < 3' supabase/migrations/20260923000000_set_name_min_length.sql
 related: [scope-boundaries, read-rooted-at-list-members, session-still-valid-guards-writes, supabase-local-stack]
 indexed: false

@@ -4,8 +4,8 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator, keyboard]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md]
-last_verified: 2026-09-29
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md]
+last_verified: 2026-09-30
 verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Back$' .maestro/flows/set-theme.yaml && ! grep -rqE '^- tapOn: "?(My Lists|Navigate up)"?$' .maestro/flows
 related: [phone-is-the-product, list-headers-are-pinned-and-opaque, native-build-toolchain, dev-client-draws-over-the-app, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone, screens-take-navigation-props]
 ---
@@ -31,8 +31,8 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
 
 - **Its keyboards must be reset first.** Simulators inherit the Mac's multilingual keyboard list,
   and `inputText` came out mangled (`maya@example.com` → `ya@example.comm`), then stopped landing at
-  all. Fixed only on the iPhone 17e (iOS 27, 2026-09-27); any other simulator needs the same, then a
-  reboot of that simulator:
+  all. Done on the iPhone 18 Pro (iOS 27, 2026-09-30; the 17e that had it is gone); any other
+  simulator needs the same, then a reboot of that simulator:
 
   ```bash
   xcrun simctl spawn <udid> defaults write .GlobalPreferences AppleKeyboards -array "en_US@sw=QWERTY;hw=Automatic"
@@ -55,19 +55,15 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   and `back` is Android-only, so `tapOn: Back`; no `Groceries`/`My Lists`/"Navigate up" back label
   exists, and the `verify:` keeps them out. But a screen below stays in the hierarchy at its real
   coordinates: **on Sharing, List detail's `Back` is still there underneath**, so the tour taps by
-  point (`"10%,9%"`) — which needs the page at rest. The keyboard reveal on the invite field scrolls
-  the header off and leaves it there, so that tap hit a heading; `scrollUntilVisible: Sharing`
-  returned at once, since a sliver of the title under the status bar counts as visible. The tour
-  drags down first (`50%,25%` → `50%,60%`, clear of the keyboard). Flows find things by text and
-  a11y label, so renaming either breaks them as it breaks the RNTL suites
+  point (`"10%,9%"`, inside Back at y ≈ 75–111 pt on the 18 Pro). Sharing's header is pinned since
+  step 6, so the keyboard no longer scrolls Back away. Flows find things by text and a11y label, so
+  renaming either breaks them as it breaks the RNTL suites
   ([queries-go-through-a11y-labels](queries-go-through-a11y-labels.md)).
-- **A tap on something the keyboard covers lands on the keyboard.** `tapOn: Send code` typed a "t"
-  into the address until `useKeyboardReveal` kept the auth card above the keyboard. `hideKeyboard`
-  on iOS is a swipe on the content, and one opened the row at the screen's centre: the tour leaves
-  the keyboard up and empties a field with `eraseText`.
+- **A tap on something the keyboard covers lands on the keyboard** (`tapOn: Send code` typed a
+  "t"). `hideKeyboard` on iOS is a swipe on the content, and one opened the row at the screen's
+  centre: the tour leaves the keyboard up and empties a field with `eraseText`.
 - **Maestro cannot perform the iOS edge-swipe back.** A `swipe` from x 0–1%, fast or slow, popped
-  neither List detail nor Sharing, so the fault is Maestro's synthesized touch. It lands on the
-  content too, and once checked off a row. Test the swipe by hand.
+  nothing and landed on the content, once checking off a row. Test the swipe by hand.
 - **Tap a row only once the list is still and the row is in the open.** A tap during scroll momentum
   only stops the scroll, and `scrollUntilVisible` returns while the list coasts: add
   `waitForAnimationToEnd` first. A row scrolled up behind a pinned header
@@ -77,9 +73,13 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   pills until it is turned off per device, so `tapOn: Account` opens the dev menu. The fix, and the
   other overlays: [dev-client-draws-over-the-app](dev-client-draws-over-the-app.md).
 - **Under heavy machine load a tap right after `inputText` is lost** (4/4 at load 60–120, 0/4 at
-  normal load). Check `uptime` first.
+  normal load), **and `inputText` drops characters**: `Jor` came out `J`, and `maya@example.com`
+  `mxample.com`, which the server refused as an invalid address. Check `uptime` first; rerun.
+- **A shot right after a push can catch it mid-slide** — rounded corners, black edges:
+  `extendedWaitUntil` returns before the transition ends. `waitForAnimationToEnd` first.
 - `takeScreenshot` takes a bare name only; PNGs land in `<--test-output-dir>/takeScreenshot/`.
-- `xcrun simctl status_bar <udid> override --time 9:41 …` matches the mockups' clock until reboot.
+- `xcrun simctl status_bar <udid> override --time 9:41 …` matches the mockups' clock until reboot
+  (the 18 Pro's 24-hour locale shows `09:41`).
 
 **Reaching a time of day** (Auto's sunset and sunrise) takes no code — move the zone, not the clock:
 
@@ -97,11 +97,10 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   a throwaway jest file. The `status_bar` override keeps showing 9:41, never the time under test;
   read what the app believes through [metro-inspector-reads-live-app-state](metro-inspector-reads-live-app-state.md).
 
-**Android:** run `adb reverse tcp:8081 tcp:8081` first so `open-app.yaml`'s `127.0.0.1:8081`
-reaches Metro. After the first-time driver install the app was not running (no crash in
-`logcat -b crash`), so start with `open-app`, and wait for the list (`extendedWaitUntil`) before the
-first gesture: a fast swipe straight after it became a tap. A freshly booted emulator may show
-"System UI isn't responding" — tap Wait. No flow has run on Android since step 5's drawn `Back`s.
+**Android** (no flow run since task 20 step 5): `adb reverse tcp:8081 tcp:8081` first, so
+`open-app.yaml`'s `127.0.0.1:8081` reaches Metro. The first driver install leaves the app stopped:
+start with `open-app`, and wait for the list (`extendedWaitUntil`) before the first gesture — a fast
+swipe straight after it became a tap. On "System UI isn't responding" after a boot, tap Wait.
 
 **What lives in `.maestro/`** (kept in the repo, for task 20 and after), against the local stack.
 If sign-in fails with "Error sending magic link email", the app is on cloud:
@@ -112,7 +111,8 @@ If sign-in fails with "Error sending magic link email", the app is on cloud:
   `set-theme` (`THEME` = `Day`/`Night`/`Auto`), and the two screenshot tours (`THEME` = `day`/`night`).
 - `shoot-all.sh <out> <owner-email> <fresh-prefix>` — both tours in both themes, each set
   explicitly, so Auto's default never reaches them. Set name only appears for a never-seen address,
-  so each run needs a fresh prefix.
+  so each run needs a fresh prefix. Not for a task's shots, which cover only the changed screens
+  ([phone-is-the-product](phone-is-the-product.md)).
 - `seed.mjs [owner] [member]` — the tour data, made **through the API** (OTP via Mailpit, then the
   app's RPCs; a psql role switch fails every write RPC's `auth.sessions` check —
   [session-still-valid-guards-writes](session-still-valid-guards-writes.md)). Once per stack, as

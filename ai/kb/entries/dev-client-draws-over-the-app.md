@@ -4,8 +4,8 @@ title: The dev client draws its own UI over the app — a floating Dev tools but
 type: environment
 status: current
 tags: [environment, verification, expo, dev-client, maestro, ios, android]
-sources: [ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-4.md]
-last_verified: 2026-09-27
+sources: [ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-6.md]
+last_verified: 2026-09-30
 verify: grep -q '"expo-dev-client"' package.json && grep -q '"EXDevMenuShowFloatingActionButton"' node_modules/expo-dev-menu/ios/Modules/DevMenuPreferences.swift && grep -q 'var showFab' node_modules/expo-dev-menu/android/src/debug/java/expo/modules/devmenu/DevMenuPreferences.kt && grep -q '"expo.modules.devmenu.sharedpreferences"' node_modules/expo-dev-menu/android/src/debug/java/expo/modules/devmenu/DevMenuPreferences.kt
 related: [maestro-drives-the-native-ui, theme-reaches-native-surfaces, native-build-toolchain, phone-is-the-product]
 indexed: false
@@ -28,7 +28,7 @@ platforms. Turn it off per device, **with the app terminated first**:
   `shared_prefs/expo.modules.devmenu.sharedpreferences.xml`, through
   `adb shell run-as com.shoppingloop.app`.
 
-Both are done on the iPhone 17e (iOS 27) and on `Pixel_10` as of 2026-09-27. The setting lives in
+Done on the iPhone 18 Pro (iOS 27, 2026-09-30) and `Pixel_10` (2026-09-27). The setting lives in
 the app's own data, so a reinstall that wipes the container brings the button back. The key names
 come from `expo-dev-menu`'s `DevMenuPreferences`; the `verify:` checks they are still the ones it
 reads.

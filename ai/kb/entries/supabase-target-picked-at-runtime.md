@@ -4,8 +4,8 @@ title: The Supabase environment is chosen at runtime by platform, not compiled i
 type: decision
 status: current
 tags: [supabase, environment, expo, config, architecture]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example]
-last_verified: 2026-09-28
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example, ai/tasks/20-ux/implementation-log-step-6.md]
+last_verified: 2026-09-30
 verify: grep -q "Platform.OS === 'web'" src/lib/supabaseTarget.ts && grep -q "Device.isDevice ? 'cloud' : 'local'" src/lib/supabaseTarget.ts && test "$(grep -c 'process\.env\.EXPO_PUBLIC_SUPABASE_\(URL\|ANON_KEY\)_\(LOCAL\|CLOUD\)' src/lib/supabaseTarget.ts)" = 4 && test "$(grep -rl 'process\.env\.EXPO_PUBLIC_SUPABASE' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.')" = src/lib/supabaseTarget.ts && grep -q "from './supabaseTarget'" src/lib/supabase.ts && grep -q "10.0.2.2" src/lib/supabaseTarget.ts
 related: [supabase-local-stack, supabase-client-module-boundary, native-build-toolchain, supabase-config-push-sends-the-whole-root, expo-crypto-undefined-under-jest]
 ---
@@ -22,7 +22,9 @@ start, which Supabase the client talks to:
 
 `EXPO_PUBLIC_SUPABASE_TARGET=local|cloud` overrides all of it, the browser and the simulator
 included. That is how you put two clients on one database, and it is a trap: **this machine's `.env`
-held `EXPO_PUBLIC_SUPABASE_TARGET=cloud` on 2026-09-28**, which sent the simulator to production.
+has held `EXPO_PUBLIC_SUPABASE_TARGET=cloud` since at least 2026-09-28**, which sent the simulator to
+production. **A Metro already serving 8081 is as suspect**: on 2026-09-30 one left by `npm run ios`,
+started without the override, had the app on cloud; stop it and restart with the override.
 Maestro's `sign-in.yaml` asked cloud for a code to `maya@example.com` and got "Error sending magic
 link email", which says nothing about the target. Before a run that reads Mailpit, check `.env` and
 `.env.local` for the key. To force local without editing the user's `.env`, put it in the shell:

@@ -4,10 +4,10 @@ title: Screens take navigation/route as props, never useNavigation()
 type: convention
 status: current
 tags: [navigation, screens, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-09-29
-verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && test "$(grep -c '<Stack.Screen' src/navigation/RootNavigator.tsx)" = "$(grep -c 'headerShown: false' src/navigation/RootNavigator.tsx)" && ! grep -rq 'headerRight' src --include='*.tsx' --exclude='*.test.tsx' && grep -q 'onBack={() => navigation.goBack()}' src/screens/AccountScreen.tsx && grep -q 'onBack={() => navigation.goBack()}' src/screens/SharingScreen.tsx && grep -q 'setOptions).toHaveBeenCalledWith(expect.objectContaining({ title:' src/screens/ListDetailScreen.test.tsx
-related: [rntl-14-api-changes, queries-go-through-a11y-labels, react-native-screens-past-the-sdk-pin, expo-sdk-version, phone-is-the-product, maestro-drives-the-native-ui]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
+last_verified: 2026-09-30
+verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && test "$(grep -c '<Stack.Screen' src/navigation/RootNavigator.tsx)" = "$(grep -c 'headerShown: false' src/navigation/RootNavigator.tsx)" && ! grep -rq 'headerRight' src --include='*.tsx' --exclude='*.test.tsx' && grep -q 'onBack={() => navigation.goBack()}' src/screens/AccountScreen.tsx && grep -qF 'label="Back" outline={colors.outline} onPress={() => navigation.goBack()}' src/screens/SharingScreen.tsx && grep -q 'setOptions).toHaveBeenCalledWith(expect.objectContaining({ title:' src/screens/ListDetailScreen.test.tsx
+related: [rntl-14-api-changes, queries-go-through-a11y-labels, react-native-screens-past-the-sdk-pin, expo-sdk-version, phone-is-the-product, maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque]
 ---
 
 Screens receive `navigation` and `route` as props and never call `useNavigation()` or
@@ -24,10 +24,12 @@ takes `popToTop`, which sends you back when you remove your own membership.
 In [RootNavigator.tsx](../../../src/navigation/RootNavigator.tsx) all six routes carry
 `headerShown: false`, and the stack's `screenOptions` hold only `contentStyle`. Each screen draws
 its own header inside its own scrolling tree: the Account pill on Lists; Back, the Rename/Share pills
-and the serif title on List detail; and on Account and Sharing a
-[ScreenHeader](../../../src/components/ScreenHeader.tsx) — a round `Back` over the serif title,
-Sharing's `List not found` state included. Because those controls live in the screen's tree, a suite
-presses them on the same screen instance with the plain stub, and `goBack` must be in it.
+and the serif title on List detail; on Account a
+[ScreenHeader](../../../src/components/ScreenHeader.tsx) — a round `Back` over the serif title; and
+on Sharing, since task 20 step 6, the same `Back` `IconButton` and title drawn inline in its pinned
+header ([list-headers-are-pinned-and-opaque](list-headers-are-pinned-and-opaque.md)), its
+`List not found` state included. Because those controls live in the screen's tree, a suite presses
+them on the same screen instance with the plain stub, and `goBack` must be in it.
 
 The routes' `title` options stay only for the **web tab title**. `ListDetailScreen` still calls
 `navigation.setOptions({ title })`, and the web tab is now its only reader — no native back button
@@ -62,7 +64,8 @@ Giving `options` as a function at the navigator is also valid, typed react-navig
 hooks.
 
 **What to do:** a new screen adds its params to `RootStackParamList`, takes the generated props
-type, sets `headerShown: false`, and draws its own `Back` (`ScreenHeader`). If a deeply nested
+type, sets `headerShown: false`, and draws its own `Back` — `ScreenHeader` for a plain pushed
+screen, an inline `IconButton` inside a pinned header as List detail and Sharing do. If a deeply nested
 component needs navigation, thread a callback down to it rather than reaching for the hook. That
 keeps the component testable without a navigator too.
 
@@ -74,4 +77,4 @@ navigating away from it. `SignIn` exists only while signed out. `SetName` exists
 The `verify:` sweeps **all** of `src/screens/` for both hooks. Test files are excluded, because
 `ListsScreen.test.tsx` names `useNavigation()` in a comment. It also pins the `Sharing` and
 `SetName` routes, one `headerShown: false` per `Stack.Screen`, no `headerRight` anywhere in `src/`,
-Account's and Sharing's drawn Back, and the `objectContaining` title assertion.
+Account's `ScreenHeader` Back and Sharing's inline one, and the `objectContaining` title assertion.

@@ -17,10 +17,11 @@ beforeEach(() => {
 
 /**
  * Reproduces exactly what `SharingScreen` does around this component: mirror `value`/`selected` in
- * local state, clear `selected` on every edit, set both on a pick. Driving the real prop contract
- * this way, rather than a synthetic harness, is what proves the contract works end to end.
+ * local state, clear `selected` on every edit, set both on a pick, and let `Share` go live once
+ * somebody is picked. Driving the real prop contract this way, rather than a synthetic harness, is
+ * what proves the contract works end to end.
  */
-function Harness() {
+function Harness({ onShare = () => {} }: { onShare?: () => void }) {
   const [value, setValue] = useState('');
   const [selected, setSelected] = useState<UserSuggestion | null>(null);
 
@@ -36,6 +37,8 @@ function Harness() {
         setValue(user.name);
       }}
       selected={selected}
+      canShare={selected !== null}
+      onShare={onShare}
     />
   );
 }
@@ -147,4 +150,28 @@ it('editing after a selection clears it and searches again', async () => {
 
   expect(searchUsers).toHaveBeenCalledWith('Caro');
   expect(await screen.findByLabelText('Share with Caroline')).toBeOnTheScreen();
+});
+
+it('keeps Share inside the bar, live only once the caller says so', async () => {
+  jest.mocked(searchUsers).mockResolvedValue({
+    users: [{ userId: 'u1', name: 'Carol' }],
+    error: null,
+  });
+  const onShare = jest.fn();
+
+  jest.useFakeTimers();
+  await render(<Harness onShare={onShare} />);
+
+  expect(screen.getByLabelText('Share')).toBeDisabled();
+  await fireEvent.changeText(screen.getByLabelText('Name'), 'car');
+  await advanceDebounce();
+  expect(screen.getByLabelText('Share')).toBeDisabled();
+
+  await fireEvent.press(await screen.findByLabelText('Share with Carol'));
+  expect(screen.getByLabelText('Share')).not.toBeDisabled();
+
+  await fireEvent.press(screen.getByLabelText('Share'));
+  expect(onShare).toHaveBeenCalledTimes(1);
+  // The caller clears the field once the share lands; the bar does not do it for them.
+  expect(screen.getByLabelText('Name')).toHaveDisplayValue('Carol');
 });

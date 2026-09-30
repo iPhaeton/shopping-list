@@ -36,9 +36,10 @@ const FILL_STARS: readonly [number, number, number, number][] = [
 ];
 
 /**
- * The sky filling whatever region holds it — List detail's header, down to its `Hillside`: `skyTop`
- * at the top edge to `skyHorizon` at the bottom, which is exactly what `Hillside`'s flat sky
- * continues from, however tall the region above it has grown. Night draws {@link FILL_STARS}.
+ * The sky filling whatever region holds it — List detail's and Sharing's headers, down to their
+ * `Hillside`: `skyTop` at the top edge to `skyHorizon` at the bottom, which is exactly what
+ * `Hillside`'s flat sky continues from, however tall the region above it has grown. Night draws
+ * {@link FILL_STARS}.
  * Purely decorative; the caller positions it and hides it from touches and screen readers.
  *
  * **It measures itself rather than sizing the SVG by percent.** A `height="100%"` drawing is laid
@@ -92,8 +93,8 @@ const useFillStyles = themedStyles(() => ({
 }));
 
 /**
- * The whole screen's sky, stars and all, for a `Backdrop` — Account's and Sharing's, which scroll
- * their cards and `HorizonFooter` over it.
+ * The whole screen's sky, stars and all, for a `Backdrop` — Account's, which scrolls its cards and
+ * `HorizonFooter` over it.
  */
 export function ScreenSky() {
   const { width, height } = useWindowDimensions();

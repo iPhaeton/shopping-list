@@ -14,8 +14,7 @@ const TRACED_BOTTOM = 844;
 
 /**
  * The near hill, in `bands[0]`, and the land in front of it, in `bands[1]` — `[x, y]` on the mockup,
- * traced every 20pt off `account-screen-quiet-horizon` (the same edges in the member Sharing and
- * both moonlit ones). The near hill's crest sits under the sun, as on Lists.
+ * traced every 20pt off `account-screen-quiet-horizon` (the same edges in its moonlit twin). The near hill's crest sits under the sun, as on Lists.
  */
 const HILL: readonly (readonly [number, number])[] = [
   [0, 749], [20, 749], [40, 748.7], [60, 748.3], [80, 747.7], [100, 747], [120, 746], [140, 745],
@@ -41,7 +40,7 @@ const MOON_R = 27;
 const BIRDS: readonly [number, number][] = [[-86, -31], [-64, -39], [-51, -21]];
 
 /**
- * The foot of Account and Sharing: a small sun (with its birds) or moon sinking behind a hill at the
+ * The foot of Account: a small sun (with its birds) or moon sinking behind a hill at the
  * right, and one more band of land in front, down to the bottom. It closes the page rather than
  * framing the screen: it sits after the last card, pushed to the bottom of a short page and scrolled
  * to on a long one, over the fixed sky of the `Backdrop` behind — so the glow and the space around

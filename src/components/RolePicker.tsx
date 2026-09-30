@@ -12,13 +12,14 @@ type Props = {
   value: Role;
   /**
    * How to name one option, so two pickers on the same screen never collide in a query:
-   * `Share as reader` in the invite form, `Set bob@example.com to writer` on a member row.
+   * `Share as reader` in Sharing's header, `Set bob@example.com to writer` on a member row.
    */
   labelFor: (role: Role) => string;
   disabled?: boolean;
-  /** A member card's picker is the card's own (`card`); the invite form's sits on the sky. */
+  /** A member card's picker is the card's own (`card`); the invite role's sits on the header's
+   * sky. */
   track?: 'card' | 'surface';
-  size?: 'regular' | 'compact';
+  size?: 'regular' | 'compact' | 'small';
   onChange: (role: Role) => void;
 };
 

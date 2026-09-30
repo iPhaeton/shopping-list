@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '../components/Avatar';
-import { Backdrop } from '../components/Backdrop';
 import { Card } from '../components/Card';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { HorizonFooter } from '../components/HorizonFooter';
+import { Hillside } from '../components/Hillside';
+import { ChevronIcon, TrashIcon } from '../components/icons';
 import { IconButton } from '../components/IconButton';
-import { TrashIcon } from '../components/icons';
 import { PillButton } from '../components/PillButton';
 import { RolePicker } from '../components/RolePicker';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { ScreenSky } from '../components/Sky';
-import { useKeyboardReveal } from '../components/useKeyboardReveal';
+import { HEADER_GAP } from '../components/ScreenHeader';
+import { SkyFill } from '../components/Sky';
 import { UserAutocomplete } from '../components/UserAutocomplete';
 import type { Result } from '../lib/listsApi';
 import {
@@ -26,6 +32,7 @@ import {
   type UserSuggestion,
 } from '../lib/membersApi';
 import type { SharingScreenProps } from '../navigation/types';
+import { bandAt, contrastRatio } from '../state/bands';
 import { useLists } from '../state/ListsContext';
 import { canManageList } from '../state/roles';
 import { useSession } from '../state/SessionContext';
@@ -35,6 +42,9 @@ import { fonts, radius, spacing } from '../theme';
 
 /** The wording the `keep_last_owner` trigger raises, so the app and the database agree on one. */
 const LAST_OWNER = 'A list must keep at least one owner.';
+
+/** How far the sky reaches above the header — past any pull-down bounce, as on List detail. */
+const OVERSCROLL_SKY = 1000;
 
 /** A member's name, falling back to their email for an account that hasn't cleared the name gate
  * yet (pre-migration rows) — never the reverse. */
@@ -51,10 +61,15 @@ function displayNameFor(member: Member): string {
  * rather than through the outbox: `shareList` takes an id `UserAutocomplete` already resolved via a
  * search result, so there is nothing left to look up, and the roster it changes has to stay live
  * rather than queued.
+ *
+ * **Laid out as List detail is:** a header pinned over the roster — Back, the title, an owner's
+ * invite bar, and the `Hillside` whose hill the roster's land starts from — so inviting is always
+ * in reach, however long the roster, and the cards slide up under the hill.
  */
 export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { listId } = route.params;
   const { lists, userId, refresh, lastNudge } = useLists();
   const { signOut } = useSession();
@@ -68,16 +83,8 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const [inviteRole, setInviteRole] = useState<Role>('writer');
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [confirmingRemoveUserId, setConfirmingRemoveUserId] = useState<string | null>(null);
-
-  // With the keyboard up, the invite field, its suggestions and the Share row — all of it, not just
-  // the field — sit above the keyboard. Its bottom edge, in the scroll content's coordinates, is the
-  // body's offset plus the invite block's own.
-  const reveal = useKeyboardReveal();
-  const bodyY = useRef(0);
-  const inviteBottom = useRef<number | null>(null);
-  const revealInvite = () => {
-    if (inviteBottom.current !== null) reveal.setTarget(bodyY.current + inviteBottom.current);
-  };
+  // How tall the header's sky is, so the status-bar strip draws the same slice of it.
+  const [skyHeight, setSkyHeight] = useState(224);
 
   const load = useCallback(async () => {
     const { members: rows, error: failure } = await fetchMembers(listId);
@@ -149,20 +156,26 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
     return true;
   }
 
-  if (!list) {
-    return (
-      <Backdrop art={<ScreenSky />}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <ScreenHeader title="Sharing" onBack={() => navigation.goBack()} />
-          <EmptyState title="List not found" hint="Go back and pick a list from the list screen." />
-          <View style={styles.spacer} />
-          <HorizonFooter />
-        </ScrollView>
-      </Backdrop>
-    );
+  const canInvite = selected !== null && !pending;
+
+  function share() {
+    if (!selected) return;
+    void run(async () => {
+      const result = await shareList(listId, selected.userId, inviteRole);
+      if (!result.error) {
+        setQuery('');
+        setSelected(null);
+      }
+      return result;
+    });
   }
 
-  const canInvite = selected !== null && !pending;
+  // The land the roster lies on: band 0, the colour of the hill the header ends in, so a card
+  // scrolling up slides under that hill with no seam. The hints lie on it too, and `textSecondary`
+  // falls short of AA on it by night — so the band's own ink there.
+  const ground = bandAt(colors, 0);
+  const hintColor =
+    contrastRatio(colors.textSecondary, ground.color) >= 4.5 ? colors.textSecondary : ground.ink;
 
   /** Cancel and the one destructive step, under the sentence saying what that step costs. */
   const confirm = (
@@ -191,206 +204,310 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
     </View>
   );
 
-  return (
-    <Backdrop art={<ScreenSky />}>
-      <ScrollView
-        ref={reveal.ref}
-        onLayout={reveal.onLayout}
-        onScroll={reveal.onScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets>
-        <ScreenHeader title="Sharing" onBack={() => navigation.goBack()} />
-
-        {error ? <ErrorBanner message={error} /> : null}
-
+  // Pinned, and opaque top to bottom, as List detail's header is and for the same reasons
+  // (ai/kb/entries/list-headers-are-pinned-and-opaque.md): `SkyFill` behind the padded block,
+  // `Hillside`'s own sky under the hill, the `skyHorizon` fill under both, and sky above it for a
+  // pull-down bounce. An error pins itself above the list instead, taking the safe-area inset.
+  const header = (
+    <View style={styles.header}>
+      <View
+        style={styles.overscrollSky}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+      {/* Raised over `Hillside`, its later sibling: the invite suggestions hang out of this block
+          and over the strip. */}
+      <View
+        style={[styles.top, { paddingTop: (error ? 0 : insets.top) + HEADER_GAP }]}
+        onLayout={({ nativeEvent: { layout } }) => {
+          if (layout.height !== skyHeight) setSkyHeight(layout.height);
+        }}>
         <View
-          style={styles.body}
-          onLayout={({ nativeEvent: { layout } }) => {
-            bodyY.current = layout.y;
-            revealInvite();
-          }}>
-          <Text accessibilityRole="header" style={styles.heading}>
-            People with access
-          </Text>
-
-          {members === null ? (
-            <ActivityIndicator
-              accessibilityLabel="Loading who has access"
-              color={colors.primary}
-              style={styles.loading}
-            />
-          ) : (
-            <View style={styles.members}>
-              {members.map((member) => {
-                const you = member.userId === userId;
-                const locked = pending || (you && soleOwner);
-                const name = displayNameFor(member);
-                const confirmingRemove = confirmingRemoveUserId === member.userId;
-
-                return (
-                  <Card key={member.userId} style={styles.member}>
-                    <View style={styles.memberRow}>
-                      <Avatar id={member.userId} name={name} />
-                      <Text style={styles.name} numberOfLines={1}>
-                        {you ? `${name} (you)` : name}
-                      </Text>
-
-                      {manageable ? (
-                        confirmingRemove ? null : (
-                          <IconButton
-                            label={`Remove ${displayNameFor(member)}`}
-                            fill={colors.controlFill}
-                            disabled={locked}
-                            onPress={() => setConfirmingRemoveUserId(member.userId)}>
-                            <TrashIcon color={colors.text} />
-                          </IconButton>
-                        )
-                      ) : you ? (
-                        confirmingLeave ? null : (
-                          <PillButton
-                            label="Leave list"
-                            tone="danger"
-                            disabled={pending}
-                            onPress={() => setConfirmingLeave(true)}
-                          />
-                        )
-                      ) : (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{member.role}</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {manageable ? (
-                      confirmingRemove ? (
-                        confirm(
-                          you
-                            ? "You'll lose access to this list until someone shares it with you again."
-                            : `${name} will lose access to this list until someone shares it with them again.`,
-                          `Confirm remove ${displayNameFor(member)}`,
-                          pending ? 'Removing…' : 'Remove',
-                          () => {
-                            // Cleared either way, not just on refusal: on success this member's row
-                            // is simply gone next render, but the id would otherwise sit in state
-                            // and wrongly re-open the confirm view if the same account is re-invited
-                            // later and lands back on the same userId.
-                            void run(() => removeMember(listId, member.userId)).then(() => {
-                              setConfirmingRemoveUserId(null);
-                            });
-                          },
-                          () => setConfirmingRemoveUserId(null)
-                        )
-                      ) : (
-                        <View style={styles.memberPicker}>
-                          <RolePicker
-                            value={member.role}
-                            labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
-                            disabled={locked}
-                            size="compact"
-                            onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
-                          />
-                        </View>
-                      )
-                    ) : you && confirmingLeave ? (
-                      confirm(
-                        "You'll lose access to this list until someone shares it with you again.",
-                        'Confirm leave list',
-                        pending ? 'Leaving…' : 'Leave list',
-                        () => {
-                          void run(() => leaveList(listId)).then((ok) => {
-                            if (!ok) setConfirmingLeave(false);
-                          });
-                        },
-                        () => setConfirmingLeave(false)
-                      )
-                    ) : null}
-                  </Card>
-                );
-              })}
-            </View>
-          )}
-
-          {manageable && soleOwner ? <Text style={styles.hint}>{LAST_OWNER}</Text> : null}
-
-          {manageable ? (
-            <View
-              onLayout={({ nativeEvent: { layout } }) => {
-                inviteBottom.current = layout.y + layout.height;
-                revealInvite();
-              }}>
-              <Text accessibilityRole="header" style={[styles.heading, styles.inviteHeading]}>
-                Invite someone
-              </Text>
-              <View style={styles.inviteField}>
-                <UserAutocomplete
-                  value={query}
-                  onChangeText={(text) => {
-                    setQuery(text);
-                    setSelected(null);
-                  }}
-                  onSelect={(user) => {
-                    setSelected(user);
-                    setQuery(user.name);
-                  }}
-                  selected={selected}
-                  disabled={pending}
-                />
-              </View>
-              {/* Only once a name is being typed, as the mockups draw it: an empty field has nobody
-                  to give a role to. Re-sharing someone who is already a member is an upsert in
-                  `share_list`, so this form doubles as a promote and there is nothing extra to
-                  build for it. */}
-              {query.trim().length > 0 ? (
-                <View style={styles.invite}>
-                  <View style={styles.invitePicker}>
-                    <RolePicker
-                      value={inviteRole}
-                      labelFor={(role) => `Share as ${role}`}
-                      disabled={pending}
-                      track="surface"
-                      onChange={setInviteRole}
-                    />
-                  </View>
-                  <PillButton
-                    label="Share"
-                    variant="filled"
-                    size="md"
-                    disabled={!canInvite}
-                    onPress={() => {
-                      if (!selected) return;
-                      void run(async () => {
-                        const result = await shareList(listId, selected.userId, inviteRole);
-                        if (!result.error) {
-                          setQuery('');
-                          setSelected(null);
-                        }
-                        return result;
-                      });
-                    }}
-                  />
-                </View>
-              ) : null}
-            </View>
-          ) : (
-            <Text style={styles.hint}>Only an owner can change who has access.</Text>
-          )}
+          style={styles.fill}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          <SkyFill />
         </View>
 
-        <View style={styles.spacer} />
-        <HorizonFooter />
-      </ScrollView>
-    </Backdrop>
+        <View style={styles.headerRow}>
+          <IconButton label="Back" outline={colors.outline} onPress={() => navigation.goBack()}>
+            <ChevronIcon direction="left" color={colors.text} size={18} />
+          </IconButton>
+        </View>
+        <Text accessibilityRole="header" style={styles.title} numberOfLines={1}>
+          Sharing
+        </Text>
+
+        {/* Where List detail puts its Add bar. Re-sharing someone who is already a member is an
+            upsert in `share_list`, so this bar doubles as a promote and there is nothing extra to
+            build for it. */}
+        {manageable ? (
+          <View style={styles.slot}>
+            <UserAutocomplete
+              value={query}
+              onChangeText={(text) => {
+                setQuery(text);
+                setSelected(null);
+              }}
+              onSelect={(user) => {
+                setSelected(user);
+                setQuery(user.name);
+              }}
+              selected={selected}
+              canShare={canInvite}
+              onShare={share}
+              disabled={pending}
+            />
+          </View>
+        ) : null}
+      </View>
+
+      {/* The role, where List detail keeps Show deleted — only once somebody is picked. Before that
+          there is nobody to give it to, and the open suggestions hang over this spot: under their
+          blur, a checked segment smears into a dark blot. The role picked survives it hiding. */}
+      <Hillside ground={ground.color}>
+        {selected ? (
+          <View style={styles.invitePicker}>
+            <RolePicker
+              value={inviteRole}
+              labelFor={(role) => `Share as ${role}`}
+              disabled={pending}
+              track="surface"
+              size="small"
+              onChange={setInviteRole}
+            />
+          </View>
+        ) : null}
+      </Hillside>
+    </View>
+  );
+
+  return (
+    <View style={[styles.screen, { backgroundColor: ground.color }]}>
+      {error ? (
+        <View style={[styles.pinned, { paddingTop: insets.top }]}>
+          <ErrorBanner message={error} />
+        </View>
+      ) : null}
+
+      <KeyboardAvoidingView
+        style={styles.keyboard}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          // The header is child 0.
+          stickyHeaderIndices={[0]}
+          contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}
+          keyboardShouldPersistTaps="handled">
+          {header}
+
+          {!list ? (
+            <EmptyState
+              title="List not found"
+              hint="Go back and pick a list from the list screen."
+              ink={ground.ink}
+            />
+          ) : (
+            <View style={styles.body}>
+              <Text accessibilityRole="header" style={styles.heading}>
+                People with access
+              </Text>
+
+              {members === null ? (
+                <ActivityIndicator
+                  accessibilityLabel="Loading who has access"
+                  color={colors.primary}
+                  style={styles.loading}
+                />
+              ) : (
+                <View style={styles.members}>
+                  {members.map((member) => {
+                    const you = member.userId === userId;
+                    const locked = pending || (you && soleOwner);
+                    const name = displayNameFor(member);
+                    const confirmingRemove = confirmingRemoveUserId === member.userId;
+
+                    return (
+                      <Card key={member.userId} style={styles.member}>
+                        <View style={styles.memberRow}>
+                          <Avatar id={member.userId} name={name} />
+                          <Text style={styles.name} numberOfLines={1}>
+                            {you ? `${name} (you)` : name}
+                          </Text>
+
+                          {manageable ? (
+                            confirmingRemove ? null : (
+                              <IconButton
+                                label={`Remove ${displayNameFor(member)}`}
+                                fill={colors.controlFill}
+                                disabled={locked}
+                                onPress={() => setConfirmingRemoveUserId(member.userId)}>
+                                <TrashIcon color={colors.text} />
+                              </IconButton>
+                            )
+                          ) : you ? (
+                            confirmingLeave ? null : (
+                              <PillButton
+                                label="Leave list"
+                                tone="danger"
+                                disabled={pending}
+                                onPress={() => setConfirmingLeave(true)}
+                              />
+                            )
+                          ) : (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{member.role}</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {manageable ? (
+                          confirmingRemove ? (
+                            confirm(
+                              you
+                                ? "You'll lose access to this list until someone shares it with you again."
+                                : `${name} will lose access to this list until someone shares it with them again.`,
+                              `Confirm remove ${displayNameFor(member)}`,
+                              pending ? 'Removing…' : 'Remove',
+                              () => {
+                                // Cleared either way, not just on refusal: on success this member's row
+                                // is simply gone next render, but the id would otherwise sit in state
+                                // and wrongly re-open the confirm view if the same account is re-invited
+                                // later and lands back on the same userId.
+                                void run(() => removeMember(listId, member.userId)).then(() => {
+                                  setConfirmingRemoveUserId(null);
+                                });
+                              },
+                              () => setConfirmingRemoveUserId(null)
+                            )
+                          ) : (
+                            <View style={styles.memberPicker}>
+                              <RolePicker
+                                value={member.role}
+                                labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
+                                disabled={locked}
+                                size="compact"
+                                onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
+                              />
+                            </View>
+                          )
+                        ) : you && confirmingLeave ? (
+                          confirm(
+                            "You'll lose access to this list until someone shares it with you again.",
+                            'Confirm leave list',
+                            pending ? 'Leaving…' : 'Leave list',
+                            () => {
+                              void run(() => leaveList(listId)).then((ok) => {
+                                if (!ok) setConfirmingLeave(false);
+                              });
+                            },
+                            () => setConfirmingLeave(false)
+                          )
+                        ) : null}
+                      </Card>
+                    );
+                  })}
+                </View>
+              )}
+
+              {manageable && soleOwner ? (
+                <Text style={[styles.hint, { color: hintColor }]}>{LAST_OWNER}</Text>
+              ) : null}
+              {manageable ? null : (
+                <Text style={[styles.hint, { color: hintColor }]}>
+                  Only an owner can change who has access.
+                </Text>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/*
+        Keeps the status bar on clean sky. iOS draws a light blur over the top of this screen's
+        scroll view, stars and all, as it does over List detail's list and never over Lists' — the
+        same unexplained blur, and the same cure: sky drawn above the scroll view, not inside it.
+      */}
+      <View
+        style={[styles.statusBarSky, { height: insets.top }]}
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants">
+        <View style={{ height: skyHeight }}>
+          <SkyFill initialHeight={skyHeight} />
+        </View>
+      </View>
+    </View>
   );
 }
 
-// Measured off the three Sharing mockups: cards at x 20–370, 10pt apart, their content 15pt in; a
-// 36pt avatar, the name 13pt after it, the remove button at the card's right edge; the role picker
-// 10pt below.
+// Measured off the Sharing mockups: the header as List detail's; cards at x 20–370, 10pt apart,
+// their content 15pt in; a 36pt avatar, the name 13pt after it, the remove button at the card's
+// right edge; the role picker 10pt below.
 const useStyles = themedStyles((colors) => ({
-  content: {
-    flexGrow: 1,
+  screen: {
+    flex: 1,
+  },
+  keyboard: {
+    flex: 1,
+  },
+  pinned: {
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.skyTop,
+  },
+  // `SkyFill` ends on `skyHorizon` and `Hillside` starts on it, so a gap between them vanishes.
+  header: {
+    backgroundColor: colors.skyHorizon,
+  },
+  overscrollSky: {
+    position: 'absolute',
+    top: -OVERSCROLL_SKY,
+    left: 0,
+    right: 0,
+    height: OVERSCROLL_SKY,
+    backgroundColor: colors.skyTop,
+  },
+  top: {
+    zIndex: 1,
+  },
+  fill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  headerRow: {
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  title: {
+    marginTop: 10,
+    paddingHorizontal: 20,
+    fontFamily: fonts.serif,
+    fontSize: 40,
+    lineHeight: 52,
+    color: colors.text,
+  },
+  statusBarSky: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+  },
+  // With the title's 10 above it, the bar sits where List detail's Add bar does.
+  slot: {
+    marginTop: 14,
+  },
+  // Level with List detail's Show deleted track, and clear of the birds to the sun's left.
+  invitePicker: {
+    marginLeft: 20,
+    marginTop: 1,
+    width: 204,
   },
   body: {
     paddingHorizontal: 20,
@@ -401,12 +518,6 @@ const useStyles = themedStyles((colors) => ({
     fontSize: 24,
     lineHeight: 32,
     color: colors.text,
-  },
-  inviteHeading: {
-    marginTop: 16,
-  },
-  inviteField: {
-    marginTop: 8,
   },
   loading: {
     marginTop: spacing.xl,
@@ -448,13 +559,13 @@ const useStyles = themedStyles((colors) => ({
   memberPicker: {
     marginTop: 10,
   },
+  // Its colour is the screen's: `hintColor`, picked against the land.
   hint: {
     marginTop: 10,
     paddingHorizontal: spacing.xs,
     fontFamily: fonts.sans,
     fontSize: 15.5,
     lineHeight: 22,
-    color: colors.textSecondary,
   },
   confirm: {
     marginTop: 10,
@@ -472,20 +583,5 @@ const useStyles = themedStyles((colors) => ({
   },
   half: {
     flex: 1,
-  },
-  invite: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    marginTop: 10,
-  },
-  invitePicker: {
-    flex: 1,
-  },
-  // At least enough that the sun stays below the fold when the page only just fills the screen, as
-  // the long owner mockups draw it — the horizon closes the page, it does not crowd its last field.
-  spacer: {
-    flex: 1,
-    minHeight: 64,
   },
 }));

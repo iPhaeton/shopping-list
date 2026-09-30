@@ -37,15 +37,12 @@ appId: com.shoppingloop.app
     visible: "Share with .*"
     timeout: 15000
 - takeScreenshot: sharing-suggestions-${THEME}
-# The keyboard stays up — `hideKeyboard` on iOS swipes the content — and covers nothing tapped next.
+# Picked: the role picker shows in the header's strip and Share goes live. Nothing is shared.
+- tapOn: "Share with .*"
+- takeScreenshot: sharing-picked-${THEME}
+# The keyboard stays up — `hideKeyboard` on iOS swipes the content — and covers nothing tapped next:
+# the header, Back included, is pinned at the top.
 - eraseText
-# Revealing the invite block above the keyboard scrolled the header off the top; drag it back,
-# above where the keyboard is. `scrollUntilVisible` stops at once: the title's descender still
-# shows under the status bar, which counts as visible.
-- swipe:
-    start: "50%,25%"
-    end: "50%,60%"
-- waitForAnimationToEnd
 # Every screen draws its own `Back`, and Maestro's `back` is Android-only. On Sharing, List detail's
 # `Back` is still in the hierarchy underneath, so tap Sharing's by where it is drawn.
 - tapOn:
@@ -62,6 +59,8 @@ appId: com.shoppingloop.app
 - extendedWaitUntil:
     visible: Leave list
     timeout: 10000
+# `Leave list` shows before the push ends; a shot then catches the screen mid-slide, corners rounded.
+- waitForAnimationToEnd
 - takeScreenshot: sharing-member-${THEME}
 - tapOn: Leave list
 - takeScreenshot: sharing-leave-${THEME}

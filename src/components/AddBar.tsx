@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { TextInputProps } from 'react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { themedStyles, useTheme } from '../state/ThemeContext';
@@ -15,12 +16,27 @@ type Props = {
   /** Adds a `Cancel` button before the submit one — for an editor that replaces something else
    * while it is open, like `ItemRow`'s rename. */
   onCancel?: () => void;
+  /** The field's own label, where its placeholder is not the right name for it — Sharing's `Name`.
+   * Defaults to the placeholder. */
+  accessibilityLabel?: string;
+  /**
+   * Hands the text to the caller: set, and the bar shows `value` and reports edits through
+   * `onChangeText` instead of keeping a draft, and never clears itself — Sharing's invite field,
+   * whose text drives a search and whose submit may fail.
+   */
+  value?: string;
+  onChangeText?: (text: string) => void;
+  /** Whether the button is live, where "has non-blank text" is not the rule — Sharing's needs a
+   * person picked from its suggestions. */
+  canSubmit?: boolean;
+  autoCapitalize?: TextInputProps['autoCapitalize'];
 };
 
 /**
- * Text field + submit button: adding a list or an item, renaming a list, and — through `onCancel` —
- * `ItemRow`'s in-place rename. Owns its own draft text and clears it once a non-blank value has
- * been handed to `onSubmit`.
+ * Text field + submit button: adding a list or an item, renaming a list, sharing a list (through
+ * `UserAutocomplete`), and — through `onCancel` — `ItemRow`'s in-place rename. Owns its own draft
+ * text and clears it once a non-blank value has been handed to `onSubmit`, unless the caller holds
+ * the text through `value`.
  *
  * `initialValue` seeds that draft on mount only — it is a starting point, not a controlled value, so
  * a bar that is open while the underlying name changes keeps what the user is typing.
@@ -32,16 +48,28 @@ export function AddBar({
   autoFocus = false,
   onSubmit,
   onCancel,
+  accessibilityLabel = placeholder,
+  value: controlledValue,
+  onChangeText,
+  canSubmit: submittable,
+  autoCapitalize,
 }: Props) {
   const styles = useStyles();
   const { colors, scheme } = useTheme();
-  const [value, setValue] = useState(initialValue);
-  const canSubmit = value.trim().length > 0;
+  const [draft, setDraft] = useState(initialValue);
+  const controlled = controlledValue !== undefined;
+  const value = controlled ? controlledValue : draft;
+  const canSubmit = submittable ?? value.trim().length > 0;
+
+  function change(text: string) {
+    if (!controlled) setDraft(text);
+    onChangeText?.(text);
+  }
 
   function submit() {
     if (!canSubmit) return;
     onSubmit(value);
-    setValue('');
+    if (!controlled) setDraft('');
   }
 
   return (
@@ -49,12 +77,13 @@ export function AddBar({
       <TextInput
         style={styles.input}
         value={value}
-        onChangeText={setValue}
+        onChangeText={change}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         keyboardAppearance={scheme}
         selectionColor={colors.primary}
-        accessibilityLabel={placeholder}
+        accessibilityLabel={accessibilityLabel}
+        autoCapitalize={autoCapitalize}
         autoFocus={autoFocus}
         returnKeyType="done"
         onSubmitEditing={submit}

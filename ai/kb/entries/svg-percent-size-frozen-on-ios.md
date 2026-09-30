@@ -4,8 +4,8 @@ title: On iOS, a react-native-svg drawing sized "100%" keeps its first-layout si
 type: gotcha
 status: current
 tags: [ui, svg, ios, layout, react-native-svg]
-sources: [ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, src/components/Sky.tsx, a7416fd]
-last_verified: 2026-09-29
+sources: [ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, src/components/Sky.tsx, a7416fd]
+last_verified: 2026-09-30
 verify: grep -q 'onLayout=' src/components/Sky.tsx && grep -q '<Svg width={size.width} height={size.height}' src/components/Sky.tsx && ! grep -rqE '^ +height="100%"|<Svg[^>]*height="100%"' src --include='*.tsx'
 related: [absolute-decoration-needs-pointer-events-on-its-wrapper, phone-is-the-product]
 indexed: false
@@ -15,9 +15,10 @@ indexed: false
 when the `View` holding it grows later. Its gradient was sized to the drawing's bounding box, so it
 stayed short too.
 
-`SkyFill` ([Sky.tsx](../../../src/components/Sky.tsx)) is the sky behind List detail's header. The
-header's first render happens while the items are still loading, before the Add bar exists. When
-the bar arrived, the region grew, but the sky stayed at its first height. The screen-fixed ground
+`SkyFill` ([Sky.tsx](../../../src/components/Sky.tsx)) is the sky behind List detail's header, and
+since task 20 step 6 Sharing's, whose status-bar strip draws it at the height `onLayout` measured.
+List detail's header first renders while the items are still loading, before the Add bar exists.
+When the bar arrived, the region grew, but the sky stayed at its first height. The screen-fixed ground
 showed through behind the Add bar. Web and RNTL showed nothing wrong, so this was found only on the
 simulator. It cost a round trip in task 20 step 4.
 

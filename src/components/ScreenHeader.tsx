@@ -8,12 +8,12 @@ import { IconButton } from './IconButton';
 
 /**
  * Between the safe-area inset and the back button: puts the button at y 60 on the iPhone 17e, where
- * every mockup draws it — List detail's `HEADER_GAP`.
+ * every mockup draws it — List detail's `HEADER_GAP`, and Sharing's pinned header's.
  */
-const HEADER_GAP = 13;
+export const HEADER_GAP = 13;
 
 /**
- * The drawn header of a pushed screen with nothing else in its top row — Account and Sharing: an
+ * The drawn header of a pushed screen with nothing else in its top row — Account: an
  * outlined round Back, then the screen's name in the serif, as List detail draws its own. The native
  * header is hidden on every screen (`RootNavigator`); back still works without it — the edge swipe on
  * iOS and the hardware back on Android belong to the stack, not the header.
