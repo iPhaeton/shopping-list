@@ -1,8 +1,9 @@
 # Suggestion — search and sort the live rows; "Show deleted" becomes a separate bin view
 
-**Status:** proposal, not an approved step. Adopting it needs a new
-`ai/tasks/<n>/description-step-<n>.md` first, and
-[scope-boundaries](../kb/entries/scope-boundaries.md) updated afterwards by the librarian.
+**Status:** proposal, promoted the same day by `ai/tasks/24-search-and-sort/description-step-1.md`
+to `-step-3.md` at the user's request, where §7's decisions are answered. Decision 3 went against
+the recommendation: one item sort **per list**, stored only when it is not the default.
+[scope-boundaries](../kb/entries/scope-boundaries.md) is updated by the librarian as each step lands.
 
 **Date:** 2026-10-01
 
