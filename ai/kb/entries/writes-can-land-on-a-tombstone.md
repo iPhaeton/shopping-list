@@ -4,10 +4,10 @@ title: A queued write can land on something in the bin — `target_deleted` is n
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, deletion, architecture]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
 last_verified: 2026-10-01
 verify: grep -q "create type public.write_outcome as enum ('applied', 'target_deleted');" supabase/migrations/20260910000000_deletion.sql && grep -q "verdict === 'ok' && outcome === 'target_deleted'" src/state/useOutbox.ts && grep -B6 'setBlocked({ op' src/state/useOutbox.ts | grep -q 'await hydrate();' && grep -B4 'setBlocked({ op' src/state/useOutbox.ts | grep -q 'await fetchMissingTarget(op, loaded);' && grep -q '?? (await loadList(listId))' src/state/useOutbox.ts && grep -q 'queueFirst(queue.current, restore)' src/state/useBlockedWrites.ts && grep -q 'restorePlan(lists, blocked).length > 0' src/state/useBlockedWrites.ts && grep -q "rpc('add_item'" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts && awk '/create function public.set_item_done/,/^\$\$;/' supabase/migrations/20260910000000_deletion.sql | grep -E "raise exception|return 'target_deleted'" | tail -2 | head -1 | grep -q 'raise exception'
-related: [deletion-is-a-tombstone, writes-retry-from-an-outbox, refused-writes-return-zero-rows, server-stamps-done-at, first-fetch-replaces-list-state, list-data-scoped-by-rls, queries-go-through-a11y-labels, session-revoked-write-redirects]
+related: [deletion-is-a-tombstone, writes-retry-from-an-outbox, refused-writes-return-zero-rows, server-stamps-done-at, first-fetch-replaces-list-state, list-data-scoped-by-rls, queries-go-through-a11y-labels, session-revoked-write-redirects, limit-checks-pass-an-applied-resend]
 ---
 
 Since deletion exists, a write sitting in the outbox can be sent to a list or item somebody else put
@@ -65,8 +65,11 @@ duplicated into a return value that could not enforce it anyway.
 removed between making the change and the queue reaching it — the provider drops the write itself. It
 cannot be left to the banner to decline rendering: the write is still the head of a stopped queue, so
 an invisible prompt would stall everything behind it. This is also what stops the prompt looping when
-a restore is itself refused, because the fetch that follows the refusal carries the role that refused
-it.
+a restore is refused **for a role**, because the fetch that follows the refusal carries the role that
+refused it. **A restore refused at a limit does loop** (task 23 step 2, reasoned, not reproduced): the
+role still allows it, so the blocked write lands on the same tombstone, `target_deleted` clears the
+banner with `setError(null)`, and the prompt returns without the limit's sentence. Accepted, since
+restores are deliberately not pre-checked ([scope-boundaries](scope-boundaries.md)).
 
 **Two write paths had to become RPCs to carry an outcome, and only one of those reasons is deletion.**
 

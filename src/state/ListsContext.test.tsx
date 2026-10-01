@@ -8,6 +8,7 @@ import {
   fetchItem,
   fetchItems,
   fetchList,
+  fetchListCounts,
   fetchLists,
   insertList,
   renameItem,
@@ -18,9 +19,10 @@ import {
   type Result,
 } from '../lib/listsApi';
 import { subscribeToChanges } from '../lib/listsChannel';
+import { ITEMS_FULL } from '../lib/limits';
 import { loadOutbox, saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
-import { NO_LIST_CURSORS } from './listsReducer';
+import { NO_LIST_COUNTS, NO_LIST_CURSORS } from './listsReducer';
 import type { Cursor, List, Stream } from './types';
 
 /**
@@ -38,6 +40,7 @@ import type { Cursor, List, Stream } from './types';
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(),
+  fetchListCounts: jest.fn(),
   fetchItems: jest.fn(),
   fetchItem: jest.fn(),
   fetchList: jest.fn(),
@@ -58,6 +61,7 @@ jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn() }));
 
 const api = {
   fetchLists: jest.mocked(fetchLists),
+  fetchListCounts: jest.mocked(fetchListCounts),
   fetchItems: jest.mocked(fetchItems),
   fetchItem: jest.mocked(fetchItem),
   fetchList: jest.mocked(fetchList),
@@ -156,6 +160,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
 
   serveLists([]);
+  api.fetchListCounts.mockResolvedValue({ counts: NO_LIST_COUNTS, error: null });
   api.fetchItems.mockResolvedValue({ items: [], next: null, error: null });
   api.fetchItem.mockResolvedValue({ item: null, error: null });
   api.fetchList.mockResolvedValue({ list: null, error: null });
@@ -183,6 +188,7 @@ function Probe() {
   const {
     lists,
     listCursors,
+    listCounts,
     status,
     error,
     pending,
@@ -210,6 +216,7 @@ function Probe() {
       <Text>{`blocked: ${blocked ? blocked.op.type : 'none'}`}</Text>
       <Text>{`lastNudge: ${lastNudge ? (lastNudge.listId ?? 'all') : 'none'}`}</Text>
       <Text>{`list cursors: ${listCursors.live?.id ?? 'end'}, ${listCursors.bin?.id ?? 'end'}`}</Text>
+      <Text>{`list counts: ${listCounts.owned} owned, ${listCounts.total} in total`}</Text>
       {lists.map((list) => (
         <Text key={list.id}>
           {`${list.id} ${list.name}${list.deletedAt === null ? '' : ' [binned]'}${
@@ -685,7 +692,7 @@ it('drops the items of a list the database refused', async () => {
 // --- Reading offline -----------------------------------------------------------------------
 
 it('shows the last known lists when the fetch fails', async () => {
-  await writeCachedLists(USER, [GROCERIES], NO_LIST_CURSORS);
+  await writeCachedLists(USER, [GROCERIES], NO_LIST_CURSORS, NO_LIST_COUNTS);
   failLists('network down');
 
   await renderProbe();
@@ -713,7 +720,7 @@ it('remembers writes the database acknowledged, not just what a fetch returned',
 });
 
 it('never reads another account cached lists', async () => {
-  await writeCachedLists('someone-else', [GROCERIES], NO_LIST_CURSORS);
+  await writeCachedLists('someone-else', [GROCERIES], NO_LIST_CURSORS, NO_LIST_COUNTS);
 
   await renderProbe();
 
@@ -1751,7 +1758,7 @@ describe('lists, paged', () => {
 
   /** The cache holds the list cursors, so a cold start re-reads as deep as the last session got. */
   it('re-reads as many pages of lists as the cache held on a cold start', async () => {
-    await writeCachedLists(USER, FIVE_LIVE.slice(0, 4), { live: cursorAt(4), bin: null });
+    await writeCachedLists(USER, FIVE_LIVE.slice(0, 4), { live: cursorAt(4), bin: null }, NO_LIST_COUNTS);
     servePagedLists(FIVE_LIVE, 2);
 
     await renderProbe();
@@ -1761,4 +1768,151 @@ describe('lists, paged', () => {
     expect(screen.getByText(row(4))).toBeOnTheScreen();
     expect(screen.queryByText(row(5))).not.toBeOnTheScreen();
   });
+});
+
+/**
+ * The counts the Lists screen warns from (task 23 step 2). The server's, read beside page 1 on every
+ * full re-read, with this device's own creates and bins counted on top as they are made — sent or
+ * not — and nothing counted twice.
+ */
+describe('list counts', () => {
+  const serveCounts = (owned: number, total: number) =>
+    api.fetchListCounts.mockResolvedValue({ counts: { owned, total }, error: null });
+
+  it('are read beside page 1 of the lists', async () => {
+    serveCounts(7, 9);
+
+    await renderProbe();
+
+    expect(screen.getByText('list counts: 7 owned, 9 in total')).toBeOnTheScreen();
+    expect(api.fetchListCounts).toHaveBeenCalledTimes(1);
+  });
+
+  /** They are the base pending writes are counted on, so there is no older copy worth keeping. */
+  it('fail the whole re-read when they cannot be read, leaving state untouched', async () => {
+    jest.useFakeTimers();
+    serveLists([GROCERIES]);
+    serveCounts(7, 9);
+    await renderProbe();
+
+    serveLists([{ ...GROCERIES, name: 'Renamed since' }]);
+    api.fetchListCounts.mockResolvedValue({ counts: null, error: 'network down' });
+    await act(async () => nudge());
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(api.fetchListCounts).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(/^l1 Groceries/)).toBeOnTheScreen();
+    expect(screen.queryByText(/Renamed since/)).not.toBeOnTheScreen();
+    expect(screen.getByText('list counts: 7 owned, 9 in total')).toBeOnTheScreen();
+  });
+
+  it('count a list created with no signal before the database has it', async () => {
+    serveCounts(99, 99);
+    api.insertList.mockResolvedValue(OFFLINE);
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('create'));
+
+    expect(screen.getByText('list counts: 100 owned, 100 in total')).toBeOnTheScreen();
+  });
+
+  /** A re-read replaces the counts, so the queue has to be counted again on top of what it read. */
+  it('count a pending create on top of the counts a re-read brings', async () => {
+    await saveOutbox(USER, [{ type: 'list/created', id: 'l9', name: 'Hardware' }]);
+    serveCounts(99, 99);
+    api.insertList.mockResolvedValue(OFFLINE);
+
+    await renderProbe();
+
+    expect(screen.getByText('l9 Hardware: ')).toBeOnTheScreen();
+    expect(screen.getByText('list counts: 100 owned, 100 in total')).toBeOnTheScreen();
+  });
+
+  it('count a create left in the outbox on a cold start with no signal', async () => {
+    await writeCachedLists(USER, [GROCERIES], NO_LIST_CURSORS, { owned: 99, total: 99 });
+    await saveOutbox(USER, [{ type: 'list/created', id: 'l9', name: 'Hardware' }]);
+    failLists('network down');
+    api.insertList.mockResolvedValue(OFFLINE);
+
+    await renderProbe();
+
+    expect(screen.getByText('list counts: 100 owned, 100 in total')).toBeOnTheScreen();
+  });
+
+  /** No re-read follows a write that lands, so the count it took has to stay taken. */
+  it('still count a created list once the database has acknowledged it', async () => {
+    serveCounts(99, 99);
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('create'));
+    await screen.findByText('pending: 0');
+
+    expect(screen.getByText('list counts: 100 owned, 100 in total')).toBeOnTheScreen();
+  });
+
+  /** The outbox resending a create whose answer was lost: the server has counted it already. */
+  it('do not count a pending create twice when the read already holds it', async () => {
+    await saveOutbox(USER, [{ type: 'list/created', id: 'l1', name: 'Groceries' }]);
+    serveLists([GROCERIES]);
+    serveCounts(100, 100);
+    api.insertList.mockResolvedValue(OFFLINE);
+
+    await renderProbe();
+
+    expect(screen.getByText('list counts: 100 owned, 100 in total')).toBeOnTheScreen();
+  });
+
+  it('free a slot as soon as an owned list is binned', async () => {
+    serveLists([GROCERIES]);
+    serveCounts(100, 100);
+    api.setListDeleted.mockResolvedValue(OFFLINE);
+    await renderProbe();
+
+    await fireEvent.press(screen.getByLabelText('bin list'));
+
+    expect(screen.getByText('list counts: 99 owned, 99 in total')).toBeOnTheScreen();
+  });
+
+  /** A nudge names lists, and says nothing about the others, so it neither reads nor resets them. */
+  it('are kept by a nudge that names a list', async () => {
+    jest.useFakeTimers();
+    serveLists([GROCERIES]);
+    serveCounts(100, 100);
+    await renderProbe();
+    await fireEvent.press(screen.getByLabelText('create'));
+    await screen.findByText('pending: 0');
+    api.fetchList.mockResolvedValue({ list: GROCERIES, error: null });
+
+    await act(async () => nudge('l1'));
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(api.fetchList).toHaveBeenCalledWith('l1'));
+    expect(api.fetchListCounts).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('list counts: 101 owned, 101 in total')).toBeOnTheScreen();
+  });
+});
+
+/**
+ * The item limit has no warning in the app: the 1,001st item appears, the database refuses it, and
+ * the refusal is the whole story — one banner, the item gone, and nothing queued behind it left to
+ * fail on its own.
+ */
+it('leaves one banner and drops the item when the database says the list is full', async () => {
+  await saveOutbox(USER, [
+    { type: 'item/added', listId: 'l1', id: 'i9', title: 'One too many' },
+    { type: 'item/setDone', listId: 'l1', itemId: 'i9', doneAt: '2026-10-01T09:00:00.000Z' },
+  ]);
+  serveLists([GROCERIES]);
+  api.addItem.mockResolvedValue({ error: ITEMS_FULL, verdict: 'permanent' });
+
+  await renderProbe();
+
+  expect(await screen.findByText(`error: ${ITEMS_FULL}`)).toBeOnTheScreen();
+  await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
+  expect(api.setItemDone).not.toHaveBeenCalled();
+  expect(screen.queryByText(/One too many/)).not.toBeOnTheScreen();
 });

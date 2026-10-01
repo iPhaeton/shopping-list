@@ -7,7 +7,7 @@ tags: [supabase, postgres, rls, triggers, persistence]
 sources: [ai/tasks/15-session-revocation/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, src/lib/listsApi.ts]
 last_verified: 2026-10-01
 verify: grep -q "supabase.from('lists').insert({ id, name })" src/lib/listsApi.ts && ! grep -A3 "supabase.from('lists').insert" src/lib/listsApi.ts | grep -q '\.select('
-related: [refused-writes-return-zero-rows, server-stamps-done-at, list-data-scoped-by-rls, session-still-valid-guards-writes]
+related: [refused-writes-return-zero-rows, server-stamps-done-at, list-data-scoped-by-rls, session-still-valid-guards-writes, limit-checks-pass-an-applied-resend]
 indexed: false
 ---
 

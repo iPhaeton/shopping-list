@@ -1,4 +1,5 @@
-import type { Cursor, Item, List, Role, Stream } from '../state/types';
+import type { Cursor, Item, List, ListCounts, Role, Stream } from '../state/types';
+import { ITEMS_FULL, LIMIT_CODES, LISTS_FULL, OWNED_LISTS_FULL } from './limits';
 import { supabase } from './supabase';
 
 /**
@@ -235,6 +236,27 @@ export async function fetchList(
   return { list: data ? toList(data as unknown as MembershipRow) : null, error: null };
 }
 
+/**
+ * How many live lists you own and are on in total — the two numbers the database's list limits
+ * count, from `my_list_counts()`, read beside page 1 of the lists on every full re-read. A paged
+ * client cannot count them itself: it holds only the pages it has loaded.
+ *
+ * Rooted at `list_members` like both list reads, and `security invoker`, so row-level security
+ * decides what is counted. A set-returning function, so PostgREST answers with a one-row array.
+ */
+export async function fetchListCounts(): Promise<{
+  counts: ListCounts | null;
+  error: string | null;
+}> {
+  const { data, error } = await supabase.rpc('my_list_counts');
+
+  if (error) return { counts: null, error: error.message };
+  // An aggregate always answers one row; `?? []` and the zeros are for a null body, as in
+  // `fetchMembers`, rather than a crash.
+  const [row] = (data ?? []) as ListCounts[];
+  return { counts: { owned: row?.owned ?? 0, total: row?.total ?? 0 }, error: null };
+}
+
 /** `created_by` is deliberately not sent: it defaults to `auth.uid()` in the database. */
 export async function insertList(id: string, name: string): Promise<Result> {
   const { error, status } = await supabase.from('lists').insert({ id, name });
@@ -378,9 +400,11 @@ function writeResult(error: Failure, status: number, data?: unknown): Result {
  * A sentence for the failures a person can actually cause, instead of the database's own words.
  *
  * The raw text is written for whoever is reading a log — *"not allowed to change this item"*,
- * lowercase and unpunctuated — and until now it went straight to the red banner. Both codes below
- * mean the same thing to the person holding the phone: a role that moved under their feet between
- * making a change and the queue getting it sent.
+ * lowercase and unpunctuated — and until now it went straight to the red banner. The first two codes
+ * below mean the same thing to the person holding the phone: a role that moved under their feet
+ * between making a change and the queue getting it sent. The last three are a limit, reached by a
+ * write the app did not warn about — a count gone stale, a restore, or the item limit, which it
+ * never warns about.
  */
 function humanize(error: NonNullable<Failure>): string {
   switch (error.code) {
@@ -391,6 +415,16 @@ function humanize(error: NonNullable<Failure>): string {
     // The only check constraint a queued write can reach is `length(trim(...)) > 0`.
     case '23514':
       return 'That change is no longer valid.';
+
+    // The three limits. The database's words are about somebody else — they are written for the
+    // Sharing screen, which shows them as they are — so a list you created or restored, or an item
+    // you added, is told about in the second person instead.
+    case LIMIT_CODES.ownedLists:
+      return OWNED_LISTS_FULL;
+    case LIMIT_CODES.lists:
+      return LISTS_FULL;
+    case LIMIT_CODES.items:
+      return ITEMS_FULL;
 
     default:
       return error.message;
@@ -418,6 +452,12 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
   // succeed on a retry. As with 23505, the code decides and the status does not.
   if (code === 'P0002') return 'permanent';
 
+  // A limit. These do arrive as 400 — measured, 2026-10-01 — but they are named rather than left to
+  // the status rule below, for the reason `P0002` is: a limit refusal classified `retryable` would
+  // be resent every 30 s forever, since the outbox has no attempt cap, and stall every write queued
+  // behind it. The status a SQLSTATE gets is PostgREST's choice, not this schema's.
+  if (isLimitCode(code)) return 'permanent';
+
   // Status 0 is how postgrest-js reports a failed fetch — no signal, DNS, TLS, a dropped socket.
   // In other words: offline, the case this whole feature exists for.
   if (status === 0 || status >= 500) return 'retryable';
@@ -430,6 +470,10 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
   if (status >= 400) return 'permanent';
 
   return 'retryable';
+}
+
+function isLimitCode(code: string): boolean {
+  return (Object.values(LIMIT_CODES) as string[]).includes(code);
 }
 
 /**

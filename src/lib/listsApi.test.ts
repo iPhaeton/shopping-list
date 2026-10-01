@@ -1,14 +1,17 @@
+import { ITEMS_FULL, LISTS_FULL, OWNED_LISTS_FULL } from './limits';
 import {
   addItem,
   fetchItem,
   fetchItems,
   fetchList,
+  fetchListCounts,
   fetchLists,
   LIST_PAGE_SIZE,
   MAX_ROWS,
   PAGE_SIZE,
   renameItem,
   renameList,
+  resultFor,
   setItemDeleted,
   setItemDone,
   setListDeleted,
@@ -511,5 +514,71 @@ describe('the writes that go through the outbox', () => {
       status: 403,
     });
     expect(await setListDeleted('l1', true)).toMatchObject({ sessionRevoked: false });
+  });
+});
+
+describe('fetchListCounts', () => {
+  it('reads both counts from my_list_counts, which answers one row', async () => {
+    const rpc = respondToRpcWith({ data: [{ owned: 100, total: 412 }], error: null, status: 200 });
+
+    expect(await fetchListCounts()).toEqual({ counts: { owned: 100, total: 412 }, error: null });
+    expect(rpc).toHaveBeenCalledWith('my_list_counts');
+  });
+
+  it('returns the error rather than throwing it', async () => {
+    respondToRpcWith({ data: null, error: { message: 'network down' }, status: 0 });
+
+    expect(await fetchListCounts()).toEqual({ counts: null, error: 'network down' });
+  });
+});
+
+/**
+ * Each limit raises its own SQLSTATE (`20261001000000_list_limits.sql`), and all three must be
+ * `permanent`: a limit refusal read as `retryable` would be resent every 30 s forever, since the
+ * outbox has no attempt cap, and stall every write behind it. They arrive as 400 — measured — but
+ * the code decides, as it does for `P0002`, so each is asserted here at 500 as well.
+ */
+describe('the three limits', () => {
+  const cases = [
+    { code: 'LM001', message: 'they already own 100 lists', sentence: OWNED_LISTS_FULL },
+    { code: 'LM002', message: 'they are already on 1,000 lists', sentence: LISTS_FULL },
+    { code: 'LM003', message: 'this list already has 1,000 items', sentence: ITEMS_FULL },
+  ];
+
+  it.each(cases)('classifies $code as permanent whatever the status', async ({ code, message }) => {
+    for (const status of [400, 500]) {
+      respondToRpcWith({ data: null, error: { message, code }, status });
+      expect(await addItem('i1', 'l1', 'Milk')).toMatchObject({ verdict: 'permanent' });
+    }
+  });
+
+  /** Asserted verbatim: these are the banner's words, and the Lists screen shows the first two too. */
+  it('says each limit in the second person on a queued write', async () => {
+    respondToRpcWith({ data: null, error: cases[0], status: 400 });
+    expect((await setListDeleted('l1', false)).error).toBe(
+      'You own 100 lists. Delete one or hand one over to make room.'
+    );
+
+    respondToRpcWith({ data: null, error: cases[1], status: 400 });
+    expect((await setListDeleted('l1', false)).error).toBe(
+      "You're on 1,000 lists. Delete or leave one to make room."
+    );
+
+    respondToRpcWith({ data: null, error: cases[2], status: 400 });
+    expect((await addItem('i1', 'l1', 'Milk')).error).toBe('This list is full: 1,000 items at most.');
+  });
+
+  /** The Sharing screen's reader is an owner reading about somebody else: the database's own words. */
+  it('keeps the database words for the membership calls', () => {
+    expect(resultFor(cases[0], 400)).toEqual({
+      error: 'they already own 100 lists',
+      verdict: 'permanent',
+      sessionRevoked: false,
+    });
+    expect(resultFor(cases[1], 400)).toEqual({
+      error: 'they are already on 1,000 lists',
+      verdict: 'permanent',
+      sessionRevoked: false,
+    });
   });
 });

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject } from 'react';
 
-import { fetchItems, fetchList, fetchLists } from '../lib/listsApi';
+import { fetchItems, fetchList, fetchListCounts, fetchLists } from '../lib/listsApi';
 import { writeCachedLists } from '../lib/listCache';
 import { reloadListPages, reloadPages } from './reloadPages';
-import { replay } from './replay';
+import { replay, replayState } from './replay';
 import type { Action, List, ListCursors, WriteAction } from './types';
 
 /**
@@ -88,6 +88,10 @@ export function useHydration({
    * a failed read of every list did before lists were paged. An item page that fails only snaps its
    * own list back; see `reloadPages`.
    *
+   * The list counts the limits are warned from are read here too, beside page 1, and fail the call
+   * the same way: they are the server's numbers, and the pending writes are counted on top of them
+   * by `replayState`, so there is no older copy to fall back to that would not count those twice.
+   *
    * Returns the array it dispatched, so a caller that needs to know what state holds *now* — the
    * blocked-write path — does not have to wait for React to commit it.
    *
@@ -103,22 +107,35 @@ export function useHydration({
     fetching.current = true;
 
     try {
-      const pages = await reloadListPages(listsRef.current, fetchLists);
+      const [pages, read] = await Promise.all([
+        reloadListPages(listsRef.current, fetchLists),
+        fetchListCounts(),
+      ]);
       if (!live.current || pages.lists === null) return { error: pages.error, lists: null };
+      if (read.counts === null) return { error: read.error, lists: null };
 
       const lists = await reloadPages(pages.lists, listsRef.current, fetchItems);
       if (!live.current) return { error: null, lists: null };
 
-      const loaded = replay(lists, queue.current);
-      dispatch({ type: 'lists/loaded', lists: loaded, cursors: pages.cursors });
+      const replayed = replayState(
+        { lists, listCursors: pages.cursors, listCounts: read.counts },
+        queue.current
+      );
+      const loaded = replayed.lists;
+      dispatch({
+        type: 'lists/loaded',
+        lists: loaded,
+        cursors: pages.cursors,
+        counts: replayed.listCounts,
+      });
       // Set here too, not only by the mirroring effects: a screen's own mount effect can run in the
       // same commit as this dispatch, and children's effects fire before their parent's — reading
       // a ref there would see it one commit behind, the same trap `hydrate`'s return value exists
       // to avoid for the blocked-write path.
       listsRef.current = loaded;
       listCursorsRef.current = pages.cursors;
-      // The fetched rows, never the replayed view — see `writeCachedLists`.
-      void writeCachedLists(userId, lists, pages.cursors);
+      // The fetched rows and counts, never the replayed view — see `writeCachedLists`.
+      void writeCachedLists(userId, lists, pages.cursors, read.counts);
       return { error: null, lists: loaded };
     } finally {
       fetching.current = false;
@@ -145,6 +162,10 @@ export function useHydration({
    * way an item added past a loaded page does. The screen sorts by `joinedAt`, so where in the array
    * it lands does not matter. A per-id fetch that errors leaves that id's local copy untouched,
    * matching a failed nudge-triggered `hydrate`: silent.
+   *
+   * No counts are read, and none are dispatched, so the ones in state stand: a few named lists say
+   * nothing about the rest, and the counts already carry this device's own writes. Somebody else's
+   * share or removal reaches them at the next full `hydrate` — approximate, by design.
    *
    * The list cursors are read **at the same moment as `previous`** and dispatched unchanged. Read
    * later, a scroll page that landed mid-fetch would be dropped from `lists` by the replace while

@@ -14,9 +14,9 @@ import { readCachedLists, writeCachedLists } from '../lib/listCache';
 import { subscribeToChanges } from '../lib/listsChannel';
 import { loadOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
-import { replay } from './replay';
+import { replayState } from './replay';
 import type { Blocked } from './restorePlan';
-import type { List, ListCursors, WriteAction } from './types';
+import type { List, ListCounts, ListCursors, WriteAction } from './types';
 import { useBlockedWrites } from './useBlockedWrites';
 import { useHydration } from './useHydration';
 import { useListWrites } from './useListWrites';
@@ -31,6 +31,12 @@ type ListsContextValue = {
    * what is loaded so far.
    */
   listCursors: ListCursors;
+  /**
+   * How many live lists you own and are on in total — the database's last word plus this device's
+   * own writes since. Approximate, and only for warning before the tap: the Lists screen swaps its
+   * Create bar for a sentence at either limit. The database is what enforces them.
+   */
+  listCounts: ListCounts;
   /** Whose lists these are. The sharing screen needs it to tell your own roster row from the rest. */
   userId: string;
   /** `loading` until there is something to show — a cached copy, or the first fetch settling. */
@@ -255,8 +261,11 @@ export function ListsProvider({
       setPending(ops.length);
 
       if (cached) {
-        const lists = replay(cached.lists, ops);
-        dispatch({ type: 'lists/loaded', lists, cursors: cached.cursors });
+        const { lists, listCounts } = replayState(
+          { lists: cached.lists, listCursors: cached.cursors, listCounts: cached.counts },
+          ops
+        );
+        dispatch({ type: 'lists/loaded', lists, cursors: cached.cursors, counts: listCounts });
         // Synchronously, as `hydrate` does after its own dispatch: `hydrate` below counts how many
         // lists were loaded from these refs before its first await, and the mirroring effects have
         // not run yet — without this a cold start would re-read one page of lists, not as many as
@@ -287,9 +296,9 @@ export function ListsProvider({
   // acknowledged by the database, so this is server truth by another route.
   useEffect(() => {
     if (status === 'ready' && pending === 0) {
-      void writeCachedLists(userId, state.lists, state.listCursors);
+      void writeCachedLists(userId, state.lists, state.listCursors, state.listCounts);
     }
-  }, [userId, status, pending, state.lists, state.listCursors]);
+  }, [userId, status, pending, state.lists, state.listCursors, state.listCounts]);
 
   /**
    * Coming back to the app: send whatever is queued, then re-read.
@@ -356,6 +365,7 @@ export function ListsProvider({
     () => ({
       lists: state.lists,
       listCursors: state.listCursors,
+      listCounts: state.listCounts,
       userId,
       status,
       error,
@@ -380,6 +390,7 @@ export function ListsProvider({
     [
       state.lists,
       state.listCursors,
+      state.listCounts,
       userId,
       status,
       error,

@@ -23,6 +23,7 @@ import { ListDetailScreen } from './ListDetailScreen';
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], next: null, error: null })),
+  fetchListCounts: jest.fn(async () => ({ counts: { owned: 0, total: 0 }, error: null })),
   fetchList: jest.fn(async () => ({ list: null, error: null })),
   fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
   fetchItem: jest.fn(async () => ({ item: null, error: null })),

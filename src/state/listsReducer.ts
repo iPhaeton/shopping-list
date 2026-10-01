@@ -1,16 +1,28 @@
-import type { Action, Cursor, Item, List, ListCursors, State } from './types';
+import type { Action, Cursor, Item, List, ListCounts, ListCursors, State } from './types';
 
 /** Before the first fetch: no lists, and no list cursors — "nothing asked yet", not "ended". */
 export const NO_LIST_CURSORS: ListCursors = { live: null, bin: null };
 
-export const initialState: State = { lists: [], listCursors: NO_LIST_CURSORS };
+/**
+ * Before the first count arrives. Zero rather than "unknown": the counts only decide whether the
+ * app warns before the tap, and below every limit is the direction that fails safe — the database
+ * still refuses what it must.
+ */
+export const NO_LIST_COUNTS: ListCounts = { owned: 0, total: 0 };
+
+export const initialState: State = {
+  lists: [],
+  listCursors: NO_LIST_CURSORS,
+  listCounts: NO_LIST_COUNTS,
+};
 
 export function listsReducer(state: State, action: Action): State {
   switch (action.type) {
     // Hydration from the database, and the way a failed write is rolled back: whatever the server
     // holds replaces whatever the screen was showing.
     case 'lists/loaded': {
-      return { ...state, lists: action.lists, listCursors: action.cursors };
+      const listCounts = action.counts ?? state.listCounts;
+      return { ...state, lists: action.lists, listCursors: action.cursors, listCounts };
     }
 
     // A page of lists — `items/pageLoaded`'s rules one level up. A list already here is left alone
@@ -111,7 +123,17 @@ export function listsReducer(state: State, action: Action): State {
         nextLive: null,
         nextBin: null,
       };
-      return { ...state, lists: [...state.lists, list] };
+      // Counted here, on the append only, and that is what makes it exact rather than a guess: a
+      // pending create folded back over a fetch that already holds it — the outbox resending one
+      // whose answer was lost — lands on the branch above and is not counted twice.
+      return {
+        ...state,
+        lists: [...state.lists, list],
+        listCounts: {
+          owned: state.listCounts.owned + 1,
+          total: state.listCounts.total + 1,
+        },
+      };
     }
 
     case 'list/renamed': {
@@ -205,9 +227,27 @@ export function listsReducer(state: State, action: Action): State {
       // Through `updateList` like every other change to a list, and deliberately not a `filter` on
       // `state.lists`: a binned list stays in the array, where the bin can show it and a restore
       // can find it.
-      return updateList(state, action.id, (list) =>
+      const next = updateList(state, action.id, (list) =>
         list.deletedAt === action.deletedAt ? list : { ...list, deletedAt: action.deletedAt }
       );
+
+      // Nothing in the bin counts toward a limit, so binning frees a slot at once and restoring
+      // takes one — the sentence in place of the Create bar says "delete one", and has to go away
+      // when you do. Only a move between live and the bin counts: the database's own `deleted_at`
+      // differs from the one this device minted, and a pending bin folded back over a fetch that
+      // already has it moves nothing.
+      const before = state.lists.find((list) => list.id === action.id);
+      if (!before || (before.deletedAt === null) === (action.deletedAt === null)) {
+        return next;
+      }
+      const step = action.deletedAt === null ? 1 : -1;
+      return {
+        ...next,
+        listCounts: {
+          owned: next.listCounts.owned + (before.role === 'owner' ? step : 0),
+          total: next.listCounts.total + step,
+        },
+      };
     }
   }
 }

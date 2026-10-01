@@ -23,19 +23,19 @@
 -- PARAMETERS -- a `-v name=value` on the command line wins over the default here.
 \if :{?user_id}
 \else
-  \set user_id '5c7a459e-665a-4273-a615-ff4241cdcc9a'
+  \set user_id '8d6d4eb9-db34-4adc-9277-b5e986f83a6d'
 \endif
 \if :{?list_count}
 \else
-  \set list_count 999
+  \set list_count 99
 \endif
 \if :{?min_items}
 \else
-  \set min_items 100
+  \set min_items 999
 \endif
 \if :{?max_items}
 \else
-  \set max_items 1000
+  \set max_items 999
 \endif
 
 -- STEP 0: validate. psql does not substitute its variables inside a `$$` body, so they cross into

@@ -104,8 +104,8 @@ does not merely block a write — it deletes it from that device, with one error
 **Since step 15 there is a fourth gate, and it sits beside grants and policies rather than inside
 either.** Every write RPC now also raises `42501` when `public.session_still_valid()` is false — a
 device whose session was revoked elsewhere, still holding a JWT that has not yet expired. It appears
-in no policy and no grant, only as the first statement each of the ten write functions repeats (nine
-plus step 17's `set_name`; step 18's `search_users_by_name` is a read and does not carry it); the
+in no policy and no grant, only as the first statement each of the eleven write functions repeats
+(reads such as `search_users_by_name` and `my_list_counts()` do not carry it); the
 read side (`list_members_of`, the SELECT policies) is deliberately untouched
 ([session-still-valid-guards-writes](session-still-valid-guards-writes.md)).
 

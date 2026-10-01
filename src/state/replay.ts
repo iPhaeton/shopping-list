@@ -1,5 +1,5 @@
 import { initialState, listsReducer } from './listsReducer';
-import type { List, WriteAction } from './types';
+import type { List, State, WriteAction } from './types';
 
 /**
  * Server truth, with the writes the database has not seen yet folded back on top in the order they
@@ -15,9 +15,19 @@ import type { List, WriteAction } from './types';
  * depends on, and an op the reducer cannot place — an item for a list that is gone — is dropped by
  * `updateList` exactly as it would have been live.
  *
- * Lists only, not the list cursors: no write action reads or moves them, so the fold starts from
- * the empty ones and the caller dispatches whichever cursors its own fetch decided.
+ * Lists only, not the list cursors or counts: the fold starts from the empty ones, for a caller that
+ * dispatches no counts of its own. One that read counts from the server folds with `replayState`.
  */
 export function replay(lists: List[], ops: WriteAction[]): List[] {
-  return ops.reduce((state, op) => listsReducer(state, op), { ...initialState, lists }).lists;
+  return replayState({ ...initialState, lists }, ops).lists;
+}
+
+/**
+ * `replay` over a whole state, for a read that brought the list counts too: a pending create or bin
+ * moves them exactly as it moves the lists, and — because each write action is idempotent by id —
+ * one the fetched rows already reflect moves neither. No write action reads or moves the cursors,
+ * so they come out as they went in.
+ */
+export function replayState(state: State, ops: WriteAction[]): State {
+  return ops.reduce((folded, op) => listsReducer(folded, op), state);
 }

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import { fetchLists, insertList, setListDeleted } from '../lib/listsApi';
+import { LISTS_FULL, OWNED_LISTS_FULL } from '../lib/limits';
+import { fetchListCounts, fetchLists, insertList, setListDeleted } from '../lib/listsApi';
 import type { ListsScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
 import type { Cursor, List, Stream } from '../state/types';
@@ -19,6 +20,7 @@ import { ListsScreen } from './ListsScreen';
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], next: null, error: null })),
+  fetchListCounts: jest.fn(async () => ({ counts: { owned: 0, total: 0 }, error: null })),
   fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
   fetchItem: jest.fn(async () => ({ item: null, error: null })),
   fetchList: jest.fn(async () => ({ list: null, error: null })),
@@ -419,5 +421,84 @@ describe('more lists than a page', () => {
     await fireEvent.press(screen.getByLabelText('Show 2 deleted'));
 
     expect(rowLabels()).toEqual(['List 1', 'List 2', 'List 3', 'List 4', 'List 0']);
+  });
+});
+
+// --- At a list limit ----------------------------------------------------------------------------
+
+/**
+ * At either list limit the Create bar gives way to a sentence saying so — task 23 step 2. Asserted
+ * verbatim, as every piece of copy a person reads here is. The item limit has no counterpart: List
+ * detail never warns, and the database's refusal is the whole story there.
+ */
+describe('at a list limit', () => {
+  const GROCERIES: List = { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, joinedAt: '2026-09-01T08:00:00+00:00', itemsLoaded: false, items: [], nextLive: null, nextBin: null };
+
+  function serveCounts(owned: number, total: number) {
+    jest.mocked(fetchListCounts).mockResolvedValue({ counts: { owned, total }, error: null });
+  }
+
+  /** `renderScreen` waits for the Create bar, which is exactly what may not be there. */
+  async function renderAtCounts(owned: number, total: number) {
+    serveCounts(owned, total);
+    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+    await render(
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+        <ListsScreen {...({ navigation } as unknown as ListsScreenProps)} />
+      </ListsProvider>
+    );
+    await waitFor(() => expect(screen.queryByLabelText('Loading your lists')).not.toBeOnTheScreen());
+  }
+
+  afterEach(() => serveCounts(0, 0));
+
+  it('says so in place of the Create bar at 100 owned lists', async () => {
+    await renderAtCounts(100, 100);
+
+    expect(screen.getByText('You own 100 lists. Delete one or hand one over to make room.')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+  });
+
+  it('says so in place of the Create bar at 1,000 lists in total', async () => {
+    await renderAtCounts(3, 1000);
+
+    expect(screen.getByText("You're on 1,000 lists. Delete or leave one to make room.")).toBeOnTheScreen();
+    expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+  });
+
+  it('keeps the Create bar one short of either limit', async () => {
+    await renderAtCounts(99, 999);
+
+    expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
+    expect(screen.queryByText(LISTS_FULL)).not.toBeOnTheScreen();
+  });
+
+  /** The database checks the total first, so the warning names the limit a refusal would. */
+  it('names the total when both are reached', async () => {
+    await renderAtCounts(100, 1000);
+
+    expect(screen.getByText(LISTS_FULL)).toBeOnTheScreen();
+    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
+  });
+
+  it('counts a list the moment it is created', async () => {
+    await renderAtCounts(99, 99);
+
+    await createList('Groceries');
+
+    expect(screen.getByText(OWNED_LISTS_FULL)).toBeOnTheScreen();
+    expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+  });
+
+  /** The sentence says "delete one", so deleting one has to bring the bar back. */
+  it('brings the Create bar back when a list is binned', async () => {
+    serveLists([GROCERIES]);
+    await renderAtCounts(100, 100);
+
+    await fireEvent.press(screen.getByLabelText('Delete Groceries'));
+
+    expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
   });
 });

@@ -4,10 +4,10 @@ title: Every write action is idempotent by id, and updateList returns the origin
 type: convention
 status: current
 tags: [state, reducer, immutability]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, 6ef87a2]
 last_verified: 2026-10-01
 verify: grep -q 'is a no-op' src/state/listsReducer.test.ts && grep -q 'returns the same state object when the name is unchanged' src/state/listsReducer.test.ts && grep -q 'yields one row when a write the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'yields one item when an add the fetch already contains is replayed anyway' src/state/replay.test.ts && grep -q 'state.lists.some((candidate) => candidate.id === action.id)' src/state/listsReducer.ts && npx jest src/state/listsReducer.test.ts src/state/replay.test.ts -t 'is a no-op|returns the same state object|yields one row|yields one item' --silent
-related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, jest-cold-cache-timeouts]
+related: [ids-minted-outside-reducer, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, jest-cold-cache-timeouts, limit-checks-pass-an-applied-resend]
 indexed: false
 ---
 
@@ -41,6 +41,9 @@ look at.** It goes through `updateList` like every other change to a list rather
 ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)). Both arms return the same list object when
 `deletedAt` already holds the value being set, and `item/added` now leaves `deletedAt` alone as well
 as `doneAt` when the id is already there, for the same reason: somebody may have binned it since.
+**The same goes for `listCounts`** (task 23 step 2): `list/created` counts only on its append branch
+and `list/setDeleted` only when liveness flips, so a replayed write moves no count either
+([limit-checks-pass-an-applied-resend](limit-checks-pass-an-applied-resend.md)).
 
 **That second condition is load-bearing beyond rendering.** Writes carry absolute values rather than
 flips precisely so a repeat is harmless (see

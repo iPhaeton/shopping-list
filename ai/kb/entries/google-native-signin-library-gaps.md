@@ -8,6 +8,7 @@ sources: [ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/15-s
 last_verified: 2026-09-20
 verify: grep -q "skip_nonce_check = true" supabase/config.toml && grep -q "iosClientId:" src/lib/googleSignIn.ts && for f in $(grep -rl 'SessionProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/googleSignIn'" "$f" || exit 1; done
 related: [supabase-client-module-boundary, native-build-toolchain, scope-boundaries]
+indexed: false
 ---
 
 `@react-native-google-signin/google-signin@16.1.5` ([src/lib/googleSignIn.ts](../../../src/lib/googleSignIn.ts))

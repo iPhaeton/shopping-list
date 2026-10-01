@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { List, ListCursors } from '../state/types';
+import type { List, ListCounts, ListCursors } from '../state/types';
 import { inOrder } from './storageQueue';
 
 /**
@@ -39,23 +39,39 @@ import { inOrder } from './storageQueue';
  * be counted as a loaded one. The blob also gained the list cursors beside `lists`, so a cold start
  * seeds state with how far each stream of lists was paged and the first `hydrate` re-reads that
  * many. `outbox.ts` stays at `1`: `list/created` is unchanged, and the reducer mints `joinedAt: null`.
+ *
+ * **`7` since the list limits (task 23 step 2).** The blob gained `counts` — how many live lists the
+ * account owns and is on, as the database last said — so a cold start with no signal still knows
+ * whether to show the Create bar or the sentence that replaces it at a limit. Missing, it would read
+ * as `undefined`, and `undefined >= 100` is `false`: the bar would come back at the limit until the
+ * first fetch, quietly. `outbox.ts` stays at `1` once more: no queued action changed shape.
  */
-const VERSION = 6;
+const VERSION = 7;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 
 export async function readCachedLists(
   userId: string
-): Promise<{ lists: List[]; cursors: ListCursors } | null> {
+): Promise<{ lists: List[]; cursors: ListCursors; counts: ListCounts } | null> {
   const raw = await AsyncStorage.getItem(keyFor(userId));
   if (!raw) return null;
 
   try {
-    const stored = JSON.parse(raw) as { v?: unknown; lists?: unknown; cursors?: unknown };
-    if (stored.v !== VERSION || !Array.isArray(stored.lists) || !isCursors(stored.cursors)) {
+    const stored = JSON.parse(raw) as {
+      v?: unknown;
+      lists?: unknown;
+      cursors?: unknown;
+      counts?: unknown;
+    };
+    if (
+      stored.v !== VERSION ||
+      !Array.isArray(stored.lists) ||
+      !isCursors(stored.cursors) ||
+      !isCounts(stored.counts)
+    ) {
       return null;
     }
-    return { lists: stored.lists as List[], cursors: stored.cursors };
+    return { lists: stored.lists as List[], cursors: stored.cursors, counts: stored.counts };
   } catch {
     return null;
   }
@@ -64,14 +80,22 @@ export async function readCachedLists(
 /**
  * Only ever the rows a fetch returned, never the view on screen. The screen is server truth with
  * the outbox replayed on top; cache that, and the next load replays those same writes onto rows
- * that already contain them — a `list/created` appends by id, and the list appears twice.
+ * that already contain them — a `list/created` appends by id, and the list appears twice. The same
+ * goes for `counts`: the ones the fetch read, before a pending create is counted on top.
  */
 export function writeCachedLists(
   userId: string,
   lists: List[],
-  cursors: ListCursors
+  cursors: ListCursors,
+  counts: ListCounts
 ): Promise<void> {
-  const stored = JSON.stringify({ v: VERSION, lists, cursors, fetchedAt: new Date().toISOString() });
+  const stored = JSON.stringify({
+    v: VERSION,
+    lists,
+    cursors,
+    counts,
+    fetchedAt: new Date().toISOString(),
+  });
   return inOrder(() => AsyncStorage.setItem(keyFor(userId), stored));
 }
 
@@ -81,6 +105,13 @@ function isCursors(value: unknown): value is ListCursors {
   const { live, bin } = value as { live?: unknown; bin?: unknown };
   const cursor = (c: unknown) => c === null || typeof c === 'object';
   return cursor(live) && cursor(bin);
+}
+
+/** Both numbers present, since `undefined` would compare below every limit. */
+function isCounts(value: unknown): value is ListCounts {
+  if (typeof value !== 'object' || value === null) return false;
+  const { owned, total } = value as { owned?: unknown; total?: unknown };
+  return typeof owned === 'number' && typeof total === 'number';
 }
 
 export function clearCachedLists(userId: string): Promise<void> {

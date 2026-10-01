@@ -1,4 +1,5 @@
-import { replay } from './replay';
+import { initialState } from './listsReducer';
+import { replay, replayState } from './replay';
 import type { List, WriteAction } from './types';
 
 const MILK = { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null };
@@ -81,4 +82,41 @@ it('drops a queued write whose list is gone', () => {
   const add: WriteAction = { type: 'item/added', listId: 'gone', id: 'i9', title: 'Nails' };
 
   expect(replay([GROCERIES], [add])).toEqual([GROCERIES]);
+});
+
+describe('replayState', () => {
+  const COUNTS = { owned: 99, total: 99 };
+  const fetched = (lists: List[]) => ({ ...initialState, lists, listCounts: COUNTS });
+
+  /** A list created offline must count before the database has it, or the Create bar stays up. */
+  it('counts a pending create on top of the counts the server read', () => {
+    const create: WriteAction = { type: 'list/created', id: 'l2', name: 'Hardware' };
+
+    expect(replayState(fetched([GROCERIES]), [create]).listCounts).toEqual({ owned: 100, total: 100 });
+  });
+
+  /**
+   * The outbox resending a create whose answer was lost: the database has the list and has counted
+   * it, so counting the queued op again would be one too many.
+   */
+  it('does not count a pending create the fetched rows already hold', () => {
+    const create: WriteAction = { type: 'list/created', id: 'l1', name: 'Groceries' };
+
+    expect(replayState(fetched([GROCERIES]), [create]).listCounts).toEqual(COUNTS);
+  });
+
+  it('frees a slot for a pending bin of a list the fetch says is live', () => {
+    const bin: WriteAction = { type: 'list/setDeleted', id: 'l1', deletedAt: '2026-09-30T12:00:00.000Z' };
+
+    expect(replayState(fetched([GROCERIES]), [bin]).listCounts).toEqual({ owned: 98, total: 98 });
+  });
+
+  it('leaves the cursors as they went in', () => {
+    const cursors = { live: { createdAt: '2026-09-01T08:00:00+00:00', id: 'l1' }, bin: null };
+    const create: WriteAction = { type: 'list/created', id: 'l2', name: 'Hardware' };
+
+    expect(replayState({ ...fetched([GROCERIES]), listCursors: cursors }, [create]).listCursors).toBe(
+      cursors
+    );
+  });
 });

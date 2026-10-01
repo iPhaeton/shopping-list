@@ -14,6 +14,7 @@ import { PillButton } from '../components/PillButton';
 import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { Sky } from '../components/Sky';
 import { SyncBanner } from '../components/SyncBanner';
+import { listLimitSentence } from '../lib/limits';
 import type { ListsScreenProps } from '../navigation/types';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
@@ -21,7 +22,7 @@ import { inJoinOrder, liveLists } from '../state/listsReducer';
 import { canManageList } from '../state/roles';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { List } from '../state/types';
-import { fonts, spacing } from '../theme';
+import { fonts, radius, spacing } from '../theme';
 
 /** A stable empty array while loading, so the `FlatList`'s `data` prop never allocates a new one. */
 const NONE: List[] = [];
@@ -41,6 +42,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   const {
     lists,
     listCursors,
+    listCounts,
     status,
     error,
     pending,
@@ -71,6 +73,11 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   const ordered = useMemo(() => inJoinOrder(showDeleted ? lists : live), [showDeleted, lists, live]);
   const visible = loading ? NONE : ordered;
   const binned = lists.length - live.length;
+
+  // At either list limit the Create bar gives way to the sentence saying so, rather than letting a
+  // list appear and vanish a moment later when the database refuses it. The counts are approximate
+  // — another member's share moves them unseen — so this is a warning, never the enforcement.
+  const full = listLimitSentence(listCounts);
 
   // Whether a scroll to the end has anything to fetch: the bin's cursor only counts while the bin
   // is on screen. With no cursor the `FlatList` gets no handler at all, so nothing fires.
@@ -128,7 +135,13 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
       ) : (
         <>
           <SyncBanner pending={pending} />
-          <AddBar placeholder="New list name" buttonLabel="Create" onSubmit={(name) => createList(name)} />
+          {full ? (
+            <View style={styles.full}>
+              <Text style={styles.fullText}>{full}</Text>
+            </View>
+          ) : (
+            <AddBar placeholder="New list name" buttonLabel="Create" onSubmit={(name) => createList(name)} />
+          )}
         </>
       )}
       <Horizon ground={bandAt(colors, 0).color}>
@@ -257,6 +270,27 @@ const useStyles = themedStyles((colors) => ({
     fontFamily: fonts.serif,
     fontSize: 40,
     color: colors.text,
+  },
+  // The Create bar's own surface — outline, shadow, the 20pt inset — holding the sentence in its
+  // place, so the header keeps its shape at a limit. Two lines on a phone, so a minimum height
+  // rather than the bar's fixed one, and `radius.lg`, the pill's cousin for content that tall.
+  full: {
+    justifyContent: 'center',
+    minHeight: 52,
+    marginHorizontal: 20,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.surfaceOutline,
+    backgroundColor: colors.surface,
+    boxShadow: `0px 3px 16px ${colors.barShadow}`,
+  },
+  fullText: {
+    color: colors.text,
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    lineHeight: 20,
   },
   loadingBlock: {
     alignItems: 'center',

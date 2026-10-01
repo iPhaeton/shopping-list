@@ -6,6 +6,7 @@ import {
   listsReducer,
   liveItems,
   liveLists,
+  NO_LIST_COUNTS,
   NO_LIST_CURSORS,
 } from './listsReducer';
 import type { List, State } from './types';
@@ -506,6 +507,71 @@ describe('list/setDeleted', () => {
     const before = stateWithItems('Milk');
 
     expect(listsReducer(before, { type: 'list/setDeleted', id: 'l1', deletedAt: null })).toBe(before);
+  });
+});
+
+/**
+ * The counts the Lists screen warns from: the server's, then moved by this device's own creates and
+ * bins as they are made. Each move must be idempotent the way the lists are, because `replay` and
+ * `foldPage` apply queued writes again over rows that may already reflect them.
+ */
+describe('list counts', () => {
+  const COUNTS = { owned: 99, total: 500 };
+  const loaded = (lists: List[] = []) =>
+    listsReducer(initialState, { type: 'lists/loaded', lists, cursors: NO_LIST_CURSORS, counts: COUNTS });
+  const OWNED: List = { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, joinedAt: '2026-09-01T08:00:00+00:00', itemsLoaded: false, items: [], nextLive: null, nextBin: null };
+  const SHARED: List = { ...OWNED, id: 'l2', role: 'writer' };
+
+  it('start at zero, below every limit', () => {
+    expect(initialState.listCounts).toEqual(NO_LIST_COUNTS);
+  });
+
+  it('are replaced by a read that carries them, and kept by one that does not', () => {
+    const state = loaded();
+    expect(state.listCounts).toEqual(COUNTS);
+
+    const nudged = listsReducer(state, { type: 'lists/loaded', lists: [], cursors: NO_LIST_CURSORS });
+    expect(nudged.listCounts).toEqual(COUNTS);
+  });
+
+  it('count a created list toward both, once per id', () => {
+    const once = listsReducer(loaded(), { type: 'list/created', id: 'l9', name: 'Hardware' });
+    const twice = listsReducer(once, { type: 'list/created', id: 'l9', name: 'Hardware' });
+
+    expect(once.listCounts).toEqual({ owned: 100, total: 501 });
+    expect(twice.listCounts).toEqual({ owned: 100, total: 501 });
+  });
+
+  it('do not count a blank name, which creates nothing', () => {
+    expect(listsReducer(loaded(), { type: 'list/created', id: 'l9', name: '  ' }).listCounts).toEqual(COUNTS);
+  });
+
+  it('free a slot when an owned list is binned, and take it back on restore', () => {
+    const binned = listsReducer(loaded([OWNED]), { type: 'list/setDeleted', id: 'l1', deletedAt: DELETED_AT });
+    expect(binned.listCounts).toEqual({ owned: 98, total: 499 });
+
+    const restored = listsReducer(binned, { type: 'list/setDeleted', id: 'l1', deletedAt: null });
+    expect(restored.listCounts).toEqual(COUNTS);
+  });
+
+  it('move only the total for a list somebody else owns', () => {
+    const binned = listsReducer(loaded([SHARED]), { type: 'list/setDeleted', id: 'l2', deletedAt: DELETED_AT });
+
+    expect(binned.listCounts).toEqual({ owned: 99, total: 499 });
+  });
+
+  /** The database stamps its own `deleted_at`, so a queued bin folded back over it differs only there. */
+  it('do not move when a binned list only gets a different timestamp', () => {
+    const fetched = loaded([{ ...OWNED, deletedAt: '2026-09-30T12:00:00+00:00' }]);
+    const folded = listsReducer(fetched, { type: 'list/setDeleted', id: 'l1', deletedAt: DELETED_AT });
+
+    expect(folded.listCounts).toEqual(COUNTS);
+  });
+
+  it('do not move for a list that is not here', () => {
+    const state = listsReducer(loaded([OWNED]), { type: 'list/setDeleted', id: 'nope', deletedAt: DELETED_AT });
+
+    expect(state.listCounts).toEqual(COUNTS);
   });
 });
 

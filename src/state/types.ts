@@ -92,9 +92,22 @@ export type List = {
  */
 export type ListCursors = { live: Cursor | null; bin: Cursor | null };
 
+/**
+ * How many live lists you own, and are on in total — what the database's two list limits count
+ * (`src/lib/limits.ts`). Read from the server on every full re-read, because a paged client cannot
+ * count lists it has not loaded; then moved by this device's own writes as they are made, so a list
+ * created or binned here counts at once, sent or not.
+ *
+ * **Approximate by design.** Other members' writes and the database's accepted overshoot move the
+ * real numbers under it until the next re-read. It decides only whether the app warns before the
+ * tap; the database decides whether the write goes through.
+ */
+export type ListCounts = { owned: number; total: number };
+
 export type State = {
   lists: List[];
   listCursors: ListCursors;
+  listCounts: ListCounts;
 };
 
 /**
@@ -112,8 +125,12 @@ export type State = {
  * same people, and one tap from being restored.
  */
 export type Action =
-  /** Replaces the lists wholesale, and the list cursors with them — a fetch decides both. */
-  | { type: 'lists/loaded'; lists: List[]; cursors: ListCursors }
+  /**
+   * Replaces the lists wholesale, and the list cursors with them — a fetch decides both. `counts`
+   * likewise, from a read of every list; omitted, the counts stay where they are, which is what a
+   * re-read of a few named lists wants, since it learns nothing about the rest.
+   */
+  | { type: 'lists/loaded'; lists: List[]; cursors: ListCursors; counts?: ListCounts }
   /**
    * A page of lists, read from the database — `items/pageLoaded` one level up. Idempotent by id: a
    * list already here is left alone, and the new ones go in before the first optimistic list.

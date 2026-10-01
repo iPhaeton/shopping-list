@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { List, ListCursors } from '../state/types';
+import type { List, ListCounts, ListCursors } from '../state/types';
 import { readCachedLists, writeCachedLists } from './listCache';
 
 /**
@@ -25,14 +25,17 @@ const GROCERIES: List = {
 /** How far each stream of lists was paged, so a cold start re-reads that many. */
 const CURSORS: ListCursors = { live: { createdAt: '2026-09-01T09:00:00+00:00', id: 'l1' }, bin: null };
 
+/** What the database last counted, so a cold start offline still knows whether to warn. */
+const COUNTS: ListCounts = { owned: 100, total: 140 };
+
 beforeEach(async () => {
   await AsyncStorage.clear();
 });
 
-it('round-trips what it was given, both levels of cursors included', async () => {
-  await writeCachedLists('u1', [GROCERIES], CURSORS);
+it('round-trips what it was given, both levels of cursors and the counts included', async () => {
+  await writeCachedLists('u1', [GROCERIES], CURSORS, COUNTS);
 
-  expect(await readCachedLists('u1')).toEqual({ lists: [GROCERIES], cursors: CURSORS });
+  expect(await readCachedLists('u1')).toEqual({ lists: [GROCERIES], cursors: CURSORS, counts: COUNTS });
 });
 
 it('drops a blob from before pagination rather than reading its missing cursors as "more"', async () => {
@@ -58,7 +61,26 @@ it('drops a blob from before lists were paged, which has no joinedAt and no list
 
 /** `undefined` would read as "there is more", so a blob without both cursors is not trusted. */
 it('drops a blob whose list cursors are missing', async () => {
-  await AsyncStorage.setItem('lists:u1', JSON.stringify({ v: 6, lists: [GROCERIES], cursors: { live: null } }));
+  await AsyncStorage.setItem(
+    'lists:u1',
+    JSON.stringify({ v: 7, lists: [GROCERIES], cursors: { live: null }, counts: COUNTS })
+  );
+
+  expect(await readCachedLists('u1')).toBeNull();
+});
+
+it('drops a blob from before the list limits, which has no counts', async () => {
+  await AsyncStorage.setItem('lists:u1', JSON.stringify({ v: 6, lists: [GROCERIES], cursors: CURSORS }));
+
+  expect(await readCachedLists('u1')).toBeNull();
+});
+
+/** `undefined >= 100` is `false`, so a blob without both numbers would hide a limit until a fetch. */
+it('drops a blob whose counts are missing a number', async () => {
+  await AsyncStorage.setItem(
+    'lists:u1',
+    JSON.stringify({ v: 7, lists: [GROCERIES], cursors: CURSORS, counts: { owned: 100 } })
+  );
 
   expect(await readCachedLists('u1')).toBeNull();
 });

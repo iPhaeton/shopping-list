@@ -4,10 +4,10 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/lib/membersApi.ts, src/state/types.ts]
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/lib/membersApi.ts, src/state/types.ts]
 last_verified: 2026-10-01
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(awk '/^export type Action =/,/^export type WriteAction/' src/state/types.ts | grep -c "type: '")" = 11 && test "$(awk '/^export type WriteAction/,/>;/' src/state/types.ts | grep -oE "type: '[a-zA-Z/]+'" | sort | tr '\n' ' ')" = "type: 'items/firstPageLoaded' type: 'items/pageLoaded' type: 'lists/loaded' type: 'lists/pageLoaded' " && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
-related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects, sync-banner-mount-is-unconditional]
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && grep -q "if (isLimitCode(code)) return 'permanent';" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(awk '/^export type Action =/,/^export type WriteAction/' src/state/types.ts | grep -c "type: '")" = 11 && test "$(awk '/^export type WriteAction/,/>;/' src/state/types.ts | grep -oE "type: '[a-zA-Z/]+'" | sort | tr '\n' ' ')" = "type: 'items/firstPageLoaded' type: 'items/pageLoaded' type: 'lists/loaded' type: 'lists/pageLoaded' " && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
+related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects, sync-banner-mount-is-unconditional, limit-checks-pass-an-applied-resend]
 ---
 
 Every reducer-owned write dispatches first — the row is on screen before any request — and is then
@@ -27,14 +27,16 @@ off the screen. A refused write vanishes: gone from database and outbox both, no
 was never wrong, only the device's credentials were, so it stays queued and replays at the next
 sign-in instead ([session-revoked-write-redirects](session-revoked-write-redirects.md)).
 
-**The SQLSTATE beats the status, and two rules do it.** `23505` is one; `P0002` is the other:
+**The SQLSTATE beats the status, and three rules do it.** `23505` is one. `P0002` is another:
 PostgREST answers it with **500** — measured — and a 500 otherwise means "send it again", but
 `share_list` raises it for a refusal that will never succeed on retry — "that account no longer
-exists" (a search-resolved id deleted before the tap on Share). When adding an RPC that raises, check
-what HTTP status PostgREST gives its SQLSTATE first. **There is no
-attempt cap** — "eventually persisted" is incompatible with giving up after N tries, and a cap would
-fire in exactly the case the feature exists for. Backoff is 1s doubling to a 30s ceiling, cut short
-by the web `online` event or `AppState` going `active`.
+exists". The limits' `LM001`–`LM003` are the third
+([limit-checks-pass-an-applied-resend](limit-checks-pass-an-applied-resend.md)): they measure **400**,
+but are named anyway, since one misread as `retryable` would resend every 30 s and stall every write
+behind it. A new RPC that raises: measure its SQLSTATE's status, and name the code if a retry can
+never succeed. **There is no attempt cap** — "eventually persisted" is incompatible with giving up
+after N tries, and a cap would fire in exactly the case the feature exists for. Backoff is 1s
+doubling to a 30s ceiling, cut short by the web `online` event or `AppState` going `active`.
 
 **The queue holds reducer actions, not a second vocabulary for "a write".** `WriteAction` in
 [src/state/types.ts](../../../src/state/types.ts) is `Action` minus the four *reads* (`lists/loaded`,
@@ -49,8 +51,7 @@ while offline is one request. Nothing *removes* anything from `state.lists` — 
 derived at send time from `doneAt !== null`, not stored ([server-stamps-done-at](server-stamps-done-at.md)).
 
 **Adding a write is a new action plus a case in `sendWrite()`, and the type errors enumerate the rest.** `listIdOf`, `itemIdOf`, `sendWrite()`
-(`send()` renamed, now in [sendWrite.ts](../../../src/state/sendWrite.ts), alongside the seven action creators in [useListWrites.ts](../../../src/state/useListWrites.ts))
-and `dropDependents`'s "strands nothing" arm are exhaustive switches, so let the compiler point at them. Two things in `outbox.ts` do **not** defend themselves and must be edited by hand, each with a test naming the trap:
+([sendWrite.ts](../../../src/state/sendWrite.ts)) and `dropDependents`'s "strands nothing" arm are exhaustive switches. Two things in `outbox.ts` do **not** defend themselves and must be edited by hand, each with a test naming the trap:
 `supersedes` ends in `default: return false`, so a new absolute-valued write silently stops
 coalescing; and `dropDependents`'s `item/added` arm is a filter predicate rather than a `switch`, so
 it silently keeps a new item action that a refused insert should have stranded. **`outbox.ts`'s
@@ -61,10 +62,8 @@ restore in front of the write it unblocks ([writes-can-land-on-a-tombstone](writ
 
 **Membership writes deliberately do *not* go through any of this.** `shareList`, `setMemberRole`,
 `removeMember` and — since step 19 — `leaveList` are called straight from `SharingScreen`, which holds
-its roster in `useState`. Since step 18 [`shareList`](../../../src/lib/membersApi.ts) takes an id a
-search suggestion already resolved, so there is no typed address left to answer synchronously — the
-reason now is that the reducer models no members at all, `replay` has nothing to preserve, and the
-roster is an uncached, online-only RPC — `leaveList` fits the same boundary, not a new one. The
+its roster in `useState` ([membersApi.ts](../../../src/lib/membersApi.ts)): the reducer models no
+members, `replay` has nothing to preserve, and the roster is an uncached, online-only RPC. The
 boundary is "a write the reducer describes", not "any request".
 
 **Serial, and never overlapping a fetch.** `items.list_id` is a foreign key, so an item insert must
@@ -104,16 +103,15 @@ refusal as success would have the outbox drop a write it never delivered, which 
 `set_item_done` raises ([server-stamps-done-at](server-stamps-done-at.md)); a `PATCH` or `DELETE`
 filtered to zero rows answers `204` and reads as success unless it asked for the row back
 ([refused-writes-return-zero-rows](refused-writes-return-zero-rows.md)). `writeResult` rewrites
-`42501` and `23514` into sentences for these seven writes only, because their failure reaches the
-banner minutes or days after the tap; the membership RPCs keep the raw message.
-
-**Still not solved:** conflict resolution beyond last-write-wins, no happens-before, no sync engine
-(PowerSync if this ever needs real convergence), no warning when signing out with writes pending.
+`42501`, `23514` and the three limit codes into sentences (the limits' from
+[src/lib/limits.ts](../../../src/lib/limits.ts)) for these seven writes only, because their failure
+reaches the banner minutes or days after the tap; the membership RPCs keep the raw message, which
+the limit triggers write for the Sharing screen ("they already own 100 lists").
 
 The `verify:` command asserts shape, not plumbing: one `useReducer` caller; dispatch and enqueue
 counts equal, summed over `ListsContext.tsx` and `useListWrites.ts` (**a write that skips the
 outbox fails** — it counts the literal `dispatch(op);`, so a loop over already-queued ops must name
-its variable differently, as `foldPage` does); both verdict branches; the `P0002` rule; no attempt
+its variable differently, as `foldPage` does); both verdict branches; the `P0002` and limit rules; no attempt
 cap; no connectivity library; no `…/removed` action (case-insensitive, since a case-sensitive grep
 once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer; exactly **eleven** `Action`
 members (`type:` lines between `Action` and `WriteAction`) and `WriteAction` excluding exactly the four

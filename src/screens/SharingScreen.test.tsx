@@ -31,6 +31,7 @@ import { SharingScreen } from './SharingScreen';
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], next: null, error: null })),
+  fetchListCounts: jest.fn(async () => ({ counts: { owned: 0, total: 0 }, error: null })),
   fetchList: jest.fn(async () => ({ list: null, error: null })),
   fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
   fetchItem: jest.fn(async () => ({ item: null, error: null })),
@@ -498,6 +499,36 @@ it('renders the database refusal for a suggestion whose account is gone', async 
   expect(await screen.findByText('that account no longer exists')).toBeOnTheScreen();
   // The name stays in the field, since `run()` never clears it on failure.
   expect(screen.getByLabelText('Name')).toHaveDisplayValue('Carol');
+});
+
+/**
+ * The list limits (task 23 step 2) reach this screen in the database's own words — an owner reading
+ * about somebody else — never as the second-person sentence the Lists screen and the red banner use
+ * for your own lists.
+ */
+it('renders the database refusal for somebody already on 1,000 lists', async () => {
+  jest
+    .mocked(shareList)
+    .mockResolvedValue({ error: 'they are already on 1,000 lists', verdict: 'permanent' });
+
+  jest.useFakeTimers();
+  await renderScreen();
+  await pickSuggestion({ userId: 'u3', name: 'Carol' });
+  await fireEvent.press(screen.getByLabelText('Share'));
+
+  expect(await screen.findByText('they are already on 1,000 lists')).toBeOnTheScreen();
+});
+
+it('renders the database refusal for promoting somebody who already owns 100 lists', async () => {
+  jest
+    .mocked(setMemberRole)
+    .mockResolvedValue({ error: 'they already own 100 lists', verdict: 'permanent' });
+
+  await renderScreen();
+  await fireEvent.press(screen.getByLabelText('Set bob@example.com to owner'));
+
+  expect(setMemberRole).toHaveBeenCalledWith('l1', 'u2', 'owner');
+  expect(await screen.findByText('they already own 100 lists')).toBeOnTheScreen();
 });
 
 /**

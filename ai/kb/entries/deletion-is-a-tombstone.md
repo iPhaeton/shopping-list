@@ -4,10 +4,10 @@ title: Deleting stamps `deleted_at` and leaves the row — the bin's first page 
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
 last_verified: 2026-10-01
 verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
-related: [writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack]
+related: [writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack, limit-checks-pass-an-applied-resend]
 ---
 
 Step 9 added deletion, and **it deletes nothing**. `lists` and `items` each grew a `deleted_at
@@ -47,7 +47,9 @@ either table is un-writable by construction, so the RPCs are forced rather than 
 Both take a boolean rather than being a verb, so the value is absolute: a retry is harmless and the
 outbox coalesces delete/restore/delete into one request, exactly as it does a toggle
 ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). Both `raise 42501` when they change
-nothing; neither returns an outcome, because a delete cannot itself land on a deleted target.
+nothing; neither returns an outcome, because a delete cannot itself land on a deleted target. Since
+task 23 step 2 a restore can also be refused at a limit, since nothing in the bin counts toward one
+([limit-checks-pass-an-applied-resend](limit-checks-pass-an-applied-resend.md)).
 
 **The bin arrives with the live stream the moment a list is opened, not with `fetchLists` — since
 step 11-2 — and the client is what hides it.** `fetchLists` is list and membership metadata only
@@ -66,10 +68,8 @@ trap:
 > ([src/state/listsReducer.ts](../../../src/state/listsReducer.ts)). A tombstone reads exactly like a
 > live row otherwise, so the mistake is invisible in any test that does not delete something first.
 > `liveLists` keeps a binned list out of the Lists screen; `liveItems` drives
-> `ListDetailScreen`'s "Nothing on this list" empty state and its sort. `ListRow`'s "N of M done" is
-> gone as of step 11-2 — a row shows only its name now, a deliberate product trade-off (see
-> [scope-boundaries](scope-boundaries.md)), not a bug — so `countDone` (still exported, still tested)
-> has no caller left in app code.
+> `ListDetailScreen`'s "Nothing on this list" empty state and its sort. A list row shows only its
+> name, a product trade-off ([scope-boundaries](scope-boundaries.md)), so `countDone` has no caller.
 
 Both helpers return a fresh array, so a screen handing one to a `FlatList` memoises it.
 `ShowDeletedToggle` renders **only when the bin is non-empty**, since a toggle that reveals nothing
