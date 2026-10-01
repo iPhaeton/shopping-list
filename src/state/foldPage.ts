@@ -16,7 +16,10 @@ import type { Action, WriteAction } from './types';
 export function foldPage(
   dispatch: Dispatch<Action>,
   queue: MutableRefObject<WriteAction[]>,
-  action: Extract<Action, { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }>
+  action: Extract<
+    Action,
+    { type: 'lists/pageLoaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }
+  >
 ): void {
   dispatch(action);
   for (const queued of queue.current) dispatch(queued);

@@ -48,6 +48,16 @@ export type List = {
   /** As on `Item`, and independent of it: restoring a list does not restore the items in its bin. */
   deletedAt: string | null;
   /**
+   * When you joined the list — your `list_members` row's `created_at`, stamped by the database's
+   * clock. Lists are paged and ordered by this, the way items are by `Item.createdAt`, and for the
+   * same reason it is `null` only for an optimistic `list/created` the database has not
+   * acknowledged, which sorts last.
+   *
+   * Required rather than optional, like `deletedAt`: `undefined !== null`, so an older cached blob
+   * would read every list as stamped with a timestamp it does not have.
+   */
+  joinedAt: string | null;
+  /**
    * Whether this list's first page of both streams has been fetched — on entering it, on a cache
    * hit that already had it, or after `reloadPages` re-expands it. `false` with `items: []` means
    * "not fetched yet," not "empty" — `fetchLists` no longer carries any items, so every list
@@ -75,8 +85,16 @@ export type List = {
   nextBin: Cursor | null;
 };
 
+/**
+ * Where the next page of each stream of *lists* starts — the list-level twin of `List.nextLive` /
+ * `List.nextBin`. `createdAt` is the membership's `created_at` (`List.joinedAt`), `id` the list id.
+ * `null` means the stream has ended — or, before the first fetch, that nothing was asked yet.
+ */
+export type ListCursors = { live: Cursor | null; bin: Cursor | null };
+
 export type State = {
   lists: List[];
+  listCursors: ListCursors;
 };
 
 /**
@@ -94,7 +112,19 @@ export type State = {
  * same people, and one tap from being restored.
  */
 export type Action =
-  | { type: 'lists/loaded'; lists: List[] }
+  /** Replaces the lists wholesale, and the list cursors with them — a fetch decides both. */
+  | { type: 'lists/loaded'; lists: List[]; cursors: ListCursors }
+  /**
+   * A page of lists, read from the database — `items/pageLoaded` one level up. Idempotent by id: a
+   * list already here is left alone, and the new ones go in before the first optimistic list.
+   * `stream` moves that stream's list cursor; omitted, the cursors stay where they are, which is
+   * what a single-list read (a blocked write's target, or the list a screen has open) wants.
+   */
+  | {
+      type: 'lists/pageLoaded';
+      lists: List[];
+      stream?: { name: Stream; next: Cursor | null };
+    }
   /**
    * A page of one list's rows, read from the database. Idempotent by id — a row already here is
    * left alone, since its `doneAt` or `deletedAt` may have moved since — and the new ones go in
@@ -132,10 +162,13 @@ export type Action =
 /**
  * The seven actions that owe the database a write. They are the outbox's entries as well as the
  * reducer's actions — `src/lib/outbox.ts` stores exactly these — which is what lets a pending write
- * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`). The three
+ * be folded back over fetched rows with the reducer itself (`src/state/replay.ts`). The four
  * reads are excluded: none of them owes anything, so none is queued and none is folded.
  */
 export type WriteAction = Exclude<
   Action,
-  { type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }
+  | { type: 'lists/loaded' }
+  | { type: 'lists/pageLoaded' }
+  | { type: 'items/pageLoaded' }
+  | { type: 'items/firstPageLoaded' }
 >;

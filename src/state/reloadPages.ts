@@ -1,5 +1,5 @@
-import { listsReducer } from './listsReducer';
-import type { Cursor, Item, List, Stream } from './types';
+import { initialState, listsReducer } from './listsReducer';
+import type { Cursor, Item, List, ListCursors, Stream } from './types';
 
 /** One page of one stream, as `fetchItems` answers it; `items: null` means the read failed. */
 export type FetchPage = (
@@ -7,6 +7,75 @@ export type FetchPage = (
   stream: Stream,
   after: Cursor | null
 ) => Promise<{ items: Item[] | null; next: Cursor | null }>;
+
+/** One page of one stream of lists, as `fetchLists` answers it; `lists: null` means it failed. */
+export type FetchListPage = (
+  stream: Stream,
+  after: Cursor | null
+) => Promise<{ lists: List[] | null; next: Cursor | null; error: string | null }>;
+
+export type ListPages =
+  | { lists: List[]; cursors: ListCursors; error: null }
+  | { lists: null; cursors: null; error: string };
+
+/**
+ * The lists themselves, brought back up to how many of each stream were loaded before —
+ * `reloadPages`' rule one level up, and run in front of it: `lists/loaded` replaces state wholesale,
+ * so a re-read that fetched only page 1 would snap a Lists screen scrolled three pages deep back to
+ * one, on every foreground and every nudge.
+ *
+ * Each stream is re-read **one page per request, from page 1**, until it holds at least as many
+ * lists the database stamped (`joinedAt !== null`) as `previous` held of that stream, or the stream
+ * ends. At least page 1 always goes out, since a stream empty last time is not proof it still is.
+ * Optimistic lists are folded back on top afterwards by `replay`, so counting them here would ask
+ * for a page never read. The two streams are read side by side; pages are folded with the reducer's
+ * own `lists/pageLoaded`, live first, so a list caught in both — binned between the two reads — is
+ * kept once.
+ *
+ * **Any page that fails fails the whole re-read**, and the caller dispatches nothing. That is
+ * deliberately not `reloadPages`' per-list snap-back: snapping the list pages back would drop lists
+ * from state — the one open on List detail, or one with writes still queued — for a hiccup. Leaving
+ * state untouched is what a failed read of every list always did.
+ */
+export async function reloadListPages(
+  previous: List[],
+  fetchPage: FetchListPage
+): Promise<ListPages> {
+  type Page = { lists: List[]; next: Cursor | null };
+  const reread = async (stream: Stream): Promise<Page[] | string> => {
+    const wanted = stampedLists(previous, stream);
+    const pages: Page[] = [];
+    let held = 0;
+    let next: Cursor | null = null;
+
+    do {
+      const page = await fetchPage(stream, next);
+      if (page.lists === null) return page.error ?? 'Could not load your lists.';
+      pages.push({ lists: page.lists, next: page.next });
+      held += stampedLists(page.lists, stream);
+      next = page.next;
+    } while (next !== null && held < wanted);
+
+    return pages;
+  };
+
+  const [live, bin] = await Promise.all([reread('live'), reread('bin')]);
+  if (typeof live === 'string') return { lists: null, cursors: null, error: live };
+  if (typeof bin === 'string') return { lists: null, cursors: null, error: bin };
+
+  let state = initialState;
+  for (const [name, pages] of [['live', live], ['bin', bin]] as const) {
+    for (const page of pages) {
+      state = listsReducer(state, {
+        type: 'lists/pageLoaded',
+        lists: page.lists,
+        stream: { name, next: page.next },
+      });
+    }
+  }
+
+  return { lists: state.lists, cursors: state.listCursors, error: null };
+}
 
 /**
  * Brings a fresh fetch back up to how much of each list was loaded before it.
@@ -75,7 +144,7 @@ export async function reloadPages(
         }
 
         lists = listsReducer(
-          { lists },
+          { ...initialState, lists },
           {
             type: 'items/pageLoaded',
             listId: list.id,
@@ -99,6 +168,14 @@ export async function reloadPages(
   }
 
   return lists;
+}
+
+/** How many database-stamped lists of `stream` there are in `lists`. */
+function stampedLists(lists: List[], stream: Stream): number {
+  return lists.filter((list) => {
+    if (list.joinedAt === null) return false;
+    return stream === 'live' ? list.deletedAt === null : list.deletedAt !== null;
+  }).length;
 }
 
 /** How many database-stamped rows of `stream` the list holds. */

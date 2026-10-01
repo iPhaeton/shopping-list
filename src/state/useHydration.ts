@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject } from 'react';
 
-import { fetchItem, fetchItems, fetchList, fetchLists, MAX_ROWS } from '../lib/listsApi';
+import { fetchItems, fetchList, fetchLists } from '../lib/listsApi';
 import { writeCachedLists } from '../lib/listCache';
-import { reloadPages } from './reloadPages';
+import { reloadListPages, reloadPages } from './reloadPages';
 import { replay } from './replay';
-import type { Action, List, WriteAction } from './types';
+import type { Action, List, ListCursors, WriteAction } from './types';
 
 /**
  * How long a nudge from another device waits for company. Somebody adding five items sends five
@@ -39,6 +39,7 @@ export function useHydration({
   queue,
   live,
   listsRef,
+  listCursorsRef,
   fetching,
   flushing,
   retry,
@@ -49,6 +50,7 @@ export function useHydration({
   queue: MutableRefObject<WriteAction[]>;
   live: MutableRefObject<boolean>;
   listsRef: MutableRefObject<List[]>;
+  listCursorsRef: MutableRefObject<ListCursors>;
   fetching: MutableRefObject<boolean>;
   flushing: MutableRefObject<boolean>;
   retry: MutableRefObject<ReturnType<typeof setTimeout> | null>;
@@ -75,12 +77,16 @@ export function useHydration({
    * Unguarded on purpose — the flush loop calls it to roll a refused write back, and that happens
    * with `flushing` set. `refresh` below is the guarded door everyone else comes through.
    *
-   * A fetch carries a first page of each list's rows, and `lists/loaded` replaces state wholesale,
-   * so this re-reads as many pages as were loaded before — see `reloadPages` — inside the same
-   * `fetching` guard, one page per request. "Loaded before" is read from `listsRef`, a mirror of
-   * state, rather than from a dependency: `hydrate` is a dependency of `flush`, which is a
-   * dependency of everything, and re-creating that chain on every render is how the effects above
-   * it start re-subscribing.
+   * `lists/loaded` replaces state wholesale, so this re-reads as many pages as were loaded before,
+   * inside the same `fetching` guard, one page per request: the pages of lists first
+   * (`reloadListPages`), then the pages of each list that was open (`reloadPages`). "Loaded before"
+   * is read from `listsRef`, a mirror of state, rather than from a dependency: `hydrate` is a
+   * dependency of `flush`, which is a dependency of everything, and re-creating that chain on every
+   * render is how the effects above it start re-subscribing.
+   *
+   * A list page that fails fails the whole call — nothing dispatched, state untouched — exactly as
+   * a failed read of every list did before lists were paged. An item page that fails only snaps its
+   * own list back; see `reloadPages`.
    *
    * Returns the array it dispatched, so a caller that needs to know what state holds *now* — the
    * blocked-write path — does not have to wait for React to commit it.
@@ -97,29 +103,23 @@ export function useHydration({
     fetching.current = true;
 
     try {
-      const { lists: fetched, error: failure, truncated } = await fetchLists();
-      if (!live.current || !fetched) return { error: failure, lists: null };
+      const pages = await reloadListPages(listsRef.current, fetchLists);
+      if (!live.current || pages.lists === null) return { error: pages.error, lists: null };
 
-      // Lists are capped, not paged: the read stops at `MAX_ROWS` memberships and PostgREST would
-      // stop there silently anyway. A warning is all this earns until somebody is in a thousand
-      // lists — see the `(user_id, created_at)` index if that day comes.
-      if (truncated && __DEV__) {
-        console.warn(`fetchLists hit MAX_ROWS (${MAX_ROWS}); lists beyond the cap are not shown.`);
-      }
-
-      const lists = await reloadPages(fetched, listsRef.current, fetchItems);
-      if (!live.current) return { error: failure, lists: null };
+      const lists = await reloadPages(pages.lists, listsRef.current, fetchItems);
+      if (!live.current) return { error: null, lists: null };
 
       const loaded = replay(lists, queue.current);
-      dispatch({ type: 'lists/loaded', lists: loaded });
-      // Set here too, not only by the mirroring effect below: a screen's own mount effect can run
-      // in the same commit as this dispatch, and children's effects fire before their parent's —
-      // reading the ref there would see it one commit behind, the same trap `hydrate`'s return
-      // value exists to avoid for the blocked-write path.
+      dispatch({ type: 'lists/loaded', lists: loaded, cursors: pages.cursors });
+      // Set here too, not only by the mirroring effects: a screen's own mount effect can run in the
+      // same commit as this dispatch, and children's effects fire before their parent's — reading
+      // a ref there would see it one commit behind, the same trap `hydrate`'s return value exists
+      // to avoid for the blocked-write path.
       listsRef.current = loaded;
+      listCursorsRef.current = pages.cursors;
       // The fetched rows, never the replayed view — see `writeCachedLists`.
-      void writeCachedLists(userId, lists);
-      return { error: failure, lists: loaded };
+      void writeCachedLists(userId, lists, pages.cursors);
+      return { error: null, lists: loaded };
     } finally {
       fetching.current = false;
       if (!retry.current) void flushRef.current?.();
@@ -139,11 +139,17 @@ export function useHydration({
    * does not, so it does not — the existing `pending === 0` effect below catches this dispatch once
    * the outbox actually empties.
    *
-   * A list `fetchList` reports as no longer visible (unshared, purged) is dropped from state; one
-   * it has never seen before is appended (freshly shared) at the end of the array — not inserted at
-   * its `created_at` position, since nothing here tracks that for a list and nothing downstream
-   * sorts on it. A per-id fetch that errors leaves that id's local copy untouched, matching a failed
-   * nudge-triggered `hydrate` today: silent.
+   * A list `fetchList` reports as no longer visible (unshared, purged) is dropped from state. One it
+   * has never seen before (freshly shared) is appended **only if it falls inside the loaded range of
+   * its stream** — see `withinLoadedRange` — and otherwise dropped, to arrive with its page, the
+   * way an item added past a loaded page does. The screen sorts by `joinedAt`, so where in the array
+   * it lands does not matter. A per-id fetch that errors leaves that id's local copy untouched,
+   * matching a failed nudge-triggered `hydrate`: silent.
+   *
+   * The list cursors are read **at the same moment as `previous`** and dispatched unchanged. Read
+   * later, a scroll page that landed mid-fetch would be dropped from `lists` by the replace while
+   * its cursor advanced, and the lists on it would be skipped for good; read together, the page is
+   * dropped with its cursor and the next scroll asks for it again.
    *
    * Retriggers `flush` from its own `finally` too, for the same reason and under the same guard as
    * `hydrate` — see there.
@@ -166,19 +172,22 @@ export function useHydration({
       }
 
       const previous = listsRef.current;
+      const cursors = listCursorsRef.current;
       const fetched = previous
         .filter((list) => !removed.has(list.id))
         .map((list) => fetchedById.get(list.id) ?? list);
       for (const [id, list] of fetchedById) {
-        if (!previous.some((candidate) => candidate.id === id)) fetched.push(list);
+        if (previous.some((candidate) => candidate.id === id)) continue;
+        if (withinLoadedRange(list, cursors)) fetched.push(list);
       }
 
       const lists = await reloadPages(fetched, previous, fetchItems);
       if (!live.current) return;
 
       const loaded = replay(lists, queue.current);
-      dispatch({ type: 'lists/loaded', lists: loaded });
+      dispatch({ type: 'lists/loaded', lists: loaded, cursors });
       listsRef.current = loaded;
+      listCursorsRef.current = cursors;
     } finally {
       fetching.current = false;
       if (!retry.current) void flushRef.current?.();
@@ -278,4 +287,18 @@ export function useHydration({
   );
 
   return { hydrate, refresh, refreshSoon, drainDirty };
+}
+
+/**
+ * Whether a list sorts inside the pages of its stream loaded so far: the stream has ended (its
+ * cursor is `null`, so every list of it is loaded), or `(joinedAt, id)` is at or before the cursor.
+ * A list past the cursor is left for the page that brings it, so nothing is shown out of place
+ * ahead of lists not yet loaded. Timestamps compare as strings, as `inCreationOrder` compares them:
+ * both sides come from the same database in the same format.
+ */
+function withinLoadedRange(list: List, cursors: ListCursors): boolean {
+  const cursor = list.deletedAt === null ? cursors.live : cursors.bin;
+  if (cursor === null || list.joinedAt === null) return true;
+  if (list.joinedAt !== cursor.createdAt) return list.joinedAt < cursor.createdAt;
+  return list.id <= cursor.id;
 }

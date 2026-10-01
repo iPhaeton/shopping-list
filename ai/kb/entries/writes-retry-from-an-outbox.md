@@ -4,9 +4,9 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/lib/membersApi.ts, src/state/types.ts]
-last_verified: 2026-09-23
-verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(grep -cE "^ +(\| \{ )?type: '" src/state/types.ts)" = 10 && grep -q "{ type: 'lists/loaded' } | { type: 'items/pageLoaded' } | { type: 'items/firstPageLoaded' }" src/state/types.ts && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/lib/membersApi.ts, src/state/types.ts]
+last_verified: 2026-10-01
+verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(awk '/^export type Action =/,/^export type WriteAction/' src/state/types.ts | grep -c "type: '")" = 11 && test "$(awk '/^export type WriteAction/,/>;/' src/state/types.ts | grep -oE "type: '[a-zA-Z/]+'" | sort | tr '\n' ' ')" = "type: 'items/firstPageLoaded' type: 'items/pageLoaded' type: 'lists/loaded' type: 'lists/pageLoaded' " && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
 related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects, sync-banner-mount-is-unconditional]
 ---
 
@@ -37,8 +37,8 @@ fire in exactly the case the feature exists for. Backoff is 1s doubling to a 30s
 by the web `online` event or `AppState` going `active`.
 
 **The queue holds reducer actions, not a second vocabulary for "a write".** `WriteAction` in
-[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the three *reads*
-(`lists/loaded`, `items/pageLoaded`, `items/firstPageLoaded`) — seven writes, two of them
+[src/state/types.ts](../../../src/state/types.ts) is `Action` minus the four *reads* (`lists/loaded`,
+`lists/pageLoaded`, `items/pageLoaded`, `items/firstPageLoaded`) — seven writes, two of them
 renames — which is what lets [replay](../../../src/state/replay.ts) fold pending ops back over fetched
 rows with the reducer itself; a page gets the same treatment by re-dispatch (`foldPage`). Every one
 carries an **absolute value**, never a flip or an inverse, so a retry or a coalesced duplicate is
@@ -115,6 +115,6 @@ counts equal, summed over `ListsContext.tsx` and `useListWrites.ts` (**a write t
 outbox fails** — it counts the literal `dispatch(op);`, so a loop over already-queued ops must name
 its variable differently, as `foldPage` does); both verdict branches; the `P0002` rule; no attempt
 cap; no connectivity library; no `…/removed` action (case-insensitive, since a case-sensitive grep
-once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer; exactly **ten** `Action`
-members (`type:` line count) and `WriteAction` excluding exactly the three reads — so the next write
-cannot be added without revisiting this entry.
+once let `'item/setDeleted'` past); no `state.lists.filter` in the reducer; exactly **eleven** `Action`
+members (`type:` lines between `Action` and `WriteAction`) and `WriteAction` excluding exactly the four
+reads, by name — so the next write, or the next read, cannot be added without revisiting this entry.

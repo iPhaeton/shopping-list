@@ -1,4 +1,4 @@
-import { reloadPages, type FetchPage } from './reloadPages';
+import { reloadListPages, reloadPages, type FetchListPage, type FetchPage } from './reloadPages';
 import type { Cursor, Item, List, Stream } from './types';
 
 /** `n` fetched rows of one stream, ids and timestamps ascending from `from`. */
@@ -27,6 +27,7 @@ function bare(id: string): List {
     name: id,
     role: 'owner',
     deletedAt: null,
+    joinedAt: null,
     itemsLoaded: false,
     items: [],
     nextLive: null,
@@ -46,6 +47,7 @@ function open(
     name: id,
     role: 'owner',
     deletedAt: null,
+    joinedAt: null,
     itemsLoaded: true,
     items: [...live, ...bin],
     nextLive: next.nextLive ?? null,
@@ -207,4 +209,124 @@ it('snaps a list back to its bare fetched shape when a continuation fails, and l
   expect(result[0].itemsLoaded).toBe(false);
   expect(result[1].items).toHaveLength(6);
   expect(result[1].itemsLoaded).toBe(true);
+});
+
+// --- The lists themselves -----------------------------------------------------------------------
+
+/** `n` lists of one stream as `fetchLists` returns them, joined in ascending order from `from`. */
+function lists(stream: Stream, from: number, n: number): List[] {
+  return Array.from({ length: n }, (_, i) => {
+    const k = from + i;
+    return {
+      ...bare(`${stream}-${String(k).padStart(4, '0')}`),
+      deletedAt: stream === 'bin' ? '2026-09-10T09:00:00.000Z' : null,
+      joinedAt: `2026-09-01T00:00:00.${String(k).padStart(6, '0')}+00:00`,
+    };
+  });
+}
+
+/** Pages of `size` lists per stream, cut from streams `live` and `bin` lists long, recording calls. */
+function listPagesOf(live: number, bin: number, size: number) {
+  const calls: [Stream, Cursor | null][] = [];
+  const fetchPage: FetchListPage = async (stream, after) => {
+    calls.push([stream, after]);
+    const total = stream === 'live' ? live : bin;
+    const from = after === null ? 1 : Number(after.id.split('-')[1]) + 1;
+    const page = lists(stream, from, Math.max(0, Math.min(size, total - from + 1)));
+    const last = page[page.length - 1];
+    const next = page.length === size ? { createdAt: last.joinedAt as string, id: last.id } : null;
+    return { lists: page, next, error: null };
+  };
+  return { calls, fetchPage };
+}
+
+describe('reloadListPages', () => {
+  it('always asks for page 1 of each stream, even with nothing loaded before', async () => {
+    const { calls, fetchPage } = listPagesOf(5, 5, 3);
+
+    const result = await reloadListPages([], fetchPage);
+
+    expect(calls).toEqual([
+      ['live', null],
+      ['bin', null],
+    ]);
+    expect(result.lists?.map((list) => list.id)).toEqual([
+      'live-0001', 'live-0002', 'live-0003', 'bin-0001', 'bin-0002', 'bin-0003',
+    ]);
+    expect(result.cursors?.live?.id).toBe('live-0003');
+    expect(result.cursors?.bin?.id).toBe('bin-0003');
+  });
+
+  /** The case the Lists screen cares about: a nudge must not snap a deep scroll back to page 1. */
+  it('re-reads, one page at a time from page 1, as many lists of each stream as were loaded before', async () => {
+    const { calls, fetchPage } = listPagesOf(9, 9, 3);
+    const previous = [...lists('live', 1, 6), ...lists('bin', 1, 4)];
+
+    const result = await reloadListPages(previous, fetchPage);
+
+    // Six live lists held before, three per page: two pages. Four in the bin: two pages as well.
+    expect(calls.filter(([stream]) => stream === 'live').map(([, after]) => after?.id ?? null)).toEqual([
+      null,
+      'live-0003',
+    ]);
+    expect(calls.filter(([stream]) => stream === 'bin').map(([, after]) => after?.id ?? null)).toEqual([
+      null,
+      'bin-0003',
+    ]);
+    expect(result.lists).toHaveLength(12);
+    expect(result.cursors).toEqual({
+      live: { createdAt: lists('live', 6, 1)[0].joinedAt, id: 'live-0006' },
+      bin: { createdAt: lists('bin', 6, 1)[0].joinedAt, id: 'bin-0006' },
+    });
+  });
+
+  it('stops at a short page, since that is the last one', async () => {
+    const { calls, fetchPage } = listPagesOf(4, 0, 3);
+
+    const result = await reloadListPages(lists('live', 1, 9), fetchPage);
+
+    expect(calls.filter(([stream]) => stream === 'live')).toHaveLength(2);
+    expect(result.lists).toHaveLength(4);
+    expect(result.cursors).toEqual({ live: null, bin: null });
+  });
+
+  /** Optimistic lists are folded back afterwards by `replay`; counting them would ask for a page never read. */
+  it('does not count lists the database has not stamped', async () => {
+    const { calls, fetchPage } = listPagesOf(9, 0, 3);
+    const optimistic = { ...bare('new'), joinedAt: null };
+
+    await reloadListPages([...lists('live', 1, 3), optimistic], fetchPage);
+
+    expect(calls.filter(([stream]) => stream === 'live')).toHaveLength(1);
+  });
+
+  /**
+   * Snapping the list pages back, as `reloadPages` does for one list's items, would drop lists from
+   * state — the one open on List detail, or one with writes queued. The whole re-read fails instead.
+   */
+  it('fails as a whole when any continuation fails', async () => {
+    const { fetchPage } = listPagesOf(9, 9, 3);
+    const failing: FetchListPage = async (stream, after) =>
+      stream === 'bin' && after?.id === 'bin-0003'
+        ? { lists: null, next: null, error: 'Failed to fetch' }
+        : fetchPage(stream, after);
+
+    const result = await reloadListPages([...lists('live', 1, 6), ...lists('bin', 1, 6)], failing);
+
+    expect(result).toEqual({ lists: null, cursors: null, error: 'Failed to fetch' });
+  });
+
+  /** Binned between the live read and the bin read: in both answers, kept once. */
+  it('keeps a list caught in both streams once', async () => {
+    const moved = lists('live', 1, 1)[0];
+    const fetchPage: FetchListPage = async (stream) => ({
+      lists: stream === 'live' ? [moved] : [{ ...moved, deletedAt: '2026-09-10T09:00:00.000Z' }],
+      next: null,
+      error: null,
+    });
+
+    const result = await reloadListPages([], fetchPage);
+
+    expect(result.lists?.map((list) => list.id)).toEqual(['live-0001']);
+  });
 });

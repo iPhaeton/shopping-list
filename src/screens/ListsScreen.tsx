@@ -17,7 +17,7 @@ import { SyncBanner } from '../components/SyncBanner';
 import type { ListsScreenProps } from '../navigation/types';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
-import { liveLists } from '../state/listsReducer';
+import { inJoinOrder, liveLists } from '../state/listsReducer';
 import { canManageList } from '../state/roles';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { List } from '../state/types';
@@ -38,20 +38,52 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { lists, status, error, pending, blocked, createList, setListDeleted, restoreBlocked, discardBlocked } =
-    useLists();
+  const {
+    lists,
+    listCursors,
+    status,
+    error,
+    pending,
+    blocked,
+    createList,
+    setListDeleted,
+    restoreBlocked,
+    discardBlocked,
+    loadMoreLists,
+  } = useLists();
 
   // Local, and deliberately not remembered: the bin is somewhere you go on purpose, so arriving
   // here should always show the live lists.
   const [showDeleted, setShowDeleted] = useState(false);
+  // Screen-local like `showDeleted`: it drives the footer spinner and nothing else. The provider
+  // keeps its own guard against a second request.
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const loading = status === 'loading';
 
-  // Memoised because `liveLists` returns a fresh array every call, which would give the `FlatList`
-  // a new `data` prop on every render.
+  // Memoised because `liveLists` and `inJoinOrder` return a fresh array every call, which would give
+  // the `FlatList` a new `data` prop on every render.
+  //
+  // Sorted, both views, as List detail sorts its items: `lists` is two paged streams end to end plus
+  // lists fetched one at a time, and a list that moves between streams keeps its place in the
+  // array. With the bin shown, the sort is what interleaves the two streams by when you joined.
   const live = useMemo(() => liveLists(lists), [lists]);
-  const visible = loading ? NONE : showDeleted ? lists : live;
+  const ordered = useMemo(() => inJoinOrder(showDeleted ? lists : live), [showDeleted, lists, live]);
+  const visible = loading ? NONE : ordered;
   const binned = lists.length - live.length;
+
+  // Whether a scroll to the end has anything to fetch: the bin's cursor only counts while the bin
+  // is on screen. With no cursor the `FlatList` gets no handler at all, so nothing fires.
+  const more = listCursors.live !== null || (showDeleted && listCursors.bin !== null);
+
+  const loadNextPage = async () => {
+    setLoadingMore(true);
+    try {
+      await loadMoreLists(showDeleted);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const openList = useCallback(
     (listId: string) => navigation.navigate('ListDetail', { listId }),
@@ -101,7 +133,12 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
       )}
       <Horizon ground={bandAt(colors, 0).color}>
         {!loading && binned > 0 ? (
-          <ShowDeletedToggle checked={showDeleted} count={binned} onChange={setShowDeleted} />
+          <ShowDeletedToggle
+            checked={showDeleted}
+            count={binned}
+            more={listCursors.bin !== null}
+            onChange={setShowDeleted}
+          />
         ) : null}
       </Horizon>
     </View>
@@ -110,7 +147,8 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   // The screen's own background, not the sky: what an overscroll past a short list — or past the
   // last row of a long one — reveals below the content, so it reads as a continuation of the last
   // band rather than a seam. `bandAt` bounces back and forth across the ramp past index 5.
-  const groundColor = bandAt(colors, Math.max(visible.length, 1) - 1).color;
+  const ground = bandAt(colors, Math.max(visible.length, 1) - 1);
+  const groundColor = ground.color;
 
   return (
     <View style={[styles.screen, { backgroundColor: groundColor }]}>
@@ -164,8 +202,21 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
         // A short (non-empty) list doesn't reach past the bounded `Sky` layer behind the
         // `FlatList` on its own. A footer with a concrete `minHeight` matching `SKY_HEIGHT`
         // guarantees solid, ground-colored content past every point `Sky` reaches, however few
-        // rows there are, so it never peeks through underneath.
-        ListFooterComponent={loading || visible.length === 0 ? null : <View style={[styles.footer, { backgroundColor: groundColor }]} />}
+        // rows there are, so it never peeks through underneath. The next page's spinner sits at its
+        // top, right under the last row, so the ground stays whether or not a page is on its way.
+        ListFooterComponent={loading || visible.length === 0 ? null : (
+          <View style={[styles.footer, { backgroundColor: groundColor }]}>
+            {loadingMore ? (
+              <ActivityIndicator
+                accessibilityLabel="Loading more lists"
+                color={ground.ink}
+                style={styles.loadingMore}
+              />
+            ) : null}
+          </View>
+        )}
+        onEndReached={more && !loadingMore ? () => void loadNextPage() : undefined}
+        onEndReachedThreshold={0.5}
       />
     </View>
   );
@@ -177,6 +228,9 @@ const useStyles = themedStyles((colors) => ({
   },
   footer: {
     minHeight: SKY_HEIGHT,
+  },
+  loadingMore: {
+    paddingVertical: spacing.md,
   },
   sky: {
     position: 'absolute',

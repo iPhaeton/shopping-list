@@ -1,28 +1,35 @@
 import { useCallback, useRef, type Dispatch, type MutableRefObject } from 'react';
 
-import { fetchItems } from '../lib/listsApi';
+import { fetchItems, fetchList, fetchLists } from '../lib/listsApi';
 import { foldPage } from './foldPage';
-import type { Action, Cursor, List, Stream, WriteAction } from './types';
+import { initialState, listsReducer } from './listsReducer';
+import { replay } from './replay';
+import type { Action, Cursor, List, ListCursors, Stream, WriteAction } from './types';
 
 /**
- * The next page of a list's rows, on scroll — live, and the bin once the screen asks for it. Split
+ * The next page on scroll — of a list's rows, and of the lists themselves — live, and the bin once
+ * the screen asks for it; and one list by id, for a list something needs but has not paged to. Split
  * out of `ListsContext` because, unlike the fetch/retry core around `hydrate`/`flush`, paging shares
- * no guard with either: it reads `listsRef`/`live` and folds a page in through `foldPage`, and that
- * is the whole surface it needs.
+ * no guard with either: it reads `listsRef`/`listCursorsRef`/`live` and folds a page in through
+ * `foldPage`, and that is the whole surface it needs.
  */
 export function usePaging({
   listsRef,
+  listCursorsRef,
   live,
   dispatch,
   queue,
 }: {
   listsRef: MutableRefObject<List[]>;
+  listCursorsRef: MutableRefObject<ListCursors>;
   live: MutableRefObject<boolean>;
   dispatch: Dispatch<Action>;
   queue: MutableRefObject<WriteAction[]>;
 }) {
   // Which lists have a page in flight, so a scroll that fires `onEndReached` twice sends one request.
   const paging = useRef(new Set<string>());
+  // The same for the Lists screen's own scroll — one screen, so one flag.
+  const pagingLists = useRef(false);
 
   /**
    * The next page of one list, on scroll.
@@ -97,5 +104,59 @@ export function usePaging({
     }
   }, []);
 
-  return { loadMore, loadListItems };
+  /**
+   * `loadMore` one level up: the next page of lists on the Lists screen's scroll — live, and the bin
+   * as well while "Show deleted" is on. Same rules, for the same reasons: a read, so it may overlap a
+   * `hydrate` (the page is either re-read by it or dropped by its replace and asked for again on the
+   * next scroll); one request at a time; a failed page is silent and leaves the cursor for the next
+   * scroll to retry.
+   */
+  const loadMoreLists = useCallback(async (includeBin: boolean) => {
+    if (pagingLists.current) return;
+
+    const cursors = listCursorsRef.current;
+    const pages: [Stream, Cursor | null][] = [['live', cursors.live]];
+    if (includeBin) pages.push(['bin', cursors.bin]);
+
+    pagingLists.current = true;
+    try {
+      for (const [stream, after] of pages) {
+        if (after === null) continue;
+
+        const { lists, next } = await fetchLists(stream, after);
+        if (!live.current) return;
+        if (!lists) continue;
+
+        foldPage(dispatch, queue, { type: 'lists/pageLoaded', lists, stream: { name: stream, next } });
+      }
+    } finally {
+      pagingLists.current = false;
+    }
+  }, []);
+
+  /**
+   * One list by id, folded in with no `stream` so the list cursors stay where they are — for a list
+   * that is needed but lies past the pages loaded so far. Somebody else binned it, and it now sorts
+   * past the loaded pages of the bin: the target of a blocked write, or the list List detail has
+   * open. Resolves to the list it folded in, or `null` when it is not visible to this account (or the
+   * read failed), so a caller can go on to what hangs off it.
+   */
+  const loadList = useCallback(async (listId: string): Promise<List | null> => {
+    const { list } = await fetchList(listId);
+    if (!live.current || !list) return null;
+
+    const action = { type: 'lists/pageLoaded' as const, lists: [list] };
+    foldPage(dispatch, queue, action);
+    // Mirrored at once, the way `hydrate` sets the ref after its own dispatch: List detail's mount
+    // effect asks `loadListItems` for this list's items in the very commit it appears, and that
+    // looks the list up in `listsRef` — which the provider's mirroring effect updates only after
+    // the child's effect has already run, and found nothing.
+    listsRef.current = replay(
+      listsReducer({ ...initialState, lists: listsRef.current }, action).lists,
+      queue.current
+    );
+    return list;
+  }, []);
+
+  return { loadMore, loadListItems, loadMoreLists, loadList };
 }

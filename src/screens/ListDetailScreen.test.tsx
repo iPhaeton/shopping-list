@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import {
   addItem as addItemRequest,
   fetchItems,
+  fetchList,
   fetchLists,
   renameItem,
   renameList,
@@ -21,7 +22,8 @@ import { ListDetailScreen } from './ListDetailScreen';
  * this suite is about the screen, not about what the database returns.
  */
 jest.mock('../lib/listsApi', () => ({
-  fetchLists: jest.fn(async () => ({ lists: [], error: null, truncated: false })),
+  fetchLists: jest.fn(async () => ({ lists: [], next: null, error: null })),
+  fetchList: jest.fn(async () => ({ list: null, error: null })),
   fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
   fetchItem: jest.fn(async () => ({ item: null, error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -35,6 +37,18 @@ jest.mock('../lib/listsApi', () => ({
 
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
 jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
+
+/**
+ * What the database holds, as `fetchLists` answers it: one stream at a time, the lists with no
+ * tombstone to the live stream and the rest to the bin, a single page each.
+ */
+function serveLists(lists: List[]) {
+  jest.mocked(fetchLists).mockImplementation(async (stream) => ({
+    lists: lists.filter((list) => (list.deletedAt === null) === (stream === 'live')),
+    next: null,
+    error: null,
+  }));
+}
 
 const navigation = { navigate: jest.fn(), setOptions: jest.fn(), goBack: jest.fn() };
 
@@ -92,6 +106,7 @@ const SHARED: List = {
   name: 'Groceries',
   role: 'reader',
   deletedAt: null,
+  joinedAt: null,
   itemsLoaded: true,
   items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null }],
   nextLive: null,
@@ -105,7 +120,7 @@ const SHARED: List = {
  * tree, so a header press reaches the same screen instance with no navigator stood up at all.
  */
 async function renderAs(role: Role) {
-  jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...SHARED, role }], error: null, truncated: false });
+  serveLists([{ ...SHARED, role }]);
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
@@ -118,7 +133,7 @@ async function renderAs(role: Role) {
 }
 
 beforeEach(async () => {
-  jest.mocked(fetchLists).mockResolvedValue({ lists: [], error: null, truncated: false });
+  serveLists([]);
   navigation.setOptions.mockClear();
   navigation.navigate.mockClear();
   navigation.goBack.mockClear();
@@ -238,7 +253,53 @@ it('falls back to a not-found state for an unknown list', async () => {
     </ListsProvider>
   );
 
-  expect(screen.getByText('List not found')).toBeOnTheScreen();
+  expect(await screen.findByText('List not found')).toBeOnTheScreen();
+  // Only once a read by id agreed: lists are paged, so missing from state is not missing.
+  expect(fetchList).toHaveBeenCalledWith('does-not-exist');
+});
+
+/**
+ * Lists are paged, so a list somebody else binned can sort past the loaded pages of the bin and drop
+ * out of state on the next re-read — while it is open here. The screen reads it by id before it
+ * says "not found", and says nothing either way until that read has answered.
+ */
+it('reads a list it does not hold before saying it is not found', async () => {
+  let settle = (_result: { list: List | null; error: string | null }) => {};
+  jest.mocked(fetchList).mockReturnValueOnce(
+    new Promise((resolve) => {
+      settle = resolve;
+    })
+  );
+
+  await render(
+    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <ListDetailScreen {...detailProps('l7')} />
+    </ListsProvider>
+  );
+
+  expect(await screen.findByLabelText('Loading list')).toBeOnTheScreen();
+  expect(screen.queryByText('List not found')).not.toBeOnTheScreen();
+  expect(fetchList).toHaveBeenCalledWith('l7');
+
+  await act(async () =>
+    settle({
+      list: {
+        ...SHARED,
+        id: 'l7',
+        name: 'Old shop',
+        role: 'owner',
+        deletedAt: '2026-09-10T09:00:00.000Z',
+        joinedAt: '2026-09-01T08:00:00+00:00',
+        itemsLoaded: false,
+        items: [],
+      },
+      error: null,
+    })
+  );
+
+  expect(await screen.findByRole('header', { name: 'Old shop' })).toBeOnTheScreen();
+  expect(await screen.findByText(/This list is in the bin/)).toBeOnTheScreen();
+  expect(screen.queryByText('List not found')).not.toBeOnTheScreen();
 });
 
 /**
@@ -256,6 +317,7 @@ describe('loading a list on entry', () => {
     name: 'Groceries',
     role: 'owner',
     deletedAt: null,
+    joinedAt: null,
     itemsLoaded: false,
     items: [],
     nextLive: null,
@@ -263,7 +325,7 @@ describe('loading a list on entry', () => {
   };
 
   it('shows a spinner, then the list, once its first page arrives', async () => {
-    jest.mocked(fetchLists).mockResolvedValue({ lists: [BARE], error: null, truncated: false });
+    serveLists([BARE]);
     let settleLive = (_page: { items: List['items'] | null; next: null; error: null }) => {};
     jest
       .mocked(fetchItems)
@@ -298,7 +360,7 @@ describe('loading a list on entry', () => {
   });
 
   it('does not ask again once a list is loaded', async () => {
-    jest.mocked(fetchLists).mockResolvedValue({ lists: [{ ...BARE, itemsLoaded: true }], error: null, truncated: false });
+    serveLists([{ ...BARE, itemsLoaded: true }]);
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
@@ -338,11 +400,7 @@ describe('a reader', () => {
   });
 
   it('gets an empty state that does not ask them to add anything', async () => {
-    jest.mocked(fetchLists).mockResolvedValue({
-      lists: [{ ...SHARED, role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...SHARED, role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null }]);
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
@@ -525,8 +583,7 @@ const BINNED_AT = '2026-09-10T09:00:00.000Z';
 
 /** Renders a list holding one live item and one in the bin. */
 async function renderWithBin(role: Role = 'owner') {
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [
+  serveLists([
       {
         ...SHARED,
         role,
@@ -535,10 +592,7 @@ async function renderWithBin(role: Role = 'owner') {
           { id: 'i2', title: 'Bread', doneAt: null, deletedAt: BINNED_AT, createdAt: null },
         ],
       },
-    ],
-    error: null,
-    truncated: false,
-  });
+    ]);
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
@@ -615,17 +669,13 @@ it('offers a deleted item no rename, only a restore', async () => {
  * silence the empty state once every live item is gone.
  */
 it('says the list is empty when every live item has been deleted', async () => {
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [
+  serveLists([
       {
         ...SHARED,
         role: 'owner',
         items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: BINNED_AT, createdAt: null }],
       },
-    ],
-    error: null,
-    truncated: false,
-  });
+    ]);
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>
@@ -638,11 +688,7 @@ it('says the list is empty when every live item has been deleted', async () => {
 
 describe('a list opened from the bin', () => {
   async function renderBinnedList(role: Role = 'owner') {
-    jest.mocked(fetchLists).mockResolvedValue({
-      lists: [{ ...SHARED, role, deletedAt: BINNED_AT }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...SHARED, role, deletedAt: BINNED_AT }]);
 
     await render(
       <ListsProvider userId="u1" onSessionRevoked={() => {}}>
@@ -710,8 +756,7 @@ const AFTER_JAM = { createdAt: T(12), id: 'b2' };
 
 /** Page 1 of both streams loaded, each with more to come. */
 async function renderPaged() {
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [
+  serveLists([
       {
         ...SHARED,
         role: 'writer',
@@ -724,10 +769,7 @@ async function renderPaged() {
         nextLive: AFTER_BREAD,
         nextBin: AFTER_JAM,
       },
-    ],
-    error: null,
-    truncated: false,
-  });
+    ]);
 
   await render(
     <ListsProvider userId="u1" onSessionRevoked={() => {}}>

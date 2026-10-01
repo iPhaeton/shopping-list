@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { List } from '../state/types';
+import type { List, ListCursors } from '../state/types';
 import { inOrder } from './storageQueue';
 
 /**
@@ -33,19 +33,29 @@ import { inOrder } from './storageQueue';
  * anyway, on the same convention as every other shape change here: a v4 blob left alone would
  * make a deeply-scrolled cached list look never-opened and pay for a redundant re-fetch from page
  * 1, which is cheap but still wrong, and the fix costs nothing but one more dropped blob.
+ *
+ * **`6` since lists are paged too (task 23).** `List` gained `joinedAt`, which a v5 blob rehydrates
+ * as `undefined` — and `undefined !== null` reads as "stamped", so an optimistic-looking list would
+ * be counted as a loaded one. The blob also gained the list cursors beside `lists`, so a cold start
+ * seeds state with how far each stream of lists was paged and the first `hydrate` re-reads that
+ * many. `outbox.ts` stays at `1`: `list/created` is unchanged, and the reducer mints `joinedAt: null`.
  */
-const VERSION = 5;
+const VERSION = 6;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 
-export async function readCachedLists(userId: string): Promise<List[] | null> {
+export async function readCachedLists(
+  userId: string
+): Promise<{ lists: List[]; cursors: ListCursors } | null> {
   const raw = await AsyncStorage.getItem(keyFor(userId));
   if (!raw) return null;
 
   try {
-    const stored = JSON.parse(raw) as { v?: unknown; lists?: unknown };
-    if (stored.v !== VERSION || !Array.isArray(stored.lists)) return null;
-    return stored.lists as List[];
+    const stored = JSON.parse(raw) as { v?: unknown; lists?: unknown; cursors?: unknown };
+    if (stored.v !== VERSION || !Array.isArray(stored.lists) || !isCursors(stored.cursors)) {
+      return null;
+    }
+    return { lists: stored.lists as List[], cursors: stored.cursors };
   } catch {
     return null;
   }
@@ -56,9 +66,21 @@ export async function readCachedLists(userId: string): Promise<List[] | null> {
  * the outbox replayed on top; cache that, and the next load replays those same writes onto rows
  * that already contain them — a `list/created` appends by id, and the list appears twice.
  */
-export function writeCachedLists(userId: string, lists: List[]): Promise<void> {
-  const stored = JSON.stringify({ v: VERSION, lists, fetchedAt: new Date().toISOString() });
+export function writeCachedLists(
+  userId: string,
+  lists: List[],
+  cursors: ListCursors
+): Promise<void> {
+  const stored = JSON.stringify({ v: VERSION, lists, cursors, fetchedAt: new Date().toISOString() });
   return inOrder(() => AsyncStorage.setItem(keyFor(userId), stored));
+}
+
+/** Both keys present — `null` or an object each — since `undefined` would read as "there is more". */
+function isCursors(value: unknown): value is ListCursors {
+  if (typeof value !== 'object' || value === null) return false;
+  const { live, bin } = value as { live?: unknown; bin?: unknown };
+  const cursor = (c: unknown) => c === null || typeof c === 'object';
+  return cursor(live) && cursor(bin);
 }
 
 export function clearCachedLists(userId: string): Promise<void> {

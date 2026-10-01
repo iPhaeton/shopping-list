@@ -61,6 +61,8 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     discardBlocked,
     loadMore,
     loadListItems,
+    loadList,
+    status,
   } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
 
@@ -69,6 +71,11 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // Screen-local like `showDeleted`: it drives the footer spinner and nothing else. The provider
   // keeps its own guard against a second request for the same list.
   const [loadingMore, setLoadingMore] = useState(false);
+  // Whether a list missing from state has been looked up yet. Lists are paged, so this one may
+  // simply sort past the pages loaded so far — somebody else binned it — and "List not found" is
+  // only said once a read by id agrees. Back to `idle` whenever the list is there, so if a later
+  // hydrate drops it again, it is looked up again the same way.
+  const [lookup, setLookup] = useState<'idle' | 'pending' | 'done'>('idle');
 
   // A list reached from the bin. It is a real list still — restorable, and shared with the same
   // people — so it opens and reads normally; what it does not get is anything that would write to
@@ -109,6 +116,18 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
       setLoadingMore(false);
     }
   };
+
+  // Once the first fetch has settled, a list that is still missing is read by id and folded in.
+  useEffect(() => {
+    if (list) {
+      setLookup('idle');
+      return;
+    }
+    if (status !== 'ready' || lookup !== 'idle') return;
+
+    setLookup('pending');
+    void loadList(listId).finally(() => setLookup('done'));
+  }, [list, status, lookup, listId, loadList]);
 
   // Items are no longer part of the lists fetch — they arrive only once a list is actually
   // entered, so this asks for them the moment the screen has a list to ask about.
@@ -291,11 +310,15 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
 
   // `ink`: on a band, `textMuted` falls short of AA for the hint.
   const empty = !list ? (
-    <EmptyState
-      title="List not found"
-      hint="Go back and pick a list from the list screen."
-      ink={last.ink}
-    />
+    lookup !== 'done' ? (
+      <ActivityIndicator accessibilityLabel="Loading list" color={last.ink} style={styles.loading} />
+    ) : (
+      <EmptyState
+        title="List not found"
+        hint="Go back and pick a list from the list screen."
+        ink={last.ink}
+      />
+    )
   ) : !loaded ? (
     <ActivityIndicator
       accessibilityLabel="Loading list items"

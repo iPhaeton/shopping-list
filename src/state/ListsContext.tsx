@@ -16,7 +16,7 @@ import { loadOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
 import { replay } from './replay';
 import type { Blocked } from './restorePlan';
-import type { List, WriteAction } from './types';
+import type { List, ListCursors, WriteAction } from './types';
 import { useBlockedWrites } from './useBlockedWrites';
 import { useHydration } from './useHydration';
 import { useListWrites } from './useListWrites';
@@ -25,6 +25,12 @@ import { usePaging } from './usePaging';
 
 type ListsContextValue = {
   lists: List[];
+  /**
+   * Where the next page of each stream of lists starts, `null` once that stream has ended. The Lists
+   * screen reads them to know whether a scroll has more to fetch, and whether the bin count is only
+   * what is loaded so far.
+   */
+  listCursors: ListCursors;
   /** Whose lists these are. The sharing screen needs it to tell your own roster row from the rest. */
   userId: string;
   /** `loading` until there is something to show — a cached copy, or the first fetch settling. */
@@ -73,6 +79,18 @@ type ListsContextValue = {
    * call at any time after mount.
    */
   loadListItems: (listId: string) => Promise<void>;
+  /**
+   * The next page of lists — live, and the bin too when the screen is showing it. Resolves once the
+   * page is in state, or at once when there is nothing to load: no cursor, or a page already in
+   * flight. A read, so it is safe to call at any time after mount.
+   */
+  loadMoreLists: (includeBin: boolean) => Promise<void>;
+  /**
+   * One list by id, for a screen whose list is not in state — it can sort past the pages loaded so
+   * far once somebody else bins it. Resolves to the list, or `null` when this account cannot see it.
+   * A read, so it is safe to call at any time after mount.
+   */
+  loadList: (listId: string) => Promise<List | null>;
 };
 
 export type { Blocked } from './restorePlan';
@@ -96,9 +114,9 @@ const ListsContext = createContext<ListsContextValue | null>(null);
  *
  * The fetch/retry/paging machinery that makes this true lives one level down, in three hooks this
  * component wires together: `useHydration` (server reads), `useOutbox` (the queue and its flush
- * loop), `usePaging` (a list's own scroll). They share refs rather than a shared object because
- * each ref's readers and writers cross hook boundaries in different directions — see each hook's own
- * comment for which.
+ * loop), `usePaging` (scrolling, through the lists and through a list's own rows). They share refs
+ * rather than a shared object because each ref's readers and writers cross hook boundaries in
+ * different directions — see each hook's own comment for which.
  */
 export function ListsProvider({
   userId,
@@ -141,6 +159,14 @@ export function ListsProvider({
     listsRef.current = state.lists;
   }, [state.lists]);
 
+  // The same mirror for the list cursors: `useHydration` reads which lists fall inside the loaded
+  // range, `usePaging` where the next page of lists starts.
+  const listCursorsRef = useRef(state.listCursors);
+
+  useEffect(() => {
+    listCursorsRef.current = state.listCursors;
+  }, [state.listCursors]);
+
   // The same mirror, for `flush`: `useHydration` runs before `useOutbox`, so `hydrate`'s own
   // `finally` cannot close over `flush` directly — `flush` is built from `hydrate` one hook later,
   // and closing over it would make a dependency cycle. Kept current the same way `listsRef` is,
@@ -157,7 +183,13 @@ export function ListsProvider({
     };
   }, []);
 
-  const { loadMore, loadListItems } = usePaging({ listsRef, live, dispatch, queue });
+  const { loadMore, loadListItems, loadMoreLists, loadList } = usePaging({
+    listsRef,
+    listCursorsRef,
+    live,
+    dispatch,
+    queue,
+  });
 
   const { hydrate, refresh, refreshSoon, drainDirty } = useHydration({
     userId,
@@ -165,6 +197,7 @@ export function ListsProvider({
     queue,
     live,
     listsRef,
+    listCursorsRef,
     fetching,
     flushing,
     retry,
@@ -182,6 +215,7 @@ export function ListsProvider({
     attempt,
     stuck,
     hydrate,
+    loadList,
     drainDirty,
     setError,
     setBlocked,
@@ -221,7 +255,14 @@ export function ListsProvider({
       setPending(ops.length);
 
       if (cached) {
-        dispatch({ type: 'lists/loaded', lists: replay(cached, ops) });
+        const lists = replay(cached.lists, ops);
+        dispatch({ type: 'lists/loaded', lists, cursors: cached.cursors });
+        // Synchronously, as `hydrate` does after its own dispatch: `hydrate` below counts how many
+        // lists were loaded from these refs before its first await, and the mirroring effects have
+        // not run yet — without this a cold start would re-read one page of lists, not as many as
+        // were cached.
+        listsRef.current = lists;
+        listCursorsRef.current = cached.cursors;
         setStatus('ready');
       }
 
@@ -245,8 +286,10 @@ export function ListsProvider({
   // to say, without anything written since. With nothing pending, every row on screen has been
   // acknowledged by the database, so this is server truth by another route.
   useEffect(() => {
-    if (status === 'ready' && pending === 0) void writeCachedLists(userId, state.lists);
-  }, [userId, status, pending, state.lists]);
+    if (status === 'ready' && pending === 0) {
+      void writeCachedLists(userId, state.lists, state.listCursors);
+    }
+  }, [userId, status, pending, state.lists, state.listCursors]);
 
   /**
    * Coming back to the app: send whatever is queued, then re-read.
@@ -312,6 +355,7 @@ export function ListsProvider({
   const value = useMemo(
     () => ({
       lists: state.lists,
+      listCursors: state.listCursors,
       userId,
       status,
       error,
@@ -330,9 +374,12 @@ export function ListsProvider({
       refresh,
       loadMore,
       loadListItems,
+      loadMoreLists,
+      loadList,
     }),
     [
       state.lists,
+      state.listCursors,
       userId,
       status,
       error,
@@ -351,6 +398,8 @@ export function ListsProvider({
       refresh,
       loadMore,
       loadListItems,
+      loadMoreLists,
+      loadList,
     ]
   );
 

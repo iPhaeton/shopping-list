@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabase';
 import type { SharingScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
 import { SessionProvider } from '../state/SessionContext';
-import type { Role } from '../state/types';
+import type { List, Role } from '../state/types';
 import { SharingScreen } from './SharingScreen';
 
 /**
@@ -30,7 +30,8 @@ import { SharingScreen } from './SharingScreen';
  * function was called with what — and what the screen does with the answer.
  */
 jest.mock('../lib/listsApi', () => ({
-  fetchLists: jest.fn(async () => ({ lists: [], error: null, truncated: false })),
+  fetchLists: jest.fn(async () => ({ lists: [], next: null, error: null })),
+  fetchList: jest.fn(async () => ({ list: null, error: null })),
   fetchItems: jest.fn(async () => ({ items: [], next: null, error: null })),
   fetchItem: jest.fn(async () => ({ item: null, error: null })),
   insertList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -71,6 +72,18 @@ jest.mock('../lib/supabase', () => ({
     },
   },
 }));
+
+/**
+ * What the database holds, as `fetchLists` answers it: one stream at a time, the lists with no
+ * tombstone to the live stream and the rest to the bin, a single page each.
+ */
+function serveLists(lists: List[]) {
+  jest.mocked(fetchLists).mockImplementation(async (stream) => ({
+    lists: lists.filter((list) => (list.deletedAt === null) === (stream === 'live')),
+    next: null,
+    error: null,
+  }));
+}
 
 const auth = supabase.auth as unknown as {
   getSession: jest.Mock;
@@ -142,11 +155,7 @@ function withProviders(children: ReactNode) {
 
 /** Renders the screen for a list the signed-in account holds `role` on. */
 async function renderScreen(role: Role = 'owner') {
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role, deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
-    error: null,
-    truncated: false,
-  });
+  serveLists([{ id: 'l1', name: 'Groceries', role, deletedAt: null, joinedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }]);
 
   await render(withProviders(<SharingScreen {...sharingProps('l1')} />));
 
@@ -180,11 +189,7 @@ it("shows a member's name instead of their email once they have one", async () =
   jest
     .mocked(fetchMembers)
     .mockResolvedValue({ members: [ALICE, { ...BOB, name: 'Bob' }], error: null });
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
-    error: null,
-    truncated: false,
-  });
+  serveLists([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, joinedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }]);
 
   await render(withProviders(<SharingScreen {...sharingProps('l1')} />));
 
@@ -196,11 +201,7 @@ it("shows a member's name instead of their email once they have one", async () =
 
 it('says the roster is on its way before it arrives', async () => {
   jest.mocked(fetchMembers).mockReturnValue(new Promise(() => {}));
-  jest.mocked(fetchLists).mockResolvedValue({
-    lists: [{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }],
-    error: null,
-    truncated: false,
-  });
+  serveLists([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, joinedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null }]);
 
   await render(withProviders(<SharingScreen {...sharingProps('l1')} />));
 

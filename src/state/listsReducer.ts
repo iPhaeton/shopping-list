@@ -1,13 +1,37 @@
-import type { Action, Cursor, Item, List, State } from './types';
+import type { Action, Cursor, Item, List, ListCursors, State } from './types';
 
-export const initialState: State = { lists: [] };
+/** Before the first fetch: no lists, and no list cursors — "nothing asked yet", not "ended". */
+export const NO_LIST_CURSORS: ListCursors = { live: null, bin: null };
+
+export const initialState: State = { lists: [], listCursors: NO_LIST_CURSORS };
 
 export function listsReducer(state: State, action: Action): State {
   switch (action.type) {
     // Hydration from the database, and the way a failed write is rolled back: whatever the server
     // holds replaces whatever the screen was showing.
     case 'lists/loaded': {
-      return { ...state, lists: action.lists };
+      return { ...state, lists: action.lists, listCursors: action.cursors };
+    }
+
+    // A page of lists — `items/pageLoaded`'s rules one level up. A list already here is left alone
+    // (it may carry a rename or a tombstone newer than the page's copy), and new ones go in before
+    // the first optimistic list, which the screen sorts last anyway.
+    case 'lists/pageLoaded': {
+      const known = new Set(state.lists.map((list) => list.id));
+      const fresh = action.lists.filter((list) => !known.has(list.id));
+
+      const moved =
+        action.stream !== undefined &&
+        !sameCursor(state.listCursors[action.stream.name], action.stream.next);
+      if (fresh.length === 0 && !moved) return state;
+
+      return {
+        ...state,
+        lists: insertFetched(state.lists, fresh, (list) => list.joinedAt === null),
+        listCursors: action.stream
+          ? { ...state.listCursors, [action.stream.name]: action.stream.next }
+          : state.listCursors,
+      };
     }
 
     // A page of one list, read from the database. Rows already here are left alone — a page can
@@ -33,7 +57,7 @@ export function listsReducer(state: State, action: Action): State {
           );
         if (fresh.length === 0 && !moved) return list;
 
-        return { ...list, items: insertFetchedItems(list.items, fresh), ...cursors };
+        return { ...list, items: insertFetched(list.items, fresh, unstamped), ...cursors };
       });
     }
 
@@ -51,7 +75,7 @@ export function listsReducer(state: State, action: Action): State {
 
         return {
           ...list,
-          items: insertFetchedItems(list.items, fresh),
+          items: insertFetched(list.items, fresh, unstamped),
           nextLive: action.live.next,
           nextBin: action.bin.next,
           itemsLoaded: true,
@@ -77,6 +101,9 @@ export function listsReducer(state: State, action: Action): State {
         name,
         role: 'owner',
         deletedAt: null,
+        // The database stamps the membership when the insert lands; `null` until then keeps this
+        // list after every fetched one in `inJoinOrder`, as `createdAt: null` does for an item.
+        joinedAt: null,
         // Nothing on the server to fetch yet, so this list starts already "loaded" — no spinner
         // for a list you just created.
         itemsLoaded: true,
@@ -243,13 +270,26 @@ export function countDone(list: List): number {
  * before handing it to a `FlatList`.
  */
 export function inCreationOrder(items: Item[]): Item[] {
-  return [...items].sort((a, b) => {
-    if (a.createdAt === null || b.createdAt === null) {
-      return a.createdAt === b.createdAt ? 0 : a.createdAt === null ? 1 : -1;
-    }
-    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  });
+  return [...items].sort((a, b) => byStamp(a.createdAt, a.id, b.createdAt, b.id));
+}
+
+/**
+ * `inCreationOrder` for lists: the order `fetchLists` pages them in — `(joinedAt, id)`, when you
+ * joined each — with an optimistic list last. Needed for the same two reasons one level up: the
+ * array is two streams end to end plus lists fetched one at a time, and a list that moves between
+ * streams keeps its place in it. Returns a new array, so memoise it.
+ */
+export function inJoinOrder(lists: List[]): List[] {
+  return [...lists].sort((a, b) => byStamp(a.joinedAt, a.id, b.joinedAt, b.id));
+}
+
+/** `(stamp, id)` ascending, `null` stamps last and in their original order (the sort is stable). */
+function byStamp(aStamp: string | null, aId: string, bStamp: string | null, bId: string): number {
+  if (aStamp === null || bStamp === null) {
+    return aStamp === bStamp ? 0 : aStamp === null ? 1 : -1;
+  }
+  if (aStamp !== bStamp) return aStamp < bStamp ? -1 : 1;
+  return aId < bId ? -1 : aId > bId ? 1 : 0;
 }
 
 function sameCursor(a: Cursor | null, b: Cursor | null): boolean {
@@ -260,9 +300,14 @@ function sameCursor(a: Cursor | null, b: Cursor | null): boolean {
 /**
  * Inserts fetched rows before the first optimistic one, not at the end: a list with a page
  * loaded, an item added offline, then another page loaded must show the new page above that
- * item, which is where the next hydration would put it anyway.
+ * item, which is where the next hydration would put it anyway. The same holds for a page of lists
+ * and a list created offline.
  */
-function insertFetchedItems(items: Item[], fresh: Item[]): Item[] {
-  const at = items.findIndex((item) => item.createdAt === null);
-  return at === -1 ? [...items, ...fresh] : [...items.slice(0, at), ...fresh, ...items.slice(at)];
+function insertFetched<T>(rows: T[], fresh: T[], optimistic: (row: T) => boolean): T[] {
+  const at = rows.findIndex(optimistic);
+  return at === -1 ? [...rows, ...fresh] : [...rows.slice(0, at), ...fresh, ...rows.slice(at)];
+}
+
+function unstamped(item: Item): boolean {
+  return item.createdAt === null;
 }

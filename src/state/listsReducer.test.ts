@@ -1,5 +1,14 @@
-import { countDone, inCreationOrder, initialState, listsReducer, liveItems, liveLists } from './listsReducer';
-import type { State } from './types';
+import {
+  countDone,
+  inCreationOrder,
+  inJoinOrder,
+  initialState,
+  listsReducer,
+  liveItems,
+  liveLists,
+  NO_LIST_CURSORS,
+} from './listsReducer';
+import type { List, State } from './types';
 
 /** Stands in for a timestamp minted by the provider; the reducer never makes one itself. */
 const DONE_AT = '2026-08-31T09:00:00.000Z';
@@ -16,18 +25,35 @@ function stateWithItems(...titles: string[]): State {
 describe('lists/loaded', () => {
   it('replaces the lists with what the database returned', () => {
     const lists = [
-      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, itemsLoaded: true, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null, createdAt: null }], nextLive: null, nextBin: null },
+      { id: 'l9', name: 'Hardware', role: 'reader' as const, deletedAt: null, joinedAt: null, itemsLoaded: true, items: [{ id: 'i9', title: 'Nails', doneAt: DONE_AT, deletedAt: null, createdAt: null }], nextLive: null, nextBin: null },
     ];
 
-    const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists });
+    const state = listsReducer(stateWithItems('Milk'), {
+      type: 'lists/loaded',
+      lists,
+      cursors: NO_LIST_CURSORS,
+    });
 
     expect(state.lists).toEqual(lists);
   });
 
   it('empties the state for an account with no lists', () => {
-    const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists: [] });
+    const state = listsReducer(stateWithItems('Milk'), {
+      type: 'lists/loaded',
+      lists: [],
+      cursors: NO_LIST_CURSORS,
+    });
 
     expect(state.lists).toEqual([]);
+  });
+
+  /** A fetch decides both, so a replace that kept the old cursors would page from the wrong place. */
+  it('replaces the list cursors along with the lists', () => {
+    const cursors = { live: { createdAt: '2026-09-01T10:00:00+00:00', id: 'l9' }, bin: null };
+
+    const state = listsReducer(stateWithItems('Milk'), { type: 'lists/loaded', lists: [], cursors });
+
+    expect(state.listCursors).toEqual(cursors);
   });
 });
 
@@ -39,7 +65,14 @@ describe('list/created', () => {
       name: 'Groceries',
     });
 
-    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: true, items: [], nextLive: null, nextBin: null }]);
+    expect(state.lists).toEqual([{ id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, joinedAt: null, itemsLoaded: true, items: [], nextLive: null, nextBin: null }]);
+  });
+
+  /** The database stamps the membership; until then the list sorts after every fetched one. */
+  it('leaves joinedAt null — the reducer mints no timestamps', () => {
+    const state = listsReducer(initialState, { type: 'list/created', id: 'l1', name: 'Groceries' });
+
+    expect(state.lists[0].joinedAt).toBeNull();
   });
 
   it('starts itemsLoaded true — nothing on the server yet to fetch', () => {
@@ -681,8 +714,9 @@ function stateWithBareList(): State {
   return listsReducer(initialState, {
     type: 'lists/loaded',
     lists: [
-      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+      { id: 'l1', name: 'Groceries', role: 'owner', deletedAt: null, joinedAt: T1, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
     ],
+    cursors: NO_LIST_CURSORS,
   });
 }
 
@@ -799,5 +833,141 @@ describe('inCreationOrder', () => {
 
     expect(sorted).not.toBe(items);
     expect(items.map((item) => item.id)).toEqual(['b', 'a']);
+  });
+});
+
+// --- Lists, paged -------------------------------------------------------------------------------
+
+/** A list as a page of `fetchLists` carries it: stamped with when you joined, nothing loaded. */
+function joinedList(id: string, joinedAt: string | null, deletedAt: string | null = null): List {
+  return {
+    id,
+    name: id,
+    role: 'owner',
+    deletedAt,
+    joinedAt,
+    itemsLoaded: false,
+    items: [],
+    nextLive: null,
+    nextBin: null,
+  };
+}
+
+const LIST_CURSOR = { createdAt: T2, id: 'l2' };
+
+describe('lists/pageLoaded', () => {
+  it('appends a page and moves its stream cursor, leaving the other alone', () => {
+    const state = listsReducer(initialState, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l1', T1), joinedList('l2', T2)],
+      stream: { name: 'live', next: LIST_CURSOR },
+    });
+
+    expect(state.lists.map((list) => list.id)).toEqual(['l1', 'l2']);
+    expect(state.listCursors).toEqual({ live: LIST_CURSOR, bin: null });
+  });
+
+  it('moves the bin cursor for a page of the bin', () => {
+    const state = listsReducer(initialState, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l9', T1, DELETED_AT)],
+      stream: { name: 'bin', next: LIST_CURSOR },
+    });
+
+    expect(state.listCursors).toEqual({ live: null, bin: LIST_CURSOR });
+  });
+
+  /**
+   * A list already here may carry a rename or a tombstone newer than the page's copy — the page
+   * overlaps what a re-read, a nudge or a single-list read already brought.
+   */
+  it('is idempotent by id, and leaves a list already here alone', () => {
+    const before = listsReducer(initialState, {
+      type: 'lists/pageLoaded',
+      lists: [{ ...joinedList('l1', T1), name: 'Renamed since' }],
+    });
+
+    const state = listsReducer(before, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l1', T1), joinedList('l2', T2)],
+    });
+
+    expect(state.lists.map((list) => [list.id, list.name])).toEqual([
+      ['l1', 'Renamed since'],
+      ['l2', 'l2'],
+    ]);
+  });
+
+  it('is a no-op when the page brings nothing new and the cursor does not move', () => {
+    const before = listsReducer(initialState, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l1', T1)],
+      stream: { name: 'live', next: LIST_CURSOR },
+    });
+
+    const after = listsReducer(before, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l1', T1)],
+      stream: { name: 'live', next: { ...LIST_CURSOR } },
+    });
+
+    expect(after).toBe(before);
+  });
+
+  /** A list created offline stays last, where the next hydration will put it anyway. */
+  it('inserts a page before a list created on this device', () => {
+    const withOffline = listsReducer(initialState, { type: 'list/created', id: 'new', name: 'New' });
+
+    const state = listsReducer(withOffline, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l1', T1)],
+      stream: { name: 'live', next: null },
+    });
+
+    expect(state.lists.map((list) => list.id)).toEqual(['l1', 'new']);
+  });
+
+  /** A single-list read — a blocked write's target, the list a screen has open — is not a page. */
+  it('leaves the cursors where they are when no stream is named', () => {
+    const before = listsReducer(initialState, {
+      type: 'lists/loaded',
+      lists: [],
+      cursors: { live: LIST_CURSOR, bin: LIST_CURSOR },
+    });
+
+    const state = listsReducer(before, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l9', T3, DELETED_AT)],
+    });
+
+    expect(state.lists.map((list) => list.id)).toEqual(['l9']);
+    expect(state.listCursors).toEqual({ live: LIST_CURSOR, bin: LIST_CURSOR });
+  });
+});
+
+/**
+ * The Lists screen's order: two streams end to end plus lists fetched one at a time is not one,
+ * and a list that moves between streams keeps its place in the array.
+ */
+describe('inJoinOrder', () => {
+  it('sorts by joinedAt, then id, with lists the database has not stamped yet last', () => {
+    const lists = [
+      joinedList('b', T2),
+      joinedList('y', null),
+      joinedList('c', T3, DELETED_AT),
+      joinedList('x', null),
+      joinedList('a2', T1),
+      joinedList('a1', T1),
+    ];
+
+    expect(inJoinOrder(lists).map((list) => list.id)).toEqual(['a1', 'a2', 'b', 'c', 'y', 'x']);
+  });
+
+  it('returns a new array and leaves the input alone', () => {
+    const lists = [joinedList('b', T2), joinedList('a', T1)];
+    const sorted = inJoinOrder(lists);
+
+    expect(sorted).not.toBe(lists);
+    expect(lists.map((list) => list.id)).toEqual(['b', 'a']);
   });
 });

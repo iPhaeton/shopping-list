@@ -20,7 +20,8 @@ import {
 import { subscribeToChanges } from '../lib/listsChannel';
 import { loadOutbox, saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
-import type { List } from './types';
+import { NO_LIST_CURSORS } from './listsReducer';
+import type { Cursor, List, Stream } from './types';
 
 /**
  * `src/lib/listsApi.ts` is mocked at the module boundary, the same seam the auth suites use for
@@ -69,6 +70,46 @@ const api = {
   setItemDeleted: jest.mocked(setItemDeleted),
 };
 
+/**
+ * What the database answers `fetchLists` with, one stream at a time: the lists with no tombstone to
+ * the live stream and the rest to the bin, as a single page — or the given cursors, for a test that
+ * wants a stream with more to come.
+ */
+function pageOf(lists: List[], stream: Stream, next: Partial<Record<Stream, Cursor>> = {}) {
+  return {
+    lists: lists.filter((list) => (list.deletedAt === null) === (stream === 'live')),
+    next: next[stream] ?? null,
+    error: null,
+  };
+}
+
+/** Every read of the lists from here on answers from `lists`, both streams. */
+function serveLists(lists: List[], next: Partial<Record<Stream, Cursor>> = {}) {
+  api.fetchLists.mockImplementation(async (stream) => pageOf(lists, stream, next));
+}
+
+/** The next read of the lists — both of its streams — answers from `lists`, and only that one. */
+function serveListsOnce(lists: List[], next: Partial<Record<Stream, Cursor>> = {}) {
+  api.fetchLists
+    .mockImplementationOnce(async (stream) => pageOf(lists, stream, next))
+    .mockImplementationOnce(async (stream) => pageOf(lists, stream, next));
+}
+
+/** Every read of the lists fails, both streams. */
+function failLists(error: string) {
+  api.fetchLists.mockResolvedValue({ lists: null, next: null, error });
+}
+
+/**
+ * How many times the lists were read from the top — once per `hydrate`, which always asks for page 1
+ * of the live stream (and of the bin beside it). Counting raw `fetchLists` calls would count both
+ * streams and every continuation page.
+ */
+function hydrations(): number {
+  return api.fetchLists.mock.calls.filter(([stream, after]) => stream === 'live' && after === null)
+    .length;
+}
+
 const unsubscribe = jest.fn();
 
 /** Captured so a test can deliver a nudge, or a reconnect, the way the database would. */
@@ -78,13 +119,15 @@ let resubscribe: () => void;
 const USER = 'u1';
 
 const MILK = { id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: null };
+/** When the account joined GROCERIES, as the database stamps it. */
+const JOINED = '2026-09-01T08:00:00+00:00';
 /**
  * A list as it looks once its items are known — either because `fetchLists` is mocked as a
  * shortcut to skip straight past "enter list" for tests that are not about that mechanism, or
  * because the probe already pressed it. The real `fetchLists` never carries items any more; see
  * `describe('entering a list', ...)` for the tests that exercise that boundary directly.
  */
-const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, deletedAt: null, itemsLoaded: true, items: [MILK], nextLive: null, nextBin: null };
+const GROCERIES = { id: 'l1', name: 'Groceries', role: 'owner' as const, deletedAt: null, joinedAt: JOINED, itemsLoaded: true, items: [MILK], nextLive: null, nextBin: null };
 /** The same list as seen by somebody it was shared with, read-only. */
 const READ_ONLY = { ...GROCERIES, role: 'reader' as const };
 
@@ -112,7 +155,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
 
-  api.fetchLists.mockResolvedValue({ lists: [], error: null, truncated: false });
+  serveLists([]);
   api.fetchItems.mockResolvedValue({ items: [], next: null, error: null });
   api.fetchItem.mockResolvedValue({ item: null, error: null });
   api.fetchList.mockResolvedValue({ list: null, error: null });
@@ -139,6 +182,7 @@ afterEach(() => {
 function Probe() {
   const {
     lists,
+    listCursors,
     status,
     error,
     pending,
@@ -155,6 +199,7 @@ function Probe() {
     discardBlocked,
     loadMore,
     loadListItems,
+    loadMoreLists,
   } = useLists();
 
   return (
@@ -164,6 +209,7 @@ function Probe() {
       <Text>{`pending: ${pending}`}</Text>
       <Text>{`blocked: ${blocked ? blocked.op.type : 'none'}`}</Text>
       <Text>{`lastNudge: ${lastNudge ? (lastNudge.listId ?? 'all') : 'none'}`}</Text>
+      <Text>{`list cursors: ${listCursors.live?.id ?? 'end'}, ${listCursors.bin?.id ?? 'end'}`}</Text>
       {lists.map((list) => (
         <Text key={list.id}>
           {`${list.id} ${list.name}${list.deletedAt === null ? '' : ' [binned]'}${
@@ -198,6 +244,8 @@ function Probe() {
       <Button label="load more" onPress={() => void loadMore('l1', false)} />
       <Button label="load more with bin" onPress={() => void loadMore('l1', true)} />
       <Button label="enter list" onPress={() => void loadListItems(lists[0]?.id ?? 'l1')} />
+      <Button label="load more lists" onPress={() => void loadMoreLists(false)} />
+      <Button label="load more lists with bin" onPress={() => void loadMoreLists(true)} />
     </>
   );
 }
@@ -221,16 +269,12 @@ async function renderProbe() {
 }
 
 it('hydrates the list itself from the database on mount, with no items yet', async () => {
-  api.fetchLists.mockResolvedValue({
-    lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
-    error: null,
-    truncated: false,
-  });
+  serveLists([{ ...GROCERIES, itemsLoaded: false, items: [] }]);
 
   await renderProbe();
 
   expect(screen.getByText('l1 Groceries: ')).toBeOnTheScreen();
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
   expect(api.fetchItems).not.toHaveBeenCalled();
 });
 
@@ -241,11 +285,7 @@ it('hydrates the list itself from the database on mount, with no items yet', asy
  */
 describe('entering a list', () => {
   beforeEach(() => {
-    api.fetchLists.mockResolvedValue({
-      lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...GROCERIES, itemsLoaded: false, items: [] }]);
   });
 
   it("loads a list's first page of both streams, together, only once it is entered", async () => {
@@ -317,7 +357,7 @@ describe('entering a list', () => {
 });
 
 it('reports a failed load without pretending the account has no lists', async () => {
-  api.fetchLists.mockResolvedValue({ lists: null, error: 'network down', truncated: false });
+  failLists('network down');
 
   await renderProbe();
 
@@ -356,7 +396,7 @@ it('does not write a blank list name', async () => {
 });
 
 it('adds an item optimistically and inserts it against its list', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [{ ...GROCERIES, items: [] }], error: null, truncated: false });
+  serveLists([{ ...GROCERIES, items: [] }]);
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('add'));
@@ -372,7 +412,7 @@ it('adds an item optimistically and inserts it against its list', async () => {
  * mint, so what crosses this boundary is the target state, not a time.
  */
 it('sends an absolute value when an item is toggled', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
 
   await renderProbe();
 
@@ -388,7 +428,7 @@ it('sends an absolute value when an item is toggled', async () => {
 // --- Renaming, and who may write ---------------------------------------------------------------
 
 it('renames a list optimistically and sends the new name', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('rename'));
@@ -398,7 +438,7 @@ it('renames a list optimistically and sends the new name', async () => {
 });
 
 it('does not rename a list to nothing', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('rename blank'));
@@ -407,7 +447,7 @@ it('does not rename a list to nothing', async () => {
 });
 
 it('renames an item optimistically and sends the new title', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('rename item'));
@@ -417,7 +457,7 @@ it('renames an item optimistically and sends the new title', async () => {
 });
 
 it('does not rename an item to nothing', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('rename item blank'));
@@ -428,7 +468,7 @@ it('does not rename an item to nothing', async () => {
 
 /** A title is an absolute value like a list name, so only the newest of a queued run is sent. */
 it('sends one write for an item renamed repeatedly with no signal', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
   api.renameItem.mockResolvedValue(OFFLINE);
 
   await renderProbe();
@@ -450,7 +490,7 @@ it('sends one write for an item renamed repeatedly with no signal', async () => 
  */
 describe('a list you only have read access to', () => {
   beforeEach(() => {
-    api.fetchLists.mockResolvedValue({ lists: [READ_ONLY], error: null, truncated: false });
+    serveLists([READ_ONLY]);
   });
 
   it('refuses to add an item, and says why', async () => {
@@ -492,7 +532,7 @@ describe('a list you only have read access to', () => {
 
 /** A writer adds, renames and ticks items but does not manage the list itself. */
 it('lets a writer change items but not the name', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [{ ...GROCERIES, role: 'writer' }], error: null, truncated: false });
+  serveLists([{ ...GROCERIES, role: 'writer' }]);
 
   await renderProbe();
 
@@ -512,14 +552,14 @@ it('lets a writer change items but not the name', async () => {
  * happen, so the screen has to stop showing it.
  */
 it('surfaces a refused write and falls back to what the database holds', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [], error: null, truncated: false });
+  serveLists([]);
   api.insertList.mockResolvedValue(REFUSED);
 
   await renderProbe();
   await fireEvent.press(screen.getByLabelText('create'));
 
   expect(await screen.findByText('error: permission denied')).toBeOnTheScreen();
-  await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(hydrations()).toBe(2));
   expect(screen.queryByText(/Groceries/)).not.toBeOnTheScreen();
 });
 
@@ -531,7 +571,7 @@ it('surfaces a refused write and falls back to what the database holds', async (
  * and retries it.
  */
 it('hands off to onSessionRevoked instead of banner-ing a write refused for a revoked session', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [], error: null, truncated: false });
+  serveLists([]);
   api.insertList.mockResolvedValue(REVOKED);
   const onSessionRevoked = jest.fn();
 
@@ -548,7 +588,7 @@ it('hands off to onSessionRevoked instead of banner-ing a write refused for a re
   expect(screen.getByText('error: none')).toBeOnTheScreen();
   expect(screen.getByText('pending: 1')).toBeOnTheScreen();
   // No rollback re-fetch: the provider is about to unmount once the caller signs this device out.
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
 });
 
 // --- Offline -------------------------------------------------------------------------------
@@ -564,7 +604,7 @@ it('keeps a write the network could not deliver', async () => {
   expect(screen.getByText(/Groceries/)).toBeOnTheScreen();
   expect(screen.getByText('error: none')).toBeOnTheScreen();
   // No rollback re-fetch: it would fail too, and it would take the row down with it.
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
 });
 
 it('retries a queued write on its own until it lands', async () => {
@@ -608,7 +648,7 @@ it('treats a duplicate key as the write having landed', async () => {
 });
 
 it('sends one write for a checkbox tapped repeatedly with no signal', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
   api.setItemDone.mockResolvedValue(OFFLINE);
 
   await renderProbe();
@@ -645,8 +685,8 @@ it('drops the items of a list the database refused', async () => {
 // --- Reading offline -----------------------------------------------------------------------
 
 it('shows the last known lists when the fetch fails', async () => {
-  await writeCachedLists(USER, [GROCERIES]);
-  api.fetchLists.mockResolvedValue({ lists: null, error: 'network down', truncated: false });
+  await writeCachedLists(USER, [GROCERIES], NO_LIST_CURSORS);
+  failLists('network down');
 
   await renderProbe();
 
@@ -666,14 +706,14 @@ it('remembers writes the database acknowledged, not just what a fetch returned',
   await screen.findByText('pending: 0');
 
   await screen.unmount();
-  api.fetchLists.mockResolvedValue({ lists: null, error: 'network down', truncated: false });
+  failLists('network down');
   await renderProbe();
 
   expect(screen.getByText(/Groceries/)).toBeOnTheScreen();
 });
 
 it('never reads another account cached lists', async () => {
-  await writeCachedLists('someone-else', [GROCERIES]);
+  await writeCachedLists('someone-else', [GROCERIES], NO_LIST_CURSORS);
 
   await renderProbe();
 
@@ -685,7 +725,7 @@ it('never reads another account cached lists', async () => {
  * screen: replay the outbox over a cache that already contains it and the item appears twice.
  */
 it('does not duplicate a pending write across a restart', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
   api.addItem.mockReturnValue(new Promise<Result>(() => {}));
 
   await renderProbe();
@@ -724,7 +764,7 @@ it('re-reads when another device changes a list', async () => {
     jest.advanceTimersByTime(NUDGE_DEBOUNCE);
   });
 
-  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+  expect(hydrations()).toBe(2);
 });
 
 /** Somebody adding five items sends five nudges. That is one fetch, not five. */
@@ -741,7 +781,7 @@ it('collapses a burst of nudges into one fetch', async () => {
     jest.advanceTimersByTime(NUDGE_DEBOUNCE);
   });
 
-  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+  expect(hydrations()).toBe(2);
 });
 
 /** Delivery is at-most-once: whatever was sent while the socket was down is gone, so re-read. */
@@ -754,7 +794,7 @@ it('re-reads when the socket comes back', async () => {
     jest.advanceTimersByTime(NUDGE_DEBOUNCE);
   });
 
-  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+  expect(hydrations()).toBe(2);
 });
 
 /**
@@ -803,11 +843,11 @@ it('remembers a nudge that arrived while a write was in flight', async () => {
   });
 
   // Turned away, not dropped: a fetch now could come back without the write we are still sending.
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
 
   await act(async () => settleInsert(OK));
 
-  await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(hydrations()).toBe(2));
 });
 
 /**
@@ -819,7 +859,7 @@ it('remembers a nudge that arrived while a write was in flight', async () => {
  */
 it('sends a write enqueued while a nudge-triggered fetch was in flight', async () => {
   jest.useFakeTimers();
-  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  serveListsOnce([GROCERIES]);
   await renderProbe();
   await waitFor(() => expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen());
 
@@ -850,28 +890,30 @@ it('sends a write enqueued while a nudge-triggered fetch was in flight', async (
 /** Same fix, the other door onto it: a full (unnamed) nudge's `hydrate`, not a named one's `hydrateLists`. */
 it('sends a write enqueued while an unnamed nudge fetch was in flight', async () => {
   jest.useFakeTimers();
-  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  serveListsOnce([GROCERIES]);
   await renderProbe();
   await waitFor(() => expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen());
 
-  let settleFetch = (_result: { lists: List[] | null; error: string | null; truncated: boolean }) => {};
-  api.fetchLists.mockReturnValue(
-    new Promise((resolve) => {
-      settleFetch = resolve;
-    })
-  );
+  let settleFetch = () => {};
+  const answered = new Promise<void>((resolve) => {
+    settleFetch = resolve;
+  });
+  api.fetchLists.mockImplementation(async (stream) => {
+    await answered;
+    return pageOf([GROCERIES], stream);
+  });
 
   await act(async () => resubscribe());
   await act(async () => {
     jest.advanceTimersByTime(NUDGE_DEBOUNCE);
   });
-  expect(api.fetchLists).toHaveBeenCalledTimes(2);
+  expect(hydrations()).toBe(2);
 
   await fireEvent.press(screen.getByLabelText('toggle'));
   await screen.findByText('pending: 1');
   expect(api.setItemDone).not.toHaveBeenCalled();
 
-  await act(async () => settleFetch({ lists: [GROCERIES], error: null, truncated: false }));
+  await act(async () => settleFetch());
 
   await waitFor(() => expect(api.setItemDone).toHaveBeenCalledWith('i1', true));
   await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
@@ -890,7 +932,7 @@ it('closes the channel when the provider goes away', async () => {
  */
 it('asks only for the list a nudge names, not every list', async () => {
   jest.useFakeTimers();
-  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  serveListsOnce([GROCERIES]);
   await renderProbe();
   await waitFor(() => expect(screen.getByText(/l1 Groceries/)).toBeOnTheScreen());
 
@@ -903,7 +945,7 @@ it('asks only for the list a nudge names, not every list', async () => {
 
   await waitFor(() => expect(api.fetchList).toHaveBeenCalledWith('l1'));
   // Still just the mount's call — a named nudge never falls back to asking for every list.
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
 });
 
 /** A list just shared with you is one `fetchList` has never seen locally before — it should appear. */
@@ -917,6 +959,7 @@ it('adds a list a nudge names once it becomes visible', async () => {
     name: 'Shared with me',
     role: 'reader' as const,
     deletedAt: null,
+    joinedAt: null,
     itemsLoaded: false,
     items: [],
     nextLive: null,
@@ -930,13 +973,13 @@ it('adds a list a nudge names once it becomes visible', async () => {
   });
 
   await waitFor(() => expect(screen.getByText(/l9 Shared with me/)).toBeOnTheScreen());
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
 });
 
 /** Unshared, or purged — `fetchList` answers the same way either time: not visible any more. */
 it('drops a list a nudge names once it is no longer visible', async () => {
   jest.useFakeTimers();
-  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  serveListsOnce([GROCERIES]);
   await renderProbe();
   await waitFor(() => expect(screen.getByText(/l1 Groceries/)).toBeOnTheScreen());
 
@@ -957,7 +1000,7 @@ it('drops a list a nudge names once it is no longer visible', async () => {
  */
 it('keeps a list a nudge names that is merely binned, not gone', async () => {
   jest.useFakeTimers();
-  api.fetchLists.mockResolvedValueOnce({ lists: [GROCERIES], error: null, truncated: false });
+  serveListsOnce([GROCERIES]);
   await renderProbe();
   await waitFor(() => expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen());
 
@@ -987,14 +1030,10 @@ it('keeps a list a nudge names that is merely binned, not gone', async () => {
  */
 it('reloads only the list a nudge names, leaving another loaded list untouched', async () => {
   jest.useFakeTimers();
-  api.fetchLists.mockResolvedValueOnce({
-    lists: [
+  serveListsOnce([
       { ...GROCERIES, items: [fetched('i1', 'Milk', 1)] },
       { ...GROCERIES, id: 'l2', name: 'Hardware', items: [fetched('i2', 'Nails', 2)] },
-    ],
-    error: null,
-    truncated: false,
-  });
+    ]);
   await renderProbe();
   await waitFor(() => expect(screen.getByText(/l2 Hardware: Nails/)).toBeOnTheScreen());
 
@@ -1016,7 +1055,7 @@ it('reloads only the list a nudge names, leaving another loaded list untouched',
   await waitFor(() => expect(api.fetchItems).toHaveBeenCalledTimes(2));
   expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', null);
   expect(api.fetchItems).toHaveBeenCalledWith('l1', 'bin', null);
-  expect(api.fetchLists).toHaveBeenCalledTimes(1);
+  expect(hydrations()).toBe(1);
   expect(screen.getByText(/l1 Groceries: Milk/)).toBeOnTheScreen();
   expect(screen.getByText(/l2 Hardware: Nails/)).toBeOnTheScreen();
 });
@@ -1032,11 +1071,11 @@ const BINNED_ITEM = {
 
 describe('a write that lands on a tombstone', () => {
   it('asks rather than erroring, and keeps the write', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null, truncated: false });
+    serveLists([BINNED_LIST]);
     await fireEvent.press(screen.getByLabelText('toggle'));
 
     expect(await screen.findByText('blocked: item/setDone')).toBeOnTheScreen();
@@ -1051,11 +1090,11 @@ describe('a write that lands on a tombstone', () => {
    * React state: a reload before the user answers must not lose it.
    */
   it('leaves the blocked write in the outbox on disk', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null, truncated: false });
+    serveLists([BINNED_LIST]);
     await fireEvent.press(screen.getByLabelText('toggle'));
     await screen.findByText('blocked: item/setDone');
 
@@ -1065,11 +1104,11 @@ describe('a write that lands on a tombstone', () => {
   });
 
   it('stops sending while it waits for an answer', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null, truncated: false });
+    serveLists([BINNED_LIST]);
     await fireEvent.press(screen.getByLabelText('toggle'));
     await screen.findByText('blocked: item/setDone');
 
@@ -1083,16 +1122,16 @@ describe('a write that lands on a tombstone', () => {
 
   /** Two writes: the restore first, then the write that was waiting on it. */
   it('restores and then lets the original write through, in that order', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null, truncated: false });
+    serveLists([BINNED_LIST]);
     await fireEvent.press(screen.getByLabelText('toggle'));
     await screen.findByText('blocked: item/setDone');
 
     api.setItemDone.mockResolvedValue(OK);
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await fireEvent.press(screen.getByLabelText('restore blocked'));
 
     await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
@@ -1105,20 +1144,16 @@ describe('a write that lands on a tombstone', () => {
   });
 
   it('lifts the item too when it was binned inside a binned list', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({
-      lists: [{ ...BINNED_LIST, items: BINNED_ITEM.items }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...BINNED_LIST, items: BINNED_ITEM.items }]);
     await fireEvent.press(screen.getByLabelText('toggle'));
     await screen.findByText('blocked: item/setDone');
 
     api.setItemDone.mockResolvedValue(OK);
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await fireEvent.press(screen.getByLabelText('restore blocked'));
 
     await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
@@ -1127,11 +1162,11 @@ describe('a write that lands on a tombstone', () => {
   });
 
   it('drops the write when the user would rather not', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null, truncated: false });
+    serveLists([BINNED_LIST]);
     await fireEvent.press(screen.getByLabelText('toggle'));
     await screen.findByText('blocked: item/setDone');
 
@@ -1149,19 +1184,11 @@ describe('a write that lands on a tombstone', () => {
    * and everything behind it goes out.
    */
   it('drops a write nobody on this account may unblock, without asking', async () => {
-    api.fetchLists.mockResolvedValue({
-      lists: [{ ...GROCERIES, role: 'writer' as const }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...GROCERIES, role: 'writer' as const }]);
     await renderProbe();
 
     api.setItemDone.mockResolvedValue(BLOCKED);
-    api.fetchLists.mockResolvedValue({
-      lists: [{ ...BINNED_LIST, role: 'writer' as const }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...BINNED_LIST, role: 'writer' as const }]);
     await fireEvent.press(screen.getByLabelText('toggle'));
 
     await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
@@ -1173,7 +1200,7 @@ describe('a write that lands on a tombstone', () => {
 
 describe('binning and restoring', () => {
   it('sends the boolean and shows the tombstone before the database answers', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     await fireEvent.press(screen.getByLabelText('bin item'));
@@ -1184,7 +1211,7 @@ describe('binning and restoring', () => {
 
   /** Absolute values, so a change of mind on a train is one request rather than three. */
   it('coalesces bin, restore and bin again into one write', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     api.setItemDeleted.mockResolvedValue(OFFLINE);
     await renderProbe();
 
@@ -1196,7 +1223,7 @@ describe('binning and restoring', () => {
   });
 
   it('refuses to bin a list you do not own, before anything is sent', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [READ_ONLY], error: null, truncated: false });
+    serveLists([READ_ONLY]);
     await renderProbe();
 
     await fireEvent.press(screen.getByLabelText('bin list'));
@@ -1206,7 +1233,7 @@ describe('binning and restoring', () => {
   });
 
   it('refuses to bin an item on a list you can only read', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [READ_ONLY], error: null, truncated: false });
+    serveLists([READ_ONLY]);
     await renderProbe();
 
     await fireEvent.press(screen.getByLabelText('bin item'));
@@ -1228,24 +1255,26 @@ describe('binning and restoring', () => {
  * must be no prompt, because a prompt at that moment is a prompt made on stale information.
  */
 it('does not announce a blocked write until the fetch behind it has landed', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
   await renderProbe();
 
-  let settleFetch = (_result: { lists: List[] | null; error: string | null; truncated: boolean }) => {};
+  let settleFetch = () => {};
+  const answered = new Promise<void>((resolve) => {
+    settleFetch = resolve;
+  });
   api.setItemDone.mockResolvedValue(BLOCKED);
-  api.fetchLists.mockReturnValue(
-    new Promise((resolve) => {
-      settleFetch = resolve;
-    })
-  );
+  api.fetchLists.mockImplementation(async (stream) => {
+    await answered;
+    return pageOf([BINNED_LIST], stream);
+  });
 
   await fireEvent.press(screen.getByLabelText('toggle'));
 
   // The write has been answered, but the tombstone has not arrived yet.
-  await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(hydrations()).toBe(2));
   expect(screen.getByText('blocked: none')).toBeOnTheScreen();
 
-  await act(async () => settleFetch({ lists: [BINNED_LIST], error: null, truncated: false }));
+  await act(async () => settleFetch());
 
   expect(await screen.findByText('blocked: item/setDone')).toBeOnTheScreen();
   expect(screen.getByText('pending: 1')).toBeOnTheScreen();
@@ -1258,11 +1287,11 @@ it('does not announce a blocked write until the fetch behind it has landed', asy
  * the writes behind the discarded one never go out.
  */
 it('sends the writes queued behind a blocked one once it is resolved', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
   await renderProbe();
 
   api.setItemDone.mockResolvedValue(BLOCKED);
-  api.fetchLists.mockResolvedValue({ lists: [BINNED_LIST], error: null, truncated: false });
+  serveLists([BINNED_LIST]);
   await fireEvent.press(screen.getByLabelText('toggle'));
   await screen.findByText('blocked: item/setDone');
 
@@ -1303,7 +1332,7 @@ const PAGED = {
 
 describe('loading more', () => {
   it('reads the next page of live rows from the cursor and appends it', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [PAGED], error: null, truncated: false });
+    serveLists([PAGED]);
     api.fetchItems.mockResolvedValue({
       items: [fetched('i3', 'Eggs', 3)],
       next: null,
@@ -1322,7 +1351,7 @@ describe('loading more', () => {
   });
 
   it('reads the bin as well when asked', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [PAGED], error: null, truncated: false });
+    serveLists([PAGED]);
     api.fetchItems
       .mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null })
       .mockResolvedValueOnce({ items: [fetched('b3', 'Rye', 13, T(20))], next: null, error: null });
@@ -1337,7 +1366,7 @@ describe('loading more', () => {
   });
 
   it('asks for nothing when every row is already here', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+    serveLists([GROCERIES]);
     await renderProbe();
 
     await fireEvent.press(screen.getByLabelText('load more with bin'));
@@ -1347,7 +1376,7 @@ describe('loading more', () => {
 
   /** A scroll fires `onEndReached` more than once; the second call finds the first in flight. */
   it('sends one request for a list whose page is already in flight', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [PAGED], error: null, truncated: false });
+    serveLists([PAGED]);
     let settle = (_page: { items: List['items'] | null; next: null; error: null }) => {};
     api.fetchItems.mockReturnValue(
       new Promise((resolve) => {
@@ -1366,7 +1395,7 @@ describe('loading more', () => {
 
   /** Silent: the cursor is untouched, so the next scroll simply asks again. */
   it('keeps the cursor when a page fails, so the next scroll retries', async () => {
-    api.fetchLists.mockResolvedValue({ lists: [PAGED], error: null, truncated: false });
+    serveLists([PAGED]);
     api.fetchItems.mockResolvedValueOnce({ items: null, next: null, error: 'network down' });
     await renderProbe();
 
@@ -1392,11 +1421,7 @@ describe('a re-fetch with pages loaded', () => {
   /** Enters the list (page 1 of both streams) and scrolls the live rows once (page 2). */
   async function renderWithTwoPages() {
     jest.useFakeTimers();
-    api.fetchLists.mockResolvedValueOnce({
-      lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
-      error: null,
-      truncated: false,
-    });
+    serveListsOnce([{ ...GROCERIES, itemsLoaded: false, items: [] }]);
     api.fetchItems
       .mockResolvedValueOnce({
         items: [fetched('i1', 'Milk', 1), fetched('i2', 'Bread', 2)],
@@ -1419,11 +1444,7 @@ describe('a re-fetch with pages loaded', () => {
 
     // From here on, a real `fetchLists` call carries no items at all — every re-expansion request
     // below starts from page 1, exactly as it would against the database.
-    api.fetchLists.mockResolvedValue({
-      lists: [{ ...GROCERIES, itemsLoaded: false, items: [] }],
-      error: null,
-      truncated: false,
-    });
+    serveLists([{ ...GROCERIES, itemsLoaded: false, items: [] }]);
     api.fetchItems.mockClear();
   }
 
@@ -1447,7 +1468,7 @@ describe('a re-fetch with pages loaded', () => {
       jest.advanceTimersByTime(NUDGE_DEBOUNCE);
     });
 
-    await waitFor(() => expect(api.fetchLists).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(hydrations()).toBe(2));
     // Live is re-expanded fully (both its pages) before the bin, so the raw order differs from how
     // "load more" built it up originally — the screen sorts by creation order regardless; this
     // test is about nothing being lost, not about array position.
@@ -1487,18 +1508,14 @@ describe('a re-fetch with pages loaded', () => {
  * reads that one row before it asks.
  */
 it('fetches the tombstone a blocked write landed on when the bin does not reach it', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [PAGED], error: null, truncated: false });
+  serveLists([PAGED]);
   await renderProbe();
 
   // `i1` was binned by somebody else and, with the bin longer than a page, the re-fetch after the
   // block returns page 1 of the bin without it — and page 1 of the live rows shifted by one. A
   // fresh `fetchLists` never carries items, so the catch-up itself comes through `fetchItems`.
   api.setItemDone.mockResolvedValue(BLOCKED);
-  api.fetchLists.mockResolvedValue({
-    lists: [{ ...PAGED, items: [], itemsLoaded: false, nextLive: null, nextBin: null }],
-    error: null,
-    truncated: false,
-  });
+  serveLists([{ ...PAGED, items: [], itemsLoaded: false, nextLive: null, nextBin: null }]);
   api.fetchItems
     .mockResolvedValueOnce({
       items: [fetched('i2', 'Bread', 2), fetched('i3', 'Eggs', 3)],
@@ -1523,25 +1540,225 @@ it('fetches the tombstone a blocked write landed on when the bin does not reach 
 });
 
 it('does not read a row the fetch already brought', async () => {
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: false });
+  serveLists([GROCERIES]);
   await renderProbe();
 
   api.setItemDone.mockResolvedValue(BLOCKED);
-  api.fetchLists.mockResolvedValue({ lists: [BINNED_ITEM], error: null, truncated: false });
+  serveLists([BINNED_ITEM]);
   await fireEvent.press(screen.getByLabelText('toggle'));
 
   await screen.findByText('blocked: item/setDone');
   expect(api.fetchItem).not.toHaveBeenCalled();
 });
 
-/** Lists are capped, not paged; landing on the cap is worth a word to a developer and nothing else. */
-it('warns, in development only, when the list read hit the cap', async () => {
-  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  api.fetchLists.mockResolvedValue({ lists: [GROCERIES], error: null, truncated: true });
+// --- Lists, paged ------------------------------------------------------------------------------
 
-  await renderProbe();
+/**
+ * Lists page the way items do: page 1 of both streams on every `hydrate`, the rest on scroll, and a
+ * re-read brings back as many pages as were loaded. `servePagedLists` stands in for the keyset read
+ * itself, so a cursor it hands out is the one it is asked to continue from.
+ */
+const joinedAt = (n: number) => `2026-09-02T00:00:${String(n).padStart(2, '0')}+00:00`;
+const cursorAt = (n: number): Cursor => ({ createdAt: joinedAt(n), id: `m${String(n).padStart(2, '0')}` });
+const BINNED_AT = '2026-09-10T09:00:00.000Z';
 
-  expect(warn).toHaveBeenCalledWith(expect.stringContaining('MAX_ROWS'));
-  expect(screen.getByText('error: none')).toBeOnTheScreen();
-  warn.mockRestore();
+/** List `n`, as a page of `fetchLists` carries it: joined in the order of `n`, nothing loaded. */
+function member(n: number, deletedAt: string | null = null, name = `Member ${n}`): List {
+  return {
+    id: cursorAt(n).id,
+    name,
+    role: 'owner',
+    deletedAt,
+    joinedAt: joinedAt(n),
+    itemsLoaded: false,
+    items: [],
+    nextLive: null,
+    nextBin: null,
+  };
+}
+
+/** `fetchLists` over `all`, `size` lists a page, keyset on `(joinedAt, id)` like the real read. */
+function servePagedLists(all: List[], size: number) {
+  api.fetchLists.mockImplementation(async (stream, after) => {
+    const rest = pageOf(all, stream).lists.filter((list) => {
+      if (after === null) return true;
+      const at = list.joinedAt as string;
+      return at > after.createdAt || (at === after.createdAt && list.id > after.id);
+    });
+    const page = rest.slice(0, size);
+    const last = page[page.length - 1];
+    const next = page.length === size ? { createdAt: last.joinedAt as string, id: last.id } : null;
+    return { lists: page, next, error: null };
+  });
+}
+
+const row = (n: number) => new RegExp(`^${cursorAt(n).id} `);
+
+describe('lists, paged', () => {
+  const FIVE_LIVE = [1, 2, 3, 4, 5].map((n) => member(n));
+
+  /** Mounts on page 1 of five live lists, two a page, then scrolls once: pages 1 and 2 loaded. */
+  async function renderWithTwoPagesOfLists(all: List[] = FIVE_LIVE) {
+    servePagedLists(all, 2);
+    await renderProbe();
+    await fireEvent.press(screen.getByLabelText('load more lists'));
+    await waitFor(() => expect(screen.getByText(row(4))).toBeOnTheScreen());
+    api.fetchLists.mockClear();
+  }
+
+  it('reads page 1 of both streams on mount, and the next page of lists from the cursor on scroll', async () => {
+    servePagedLists(FIVE_LIVE, 2);
+    await renderProbe();
+
+    expect(api.fetchLists).toHaveBeenCalledWith('live', null);
+    expect(api.fetchLists).toHaveBeenCalledWith('bin', null);
+    expect(screen.getByText(row(2))).toBeOnTheScreen();
+    expect(screen.queryByText(row(3))).not.toBeOnTheScreen();
+    expect(screen.getByText('list cursors: m02, end')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('load more lists'));
+
+    await waitFor(() => expect(screen.getByText(row(4))).toBeOnTheScreen());
+    expect(api.fetchLists).toHaveBeenLastCalledWith('live', cursorAt(2));
+    expect(screen.getByText('list cursors: m04, end')).toBeOnTheScreen();
+  });
+
+  it('reads the next page of the bin only when asked', async () => {
+    servePagedLists([member(1), ...[2, 3, 4].map((n) => member(n, BINNED_AT))], 2);
+    await renderProbe();
+    expect(screen.getByText('list cursors: end, m03')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('load more lists'));
+    expect(api.fetchLists).not.toHaveBeenCalledWith('bin', cursorAt(3));
+
+    await fireEvent.press(screen.getByLabelText('load more lists with bin'));
+    await waitFor(() => expect(screen.getByText(row(4))).toBeOnTheScreen());
+    expect(api.fetchLists).toHaveBeenCalledWith('bin', cursorAt(3));
+    expect(screen.getByText('list cursors: end, end')).toBeOnTheScreen();
+  });
+
+  /** The Lists screen's case: a nudge must not snap a scroll two pages deep back to one. */
+  it('leaves two pages of lists loaded when a nudge arrives', async () => {
+    jest.useFakeTimers();
+    await renderWithTwoPagesOfLists();
+
+    await act(async () => nudge());
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(api.fetchLists).toHaveBeenCalledWith('live', cursorAt(2)));
+    expect(api.fetchLists.mock.calls).toEqual([
+      ['live', null],
+      ['bin', null],
+      ['live', cursorAt(2)],
+    ]);
+    await waitFor(() => expect(screen.getByText('list cursors: m04, end')).toBeOnTheScreen());
+    expect(screen.getByText(row(4))).toBeOnTheScreen();
+    expect(screen.queryByText(row(5))).not.toBeOnTheScreen();
+  });
+
+  /**
+   * Unlike a list's items, the lists do not snap back to what the re-read got through: that would
+   * drop the lists past it from state, including one open on List detail or one with writes queued.
+   * The whole re-read is thrown away instead — page 1's news included.
+   */
+  it('leaves state untouched when a list continuation fails', async () => {
+    jest.useFakeTimers();
+    await renderWithTwoPagesOfLists();
+
+    servePagedLists([member(1, null, 'Renamed since'), ...FIVE_LIVE.slice(1)], 2);
+    const paged = api.fetchLists.getMockImplementation()!;
+    api.fetchLists.mockImplementation(async (stream, after) =>
+      after === null ? paged(stream, after) : { lists: null, next: null, error: 'network down' }
+    );
+
+    await act(async () => nudge());
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(api.fetchLists).toHaveBeenCalledWith('live', cursorAt(2)));
+    expect(screen.getByText(/^m01 Member 1/)).toBeOnTheScreen();
+    expect(screen.queryByText(/Renamed since/)).not.toBeOnTheScreen();
+    expect(screen.getByText(row(4))).toBeOnTheScreen();
+    expect(screen.getByText('list cursors: m04, end')).toBeOnTheScreen();
+    // A nudge-triggered re-read is silent when it fails, as it always was.
+    expect(screen.getByText('error: none')).toBeOnTheScreen();
+  });
+
+  /**
+   * A list shared with you mid-stream sorts where you joined it. Appended while the lists before it
+   * are not loaded yet, it would sit out of place; so it waits for its page, the way an item added
+   * past a loaded page does.
+   */
+  it('appends a list a nudge names only when it falls inside the loaded pages', async () => {
+    jest.useFakeTimers();
+    servePagedLists(FIVE_LIVE, 2);
+    await renderProbe();
+    expect(screen.getByText('list cursors: m02, end')).toBeOnTheScreen();
+
+    api.fetchList.mockImplementation(async (id) => ({
+      list: id === 'm00' ? member(0) : member(9),
+      error: null,
+    }));
+
+    await act(async () => {
+      nudge('m00');
+      nudge('m09');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(screen.getByText(row(0))).toBeOnTheScreen());
+    expect(api.fetchList).toHaveBeenCalledWith('m09');
+    expect(screen.queryByText(row(9))).not.toBeOnTheScreen();
+    expect(screen.getByText('list cursors: m02, end')).toBeOnTheScreen();
+  });
+
+  /**
+   * The blocked-write path, one level up. The list itself sorts past the loaded pages of the bin once
+   * somebody else bins it, and a plan with no list in it is empty — which discards the write,
+   * silently. The provider reads that one list before it asks.
+   */
+  it('fetches the list a blocked write landed on when the bin pages do not reach it', async () => {
+    serveLists([GROCERIES]);
+    await renderProbe();
+
+    api.renameList.mockResolvedValue(BLOCKED);
+    // Page 1 of the bin is full of lists binned earlier, and l1 sorts after them.
+    const OLDER = { ...member(1, BINNED_AT), joinedAt: '2026-09-01T07:00:00+00:00' };
+    serveLists([OLDER], { bin: { createdAt: OLDER.joinedAt, id: OLDER.id } });
+    api.fetchList.mockResolvedValue({
+      list: { ...BINNED_LIST, items: [], itemsLoaded: false },
+      error: null,
+    });
+
+    await fireEvent.press(screen.getByLabelText('rename'));
+
+    expect(await screen.findByText('blocked: list/renamed')).toBeOnTheScreen();
+    expect(api.fetchList).toHaveBeenCalledWith('l1');
+    expect(screen.getByText('pending: 1')).toBeOnTheScreen();
+    // Folded in with the queued rename on top, and with no page's cursor moved by it.
+    expect(screen.getByText(/^l1 Weekly shop \[binned\]/)).toBeOnTheScreen();
+    expect(screen.getByText('list cursors: end, m01')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('restore blocked'));
+
+    await waitFor(() => expect(api.setListDeleted).toHaveBeenCalledWith('l1', false));
+  });
+
+  /** The cache holds the list cursors, so a cold start re-reads as deep as the last session got. */
+  it('re-reads as many pages of lists as the cache held on a cold start', async () => {
+    await writeCachedLists(USER, FIVE_LIVE.slice(0, 4), { live: cursorAt(4), bin: null });
+    servePagedLists(FIVE_LIVE, 2);
+
+    await renderProbe();
+
+    await waitFor(() => expect(api.fetchLists).toHaveBeenCalledWith('live', cursorAt(2)));
+    expect(api.fetchLists).not.toHaveBeenCalledWith('live', cursorAt(4));
+    expect(screen.getByText(row(4))).toBeOnTheScreen();
+    expect(screen.queryByText(row(5))).not.toBeOnTheScreen();
+  });
 });

@@ -4,9 +4,9 @@ title: Ids and timestamps are minted outside the reducer and arrive on the actio
 type: convention
 status: current
 tags: [state, reducer, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, src/state/useListWrites.ts]
-last_verified: 2026-09-13
-verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/useListWrites.ts
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/23-list-limits/implementation-log-step-1.md, src/state/useListWrites.ts]
+last_verified: 2026-10-01
+verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/useListWrites.ts && grep -q 'joinedAt: null,' src/state/listsReducer.ts && ! grep -qE 'joinedAt|createdAt' src/state/useListWrites.ts
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 indexed: false
 ---
@@ -32,6 +32,12 @@ the provider and the reducer still reads no clock.
 `role: 'owner'` inside the reducer without it arriving on the action, and that is fine: it is a
 constant the database's `on_list_created` trigger is guaranteed to agree with, so the case stays a
 pure function of its input. Do not "fix" it by putting `role` on the action.
+
+**Task 23's `joinedAt: null` on that same arm is the same kind of constant**, as `item/added`'s
+`createdAt: null` is. The database stamps both, and `null` is what marks a row unacknowledged: it
+sorts last (`inJoinOrder`, `inCreationOrder`), it is left out of the count a re-read pages up to
+(`reloadListPages`, `reloadPages`), and fetched pages are inserted before it. **Do not mint a device
+timestamp for either onto the action** the way `doneAt` is — the row would read as acknowledged.
 
 **And it is about values that are *created*, not every write.** `list/renamed`, the fourth action,
 mints nothing at all: the list already has its id, and the name comes from the user. There is no
@@ -61,7 +67,8 @@ the second one earns is read as "already applied"
 
 **What to do:** a new case that creates an entity, or records a moment, puts the value on the action
 and mints it in the provider. `crypto.randomUUID()` or `new Date()` inside the reducer is the mistake
-this prevents; the `verify:` command greps for both.
+this prevents; the `verify:` command greps for both, and that `useListWrites` mints no
+`createdAt`/`joinedAt` while the reducer still writes `joinedAt: null`.
 
 **Demoted out of `INDEX.md` at task 6 phase 2** (`indexed: false`), not retired: still true, still
 checked every audit, still found by `/librarian ask`, and linked from

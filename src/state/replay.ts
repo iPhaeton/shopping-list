@@ -1,4 +1,4 @@
-import { listsReducer } from './listsReducer';
+import { initialState, listsReducer } from './listsReducer';
 import type { List, WriteAction } from './types';
 
 /**
@@ -14,7 +14,10 @@ import type { List, WriteAction } from './types';
  * write means. A pending `item/added` therefore still lands after the pending `list/created` it
  * depends on, and an op the reducer cannot place — an item for a list that is gone — is dropped by
  * `updateList` exactly as it would have been live.
+ *
+ * Lists only, not the list cursors: no write action reads or moves them, so the fold starts from
+ * the empty ones and the caller dispatches whichever cursors its own fetch decided.
  */
 export function replay(lists: List[], ops: WriteAction[]): List[] {
-  return ops.reduce((state, op) => listsReducer(state, op), { lists }).lists;
+  return ops.reduce((state, op) => listsReducer(state, op), { ...initialState, lists }).lists;
 }

@@ -4,8 +4,8 @@ title: Lists, List detail and Sharing pin their whole header inside their scroll
 type: decision
 status: current
 tags: [ui, layout, flatlist, scrollview, ios, design, sharing]
-sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md]
-last_verified: 2026-09-30
+sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/23-list-limits/implementation-log-step-1.md]
+last_verified: 2026-10-01
 verify: grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListsScreen.tsx && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListDetailScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListsScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListDetailScreen.tsx && grep -q 'style={styles.headerSky}' src/screens/ListsScreen.tsx && test "$(grep -c '<Sky height={SKY_HEIGHT} />' src/screens/ListsScreen.tsx)" = 2 && ! grep -q statusBarSky src/screens/ListsScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/ListDetailScreen.tsx && grep -q '<View style={styles.header}>' src/screens/ListDetailScreen.tsx && grep -A1 '^  header: {' src/screens/ListDetailScreen.tsx | grep -q 'backgroundColor: colors.skyHorizon' && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/SharingScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/SharingScreen.tsx && grep -A1 '^  header: {' src/screens/SharingScreen.tsx | grep -q 'backgroundColor: colors.skyHorizon'
 related: [phone-is-the-product, screens-take-navigation-props, maestro-drives-the-native-ui, svg-percent-size-frozen-on-ios, absolute-decoration-needs-pointer-events-on-its-wrapper]
 indexed: false
@@ -81,8 +81,10 @@ a header whose bottom edge is row 0's top edge. The step-22 log flags it for the
 
 **Nothing in jest covers any of this.** The `ScrollView` mock ignores sticky indices, so it was
 verified on the iPhone 17e, on `Pixel_10`, and on web, where react-native-web 0.21 renders the
-header cell as `position: sticky`; Sharing on the iPhone 18 Pro and web only. Items paging (`onEndReached`) under a pinned header has not been
-exercised. For Maestro, rows behind the header are still in the hierarchy at their real
+header cell as `position: sticky`; Sharing on the iPhone 18 Pro and web only. Lists' own paging
+(`onEndReached`, task 23) under its pinned header was exercised on web and the iPhone 18 Pro, the
+spinner sitting at the top of the ground-coloured footer; List detail's items paging under its pinned
+header still has not been. For Maestro, rows behind the header are still in the hierarchy at their real
 coordinates: see [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
 
 The `verify:` asserts both lists pin index 0 of their `ListHeaderComponent`, Lists' header draws its

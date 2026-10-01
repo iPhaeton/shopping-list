@@ -4,8 +4,8 @@ title: Deleting stamps `deleted_at` and leaves the row — the bin's first page 
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
-last_verified: 2026-09-20
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
+last_verified: 2026-10-01
 verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
 related: [writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack]
 ---
@@ -50,8 +50,8 @@ outbox coalesces delete/restore/delete into one request, exactly as it does a to
 nothing; neither returns an outcome, because a delete cannot itself land on a deleted target.
 
 **The bin arrives with the live stream the moment a list is opened, not with `fetchLists` — since
-step 11-2 — and the client is what hides it.** `fetchLists` is list metadata only (`id, name,
-deleted_at`); it carries no items at all any more. Opening a list runs `loadListItems`
+step 11-2 — and the client is what hides it.** `fetchLists` is list and membership metadata only
+(`role, created_at`, and the list's `id, name, deleted_at`), no items. Opening a list runs `loadListItems`
 ([src/state/usePaging.ts](../../../src/state/usePaging.ts)), which fetches both streams from
 `null` via `Promise.all` and folds them into state together as one `items/firstPageLoaded`, each
 capped at `PAGE_SIZE` server-side; the policies add no filter, and `fetchItems(listId, 'bin',
@@ -103,10 +103,10 @@ and worth recognising rather than debugging.
 
 **What it does not solve.** Restoring a list does **not** restore its items — the two tombstones are
 independent, which is correct and confusing enough to have earned a line of copy on the binned-list
-screen. The first page of the bin is still fetched even when hidden, now on opening the list rather
-than on every list fetch — **bounded** at `PAGE_SIZE` rows per list per fetch, not minimised; the
-follow-up, if fetch size ever matters, is to read the bin only on the first tick of the checkbox,
-never to filter it in a policy.
+screen. Each bin's first page is still fetched even when hidden — an item bin's on opening its list,
+and since task 23 the *lists* bin's (`LIST_PAGE_SIZE`, 100) on every hydrate, beside the live stream
+and split from it by the same `deleted_at` filter — **bounded**, not minimised. The follow-up, if fetch
+size ever matters, is to read a bin only on the first tick of its toggle, never to filter it in a policy.
 **The purge has never run on cloud, and neither migration has been pushed there** —
 `create extension pg_cron` is the one statement that may be refused
 ([supabase-local-stack](supabase-local-stack.md)). Nothing has yet read `cron.job_run_details` after a

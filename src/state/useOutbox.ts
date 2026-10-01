@@ -31,6 +31,7 @@ export function useOutbox({
   attempt,
   stuck,
   hydrate,
+  loadList,
   drainDirty,
   setError,
   setBlocked,
@@ -47,6 +48,8 @@ export function useOutbox({
   attempt: MutableRefObject<number>;
   stuck: MutableRefObject<boolean>;
   hydrate: () => Promise<{ error: string | null; lists: List[] | null }>;
+  /** One list by id, folded into state; `usePaging`'s. */
+  loadList: (listId: string) => Promise<List | null>;
   drainDirty: () => void;
   setError: (message: string | null) => void;
   setBlocked: (blocked: Blocked | null) => void;
@@ -67,26 +70,35 @@ export function useOutbox({
   }, [userId]);
 
   /**
-   * The row a blocked write landed on, when the fetch did not bring it.
+   * The list and the row a blocked write landed on, when the fetch did not bring them.
    *
-   * `restorePlan` reads the tombstone out of state, and an empty plan means *discard the write*.
-   * `fetchLists` carries no items at all now, so this fires for essentially every blocked write on
-   * a list that is not currently (or was not previously) open — read that one row by key and fold
-   * it in with no `stream`, leaving the cursors where they are. A row the caller cannot see comes
-   * back `null`, and the plan is empty for the same reason it always was: purged, or removed.
+   * `restorePlan` reads the tombstones out of state, and an empty plan means *discard the write* —
+   * silently. Neither is guaranteed to be there. **The list**: lists are paged, and one somebody
+   * else binned can sort past the pages of the bin loaded so far, so the plan would find no list at
+   * all. **The row**: `fetchLists` carries no items, so this fires for essentially every blocked
+   * write on a list that is not (and was not) open. Each is read by key and folded in with no
+   * `stream`, leaving the cursors where they are — the list first, since the row hangs off it. One
+   * the caller cannot see comes back `null`, and the plan is empty for the same reason it always
+   * was: purged, or removed.
    */
-  const fetchMissingTarget = useCallback(async (op: WriteAction, loaded: List[] | null) => {
-    const itemId = itemIdOf(op);
-    if (!itemId || !loaded) return;
+  const fetchMissingTarget = useCallback(
+    async (op: WriteAction, loaded: List[] | null) => {
+      if (!loaded) return;
 
-    const listId = listIdOf(op);
-    const list = loaded.find((candidate) => candidate.id === listId);
-    if (!list || list.items.some((item) => item.id === itemId)) return;
+      const listId = listIdOf(op);
+      const list =
+        loaded.find((candidate) => candidate.id === listId) ?? (await loadList(listId));
+      if (!live.current || !list) return;
 
-    const { item } = await fetchItem(itemId);
-    if (!live.current || !item) return;
-    foldPage(dispatch, queue, { type: 'items/pageLoaded', listId, items: [item] });
-  }, []);
+      const itemId = itemIdOf(op);
+      if (!itemId || list.items.some((item) => item.id === itemId)) return;
+
+      const { item } = await fetchItem(itemId);
+      if (!live.current || !item) return;
+      foldPage(dispatch, queue, { type: 'items/pageLoaded', listId, items: [item] });
+    },
+    [loadList]
+  );
 
   /**
    * Sends the head of the outbox, one at a time, until it is empty or the network refuses to
@@ -140,8 +152,8 @@ export function useOutbox({
             // The op stays queued throughout, so `replay` keeps the optimistic row on screen where
             // it belongs: the write is pending, not refused.
             //
-            // Two fetches now, both before the announcement: the tombstone may be beyond the
-            // first page of the bin, where the wholesale read does not reach.
+            // Up to three fetches now, all before the announcement: the list and the item may each
+            // be beyond the loaded pages of their bin, where the wholesale read does not reach.
             const { lists: loaded } = await hydrate();
             if (!live.current) return;
             await fetchMissingTarget(op, loaded);

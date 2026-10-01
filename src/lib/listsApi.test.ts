@@ -4,6 +4,7 @@ import {
   fetchItems,
   fetchList,
   fetchLists,
+  LIST_PAGE_SIZE,
   MAX_ROWS,
   PAGE_SIZE,
   renameItem,
@@ -19,8 +20,9 @@ import { supabase } from './supabase';
  * `@supabase/supabase-js` is never loaded here.
  *
  * What is worth asserting is the *shape* of each read: `fetchLists` is rooted at `list_members`,
- * each row carries the caller's `role`, and the list hangs off it as an embed carrying no items at
- * all — those come from `fetchItems`, read separately once a list is opened.
+ * each row carries the caller's `role` and when they joined, the list hangs off it as an embed
+ * carrying no items at all — those come from `fetchItems`, read separately once a list is opened —
+ * and it is paged by the same keyset `fetchItems` is.
  */
 jest.mock('./supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 
@@ -72,9 +74,16 @@ function respondToRpcWith(response: Response) {
 
 const BREAD = { id: 'i3', title: 'Bread', done_at: null, deleted_at: '2026-09-09T07:00:00Z', created_at: '2026-09-01T11:00:00Z' };
 
+/** When membership `n` was created: distinct, ascending, in the database's own format. */
+const joined = (n: number) => `2026-09-01T00:00:00.${String(n).padStart(6, '0')}+00:00`;
+
 /** A membership row as PostgREST returns it now — no items, just list metadata. */
 function membership(n: number, role = 'owner', deletedAt: string | null = null) {
-  return { role, lists: { id: `l${n}`, name: `List ${n}`, deleted_at: deletedAt } };
+  return {
+    role,
+    created_at: joined(n),
+    lists: { id: `l${n}`, name: `List ${n}`, deleted_at: deletedAt },
+  };
 }
 
 /** A full page of `n` rows with distinct, ascending `created_at`. */
@@ -92,92 +101,126 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-it('reads from list_members, ordered by when each list entered the account', async () => {
-  const { calls } = respondWith({ data: [], error: null });
-
-  await fetchLists();
-
-  expect(argsOf(calls, 'from')).toEqual([['list_members']]);
-  // The embed is inner-joined, so a membership can never arrive without its list.
-  expect(argsOf(calls, 'select')[0][0]).toContain('lists!inner');
-  // No user filter: row-level security supplies it, and an `.eq()` here could only disagree.
-  expect(argsOf(calls, 'eq')).toEqual([]);
-  expect(argsOf(calls, 'order')).toContainEqual(['created_at']);
-});
-
 /**
- * PostgREST's `max_rows` is a silent ceiling: ask for more and exactly that many come back, with
- * no error and no header. Sending the limit ourselves is what makes the cap visible in code, and
- * landing on it exactly is the only signal that lists were cut off.
+ * Lists are paged the way items are: two streams, keyset on `(created_at, list_id)` of the
+ * membership. What is worth pinning is the root, the stream filter through the inner embed, the
+ * keyset with its redundant `gte`, and the order that makes the cursor mean anything.
  */
-it('caps the membership scan at MAX_ROWS and says when it hit the cap', async () => {
-  const { calls } = respondWith({
-    data: Array.from({ length: MAX_ROWS }, (_, n) => membership(n)),
-    error: null,
-  });
-  const full = await fetchLists();
-  expect(argsOf(calls, 'limit')).toContainEqual([MAX_ROWS]);
-  expect(full.truncated).toBe(true);
-  expect(full.lists).toHaveLength(MAX_ROWS);
+describe('fetchLists', () => {
+  const AFTER = { createdAt: '2026-09-01T10:00:00+00:00', id: 'l1' };
 
-  respondWith({ data: [membership(1)], error: null });
-  expect((await fetchLists()).truncated).toBe(false);
-});
+  it('reads the live stream from list_members, in the order each list entered the account', async () => {
+    const { calls } = respondWith({ data: [], error: null });
 
-/**
- * The point of this step: opening the Lists screen used to fetch a first page of every list's
- * items, which is exactly what made it laggy. `fetchLists` now sends no item embed at all —
- * `fetchItems` is what a list's items come from, read once that list is actually opened.
- */
-it('sends no item embed — items arrive only once a list is entered', async () => {
-  const { calls } = respondWith({ data: [], error: null });
+    await fetchLists('live', null);
 
-  await fetchLists();
-
-  const select = String(argsOf(calls, 'select')[0][0]);
-  expect(select).not.toContain('items');
-  expect(argsOf(calls, 'is')).toEqual([]);
-  expect(argsOf(calls, 'not')).toEqual([]);
-  expect(argsOf(calls, 'order')).toEqual([['created_at']]);
-  expect(argsOf(calls, 'limit')).toEqual([[MAX_ROWS]]);
-});
-
-it('carries the role from the membership row onto the list, with nothing fetched yet', async () => {
-  respondWith({
-    data: [membership(1, 'owner'), membership(2, 'reader')],
-    error: null,
+    expect(argsOf(calls, 'from')).toEqual([['list_members']]);
+    // The embed is inner-joined, so a membership can never arrive without its list — and a filter
+    // on the embed's column drops the membership row itself, which is what picks the stream.
+    expect(argsOf(calls, 'select')[0][0]).toContain('lists!inner');
+    expect(argsOf(calls, 'is')).toEqual([['lists.deleted_at', null]]);
+    expect(argsOf(calls, 'not')).toEqual([]);
+    // No user filter: row-level security supplies it, and an `.eq()` here could only disagree.
+    expect(argsOf(calls, 'eq')).toEqual([]);
+    expect(argsOf(calls, 'order')).toEqual([['created_at'], ['list_id']]);
+    expect(argsOf(calls, 'limit')).toEqual([[LIST_PAGE_SIZE]]);
+    // Page 1: no cursor, so no keyset.
+    expect(argsOf(calls, 'or')).toEqual([]);
+    expect(argsOf(calls, 'gte')).toEqual([]);
   });
 
-  const { lists } = await fetchLists();
+  it('reads the bin with the opposite filter', async () => {
+    const { calls } = respondWith({ data: [], error: null });
 
-  expect(lists).toEqual([
-    { id: 'l1', name: 'List 1', role: 'owner', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
-    { id: 'l2', name: 'List 2', role: 'reader', deletedAt: null, itemsLoaded: false, items: [], nextLive: null, nextBin: null },
-  ]);
-});
+    await fetchLists('bin', null);
 
-it('returns the error rather than throwing it', async () => {
-  respondWith({ data: null, error: { message: 'JWT expired' } });
-
-  expect(await fetchLists()).toEqual({ lists: null, error: 'JWT expired', truncated: false });
-});
-
-/**
- * `?? null` rather than a bare read: a column missing from the select string arrives `undefined`,
- * and `undefined !== null` is `true` everywhere downstream, so a typo here would silently render
- * every list as deleted — a mapping bug `toEqual` would not catch, since it ignores `undefined`.
- */
-it('carries the tombstone on a list', async () => {
-  const { calls } = respondWith({
-    data: [membership(1, 'owner', '2026-09-10T08:00:00Z')],
-    error: null,
+    expect(argsOf(calls, 'is')).toEqual([]);
+    expect(argsOf(calls, 'not')).toEqual([['lists.deleted_at', 'is', null]]);
   });
 
-  const { lists } = await fetchLists();
+  it('continues from a cursor on (created_at, list_id)', async () => {
+    const { calls } = respondWith({ data: [], error: null });
 
-  const select = String(argsOf(calls, 'select')[0][0]);
-  expect(select).toContain('name, deleted_at');
-  expect(lists?.[0].deletedAt).toBe('2026-09-10T08:00:00Z');
+    await fetchLists('live', AFTER);
+
+    expect(argsOf(calls, 'gte')).toEqual([['created_at', AFTER.createdAt]]);
+    // Quoted: a timestamp carries `:` and `+`, both reserved inside PostgREST's logic tree.
+    expect(argsOf(calls, 'or')).toEqual([
+      [
+        'created_at.gt."2026-09-01T10:00:00+00:00",and(created_at.eq."2026-09-01T10:00:00+00:00",list_id.gt."l1")',
+      ],
+    ]);
+  });
+
+  it('hands back a cursor only when the page came back full', async () => {
+    respondWith({ data: [membership(1), membership(2), membership(3)], error: null });
+    const full = await fetchLists('live', null, 3);
+    expect(full.lists).toHaveLength(3);
+    expect(full.next).toEqual({ createdAt: joined(3), id: 'l3' });
+
+    respondWith({ data: [membership(1), membership(2)], error: null });
+    expect((await fetchLists('live', null, 3)).next).toBeNull();
+  });
+
+  /** A page silently shortened by the cap would read as "the last page", and the rest would vanish. */
+  it('refuses a page size the cap would silently shorten', async () => {
+    respondWith({ data: [], error: null });
+
+    await expect(fetchLists('live', null, MAX_ROWS + 1)).rejects.toThrow(/capped/);
+    await expect(fetchLists('live', null, MAX_ROWS)).resolves.toBeTruthy();
+  });
+
+  /**
+   * Opening the Lists screen once fetched a first page of every list's items, which is exactly what
+   * made it laggy. `fetchLists` sends no item embed at all — `fetchItems` is what a list's items
+   * come from, read once that list is actually opened.
+   */
+  it('sends no item embed — items arrive only once a list is entered', async () => {
+    const { calls } = respondWith({ data: [], error: null });
+
+    await fetchLists('live', null);
+
+    expect(String(argsOf(calls, 'select')[0][0])).not.toContain('items');
+  });
+
+  it('carries the role and the join time from the membership row, with nothing fetched yet', async () => {
+    respondWith({
+      data: [membership(1, 'owner'), membership(2, 'reader')],
+      error: null,
+    });
+
+    const { lists } = await fetchLists('live', null);
+
+    expect(lists).toEqual([
+      { id: 'l1', name: 'List 1', role: 'owner', deletedAt: null, joinedAt: joined(1), itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+      { id: 'l2', name: 'List 2', role: 'reader', deletedAt: null, joinedAt: joined(2), itemsLoaded: false, items: [], nextLive: null, nextBin: null },
+    ]);
+  });
+
+  it('returns the error rather than throwing it', async () => {
+    respondWith({ data: null, error: { message: 'JWT expired' } });
+
+    expect(await fetchLists('live', null)).toEqual({ lists: null, next: null, error: 'JWT expired' });
+  });
+
+  /**
+   * `?? null` rather than a bare read: a column missing from the select string arrives `undefined`,
+   * and `undefined !== null` is `true` everywhere downstream, so a typo here would silently render
+   * every list as deleted — a mapping bug `toEqual` would not catch, since it ignores `undefined`.
+   */
+  it('carries the tombstone on a list', async () => {
+    const { calls } = respondWith({
+      data: [membership(1, 'owner', '2026-09-10T08:00:00Z')],
+      error: null,
+    });
+
+    const { lists } = await fetchLists('bin', null);
+
+    const select = String(argsOf(calls, 'select')[0][0]);
+    expect(select).toContain('name, deleted_at');
+    expect(select).toMatch(/^role, created_at, lists!inner/);
+    expect(lists?.[0].deletedAt).toBe('2026-09-10T08:00:00Z');
+  });
 });
 
 // --- The next page of a stream ----------------------------------------------------------------
@@ -294,7 +337,9 @@ describe('fetchList', () => {
     const { list } = await fetchList('l1');
 
     expect(argsOf(calls, 'from')).toEqual([['list_members']]);
-    expect(argsOf(calls, 'select')[0][0]).toContain('lists!inner');
+    // The same columns as a page, `created_at` included: a list fetched by id is placed and
+    // counted by when you joined it, like one that arrived with its page.
+    expect(argsOf(calls, 'select')[0][0]).toMatch(/^role, created_at, lists!inner/);
     expect(argsOf(calls, 'eq')).toEqual([['list_id', 'l1']]);
     expect(argsOf(calls, 'maybeSingle')).toEqual([[]]);
     expect(list).toEqual({
@@ -302,6 +347,7 @@ describe('fetchList', () => {
       name: 'List 1',
       role: 'owner',
       deletedAt: null,
+      joinedAt: joined(1),
       itemsLoaded: false,
       items: [],
       nextLive: null,

@@ -45,7 +45,7 @@ export type WriteOutcome = 'applied' | 'target_deleted';
  * visible in the code that hits it. Keep the two equal by hand: the config value is a **silent**
  * ceiling — a request for more rows, top-level or embedded, comes back with exactly this many, no
  * error, no header — so nothing here can discover it at runtime. Every explicit limit below is
- * `<= MAX_ROWS` by construction, and `fetchLists` reports `truncated` when it lands on it.
+ * `<= MAX_ROWS` by construction, and both paged reads assert it rather than trust the caller.
  */
 export const MAX_ROWS = 1000;
 
@@ -58,10 +58,24 @@ export const MAX_ROWS = 1000;
  */
 export const PAGE_SIZE = 400;
 
+/**
+ * Lists per page — the user's number (task 23). A list row is a name, a role and three
+ * identifiers, far smaller than an item row, so this is nowhere near the item budget above; it is
+ * about how many rows the Lists screen is worth drawing before a scroll asks for more. Bounded above
+ * by `MAX_ROWS`, and asserted, exactly as `PAGE_SIZE` is.
+ */
+export const LIST_PAGE_SIZE = 100;
+
 /** Structural, so this module stays the only one importing anything from supabase-js. */
 type Failure = { message: string; code?: string | null } | null;
 
 const ITEM_COLUMNS = 'id, title, done_at, deleted_at, created_at';
+
+/**
+ * Both list reads select this. `created_at` is the membership's — when you joined the list — and
+ * is what lists are ordered and paged by; the list's own timestamps are not read at all.
+ */
+const MEMBERSHIP_COLUMNS = 'role, created_at, lists!inner ( id, name, deleted_at )';
 
 type ItemRow = {
   id: string;
@@ -71,10 +85,11 @@ type ItemRow = {
   created_at: string;
 };
 type ListRow = { id: string; name: string; deleted_at: string | null };
-type MembershipRow = { role: Role; lists: ListRow };
+type MembershipRow = { role: Role; created_at: string; lists: ListRow };
 
 /**
- * One round trip, rooted at `list_members` rather than at `lists` — list metadata only, no items.
+ * The next page of one stream of *lists* — live, or the bin — rooted at `list_members` rather than
+ * at `lists`, list metadata only, no items.
  *
  * That rooting is the whole read path, not a stylistic choice. Asking `lists` "which of you may I
  * see" makes the top-level scan proportional to how many lists *exist*; asking `list_members`
@@ -83,30 +98,52 @@ type MembershipRow = { role: Role; lists: ListRow };
  * `user_id = auth.uid()`, which is an index qual on `(user_id, created_at)` — so the client still
  * filters nothing, and none of this is a rule a bug here could get wrong.
  *
- * **Items are not part of this read.** They used to arrive as a first page of `live` and `bin`
- * embedded here, which meant opening the Lists screen fetched items for every list you're in, not
- * only the one you were about to look at. `fetchItems` reads a list's items — both streams, a page
- * at a time — and is called once you actually enter that list, never for every row on this screen.
+ * **Paged the way `fetchItems` is, keyset on `(created_at, list_id)` of the membership** — when you
+ * joined, which is the order the Lists screen has always shown. The stream is picked through the
+ * `!inner` embed's `deleted_at`, which filters the membership rows themselves, not just the embed.
+ * The `gte` beside the keyset `or` is redundant in meaning and there for the plan, as in
+ * `fetchItems`: it makes the index condition a range starting at the cursor. The bin cannot use the
+ * index for its filter — it walks your memberships in join order and discards the live ones — so
+ * its cost tracks the memberships after the cursor rather than the page.
+ *
+ * `next` follows `fetchItems`' rule: the last row of a **full** page, `null` otherwise, which is why
+ * `limit` is asserted against `MAX_ROWS` rather than trusted.
+ *
+ * **Items are not part of this read.** `fetchItems` reads a list's items — both streams, a page at
+ * a time — once you actually enter that list, never for every row on this screen.
  */
-export async function fetchLists(): Promise<{
-  lists: List[] | null;
-  error: string | null;
-  /**
-   * The membership scan hit `MAX_ROWS`, so lists beyond the cap are missing and nothing else says
-   * so. Lists are capped rather than paged — nobody is in a thousand of them — and the provider
-   * turns this into a development-time warning, which is the whole point of reporting it.
-   */
-  truncated: boolean;
-}> {
-  const { data, error } = await supabase
-    .from('list_members')
-    .select('role, lists!inner ( id, name, deleted_at )')
-    .order('created_at')
-    .limit(MAX_ROWS);
+export async function fetchLists(
+  stream: Stream,
+  after: Cursor | null,
+  limit = LIST_PAGE_SIZE
+): Promise<{ lists: List[] | null; next: Cursor | null; error: string | null }> {
+  if (limit > MAX_ROWS) {
+    throw new Error(`fetchLists: a page of ${limit} rows would be silently capped at ${MAX_ROWS}`);
+  }
 
-  if (error) return { lists: null, error: error.message, truncated: false };
+  let query = supabase.from('list_members').select(MEMBERSHIP_COLUMNS);
+  query =
+    stream === 'live'
+      ? query.is('lists.deleted_at', null)
+      : query.not('lists.deleted_at', 'is', null);
+  if (after) {
+    // Quoted, because a timestamp carries `:` and `+`, both reserved inside a logic tree.
+    query = query
+      .gte('created_at', after.createdAt)
+      .or(
+        `created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",list_id.gt."${after.id}")`
+      );
+  }
+  const { data, error } = await query.order('created_at').order('list_id').limit(limit);
+
+  if (error) return { lists: null, next: null, error: error.message };
   const rows = data as unknown as MembershipRow[];
-  return { lists: rows.map(toList), error: null, truncated: rows.length === MAX_ROWS };
+  const last = rows[rows.length - 1];
+  return {
+    lists: rows.map(toList),
+    next: rows.length < limit ? null : { createdAt: last.created_at, id: last.lists.id },
+    error: null,
+  };
 }
 
 /**
@@ -174,8 +211,10 @@ export async function fetchItem(
 
 /**
  * One list's own metadata — the read a realtime nudge that names a list uses instead of asking
- * `fetchLists` for every list again. Same root as `fetchLists`, filtered to one list via
- * `list_members`'s own `list_id` column; row-level security still supplies `user_id = auth.uid()`.
+ * `fetchLists` for every page again, and the one the provider uses for a list it needs but has not
+ * paged to: a blocked write's target, or the list a screen has open. Same root and columns as
+ * `fetchLists`, filtered to one list via `list_members`'s own `list_id` column; row-level security
+ * still supplies `user_id = auth.uid()`.
  *
  * `{ list: null, error: null }` means "not visible to me" — unshared, or the list is gone
  * (`list_members` cascades on `lists` delete) — and RLS cannot tell those apart any more than a row
@@ -188,7 +227,7 @@ export async function fetchList(
 ): Promise<{ list: List | null; error: string | null }> {
   const { data, error } = await supabase
     .from('list_members')
-    .select('role, lists!inner ( id, name, deleted_at )')
+    .select(MEMBERSHIP_COLUMNS)
     .eq('list_id', listId)
     .maybeSingle();
 
@@ -394,9 +433,9 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
 }
 
 /**
- * Your role travels with the membership row; the list itself hangs off it.
+ * Your role and when you joined travel with the membership row; the list itself hangs off it.
  *
- * `?? null` on the timestamp rather than a bare read. A column missing from the select string
+ * `?? null` on the timestamps rather than a bare read. A column missing from the select string
  * arrives `undefined`, and `undefined !== null` is `true` everywhere downstream — so a typo in the
  * select above would silently render every list as deleted, which is the one failure the cache's
  * version check cannot save anybody from.
@@ -410,6 +449,7 @@ function toList(row: MembershipRow): List {
     name: row.lists.name,
     role: row.role,
     deletedAt: row.lists.deleted_at ?? null,
+    joinedAt: row.created_at ?? null,
     itemsLoaded: false,
     items: [],
     nextLive: null,
