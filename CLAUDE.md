@@ -34,8 +34,8 @@ npx jest -t 'trims the name'                   # one test by name
 - **After finishing a task step:** write `ai/tasks/<n>/implementation-log-step-<n>.md` beside the
   description, covering decisions, problems hit, and how the result was verified. Then run
   `/librarian deposit <n>` to curate what the step taught into the KB.
-- **Only the librarian writes to `ai/kb/entries/` and `ai/kb/INDEX.md`.** Hand it candidate facts;
-  don't append to the KB yourself. The rules it curates by are in
+- **Only the librarian agents write to `ai/kb/entries/` and `ai/kb/INDEX.md`.** Hand them
+  candidate facts; don't append to the KB yourself. The rules they curate by are in
   [ai/kb/CHARTER.md](ai/kb/CHARTER.md).
 - **Write for whoever is reading.** In chat, explain things in simple words — assume a technical
   person who doesn't know this code and hasn't read the documentation. When you refer to

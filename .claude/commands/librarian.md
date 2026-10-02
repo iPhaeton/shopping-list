@@ -1,25 +1,47 @@
 ---
 description: Query or curate this project's knowledgebase in ai/kb/. Use `ask <topic>` before stating anything about this project's conventions, constraints, gotchas, or scope that the auto-loaded ai/kb/INDEX.md doesn't already cover — the index is a curated shortlist and `ask` searches every entry, including the ones it omits. Also runs the end-of-step deposit pass (`deposit <n>`) and the staleness audit (`audit`).
 argument-hint: deposit <n> | audit | ask <topic>
-allowed-tools: Read, Grep, Glob, Bash(npm run kb:audit), Task
+allowed-tools: Read, Write, Grep, Glob, Bash(npm run kb:audit), Task, Agent
 ---
 
 Route on `$ARGUMENTS`:
 
-**`deposit <n>`** — spawn the `librarian` subagent with: "Run a deposit pass for task step `<n>`.
-Follow your charter and `ai/kb/CHARTER.md`." Then relay its report to the user verbatim — the
-subagent's output is not shown to them otherwise. Do not curate the KB yourself; the librarian is
-the only writer to `ai/kb/entries/`.
+**`deposit <n>`** — one planner, then small worker groups, under the charter's curation rule 5. Do
+not curate the KB yourself: the `librarian` and `librarian-worker` agents are the only writers to
+`ai/kb/entries/`. Their output is not shown to the user otherwise, so you relay it.
 
-Hand it the implementation log path and nothing else. **Do not also point it at the step's
-suggestion document**: the log records where the shipped code diverged from the proposal, so naming
-both makes it read hundreds of lines twice and reconcile two accounts of the same work.
+1. **Plan.** Spawn the `librarian` subagent with: "Plan the deposit for task step `<n>`. Follow
+   your charter and `ai/kb/CHARTER.md`." plus the implementation log path, and nothing else. **Do
+   not also point it at the step's suggestion document**: the log records where the shipped code
+   diverged from the proposal, so naming both makes it read hundreds of lines twice and reconcile
+   two accounts of the same work.
 
-**`deposit <n> pass 2`** — the second half of a wide step, spawned the same way with "Run deposit
-pass 2 for task step `<n>`." A wide step is split by the charter's rule 5, and the librarian's pass
-1 report ends by saying whether a pass 2 is owed. **Relay that request to the user rather than
-chaining straight into it** — the split exists so the expensive half can be interrupted, deferred,
-or skipped once they have seen what pass 1 found.
+   If its report says `Mode: done`, the step was small and the planner did the work itself: relay
+   the report verbatim and stop.
+2. **Save the plan.** On `Mode: groups`, write the planner's report verbatim to
+   `librarian-plan-step-<n>.md` in your scratchpad directory, before spawning anything. A resume
+   reads it from there rather than from anyone's memory.
+3. **Risky groups.** Spawn one `librarian-worker` per `R` group, **all in one message**. Hand each
+   only:
+   - its group's heading and lines from the work list, quoted facts included;
+   - the paths of its entries, `ai/kb/entries/<slug>.md`;
+   - its `diff:` command;
+   - "Read `ai/kb/CHARTER.md` first."
+
+   Not the log, the task description, or any entry outside the group.
+4. **Review-on-touch groups.** When every risky worker has returned, spawn one `librarian-worker`
+   per `T` group, all in one message, handed the same way. The risky half lands first, so a run
+   that dies here has already fixed every entry that actively misleads.
+5. **Close.**
+   - Run `npm run kb:audit`.
+   - Grep `last_verified:` across the work list's entries: each one a worker did not flag must now
+     carry today's date. Name any that does not.
+   - Relay the planner's summary, then each worker's report, **verbatim**, then the audit result,
+     the flagged entries, and any entry still owed.
+
+**Resuming.** If a worker dies, re-spawn a `librarian-worker` for its group alone, from the saved
+plan. The entries in that group whose `last_verified` is already today are done; tell the worker to
+skip them.
 
 **`audit`** — run `npm run kb:audit` and summarize. For any failure, say whether the *fact* changed
 or the *check* was wrong. Offer to spawn the librarian to fix the entries; do not edit them from

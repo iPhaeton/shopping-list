@@ -1,6 +1,6 @@
 # KB Charter
 
-Rules for the knowledgebase under `ai/kb/`. The librarian reads this file before curating.
+Rules for the knowledgebase under `ai/kb/`. The librarian agents read this file before curating.
 It is **not** auto-loaded into every session — only `ai/kb/INDEX.md` is.
 
 ## Why this exists
@@ -106,9 +106,10 @@ Run `npm run kb:audit` to execute every check.
 
 ## Curation rules
 
-1. **The librarian is the only writer to `ai/kb/entries/` and `ai/kb/INDEX.md`.** Other agents
-   deposit candidate facts by handing them to the librarian; they do not write here. If every agent
-   may append, the KB becomes the sprawl it was built to replace.
+1. **The librarian agents are the only writers to `ai/kb/entries/` and `ai/kb/INDEX.md`** — the
+   `librarian`, and the `librarian-worker`s that carry out its plan. Other agents deposit candidate
+   facts by handing them to the librarian; they do not write here. If every agent may append, the
+   KB becomes the sprawl it was built to replace.
 2. **The librarian never edits `ai/tasks/**`.** Journals are immutable, including their outdated
    parts.
 3. Curation is **task-scoped**: it runs at the end of an `ai/tasks/<n>` step, after the
@@ -116,31 +117,38 @@ Run `npm run kb:audit` to execute every check.
 4. For each candidate fact, decide exactly one of: **new** / **update** an existing entry /
    **contradicts** an existing entry (write the new truth, mark the loser superseded, link both) /
    **drop** (fails the admission test — say why).
-5. **A wide step is deposited in two passes.** Measure before starting: run `npm run kb:audit` and
-   count the entries reporting `ground moved`. **More than a third of the KB flagged means split
-   the pass.**
+5. **A deposit is planned once and done in small groups.**
 
-   | | what it covers |
+   | | what it does |
    |---|---|
-   | **Pass 1 — what moved** | every failing `verify:`, every contradiction, and every new entry. Report and stop. |
-   | **Pass 2 — review-on-touch** | the flagged entries whose checks still *pass*: re-read each against the diff, then correct the prose or bump `last_verified`. |
+   | **Plan — the `librarian`** | reads the audit's flags, every entry's title, the step's log and its `git diff --stat`, and in full only the entries that owe a fact. Writes a work list of every entry the step owes anything, grouped, and edits nothing. |
+   | **Risky groups — `librarian-worker`s, all at once** | every failing `verify:`, every contradiction, every new entry, and every update with a new fact, each with the log line it rests on quoted. |
+   | **Review-on-touch groups — then, all at once** | the flagged entries that owe nothing else, grouped around a shared ground file: re-read each against that file's diff, then correct the prose or bump `last_verified`. |
 
-   The split is by **risk**, not by size, and that is the point. Pass 1 is where a stale entry
-   actively misleads the next agent; pass 2 is where prose has merely drifted. A pass that dies
-   halfway — a rate limit, a lost session — then loses the cheap half rather than an arbitrary
-   half, and it can be resumed by re-running the audit rather than by reconstructing where it got
-   to. Step 9 is the worked example: 24 source files changed, 16 of 30 entries flagged, one pass,
-   and it was killed mid-way with no way to tell what had been judged.
+   A group holds at most ~6 entries, and no file is in two groups; `INDEX.md` belongs to the one
+   group holding the new and contradicted entries. If the whole list fits one group, the planner
+   does the work itself in the same invocation — that is the common case.
 
-   Do not split a narrow step. Two passes over four entries costs more than one.
+   The split is by **risk**, not by size, and that is the point. The risky groups are where a stale
+   entry actively misleads the next agent; review-on-touch is where prose has merely drifted, and
+   it lands second. A worker that dies — a rate limit, a lost session — loses one group, not half
+   the step, and it is resumed from the saved work list and the audit's `last_verified` dates
+   rather than by reconstructing where it got to. Step 9 is the worked example: 24 source files
+   changed, 16 of 30 entries flagged, one pass, and it was killed mid-way with no way to tell what
+   had been judged.
+
+   The split is also what keeps a deposit affordable. Every call an agent makes re-sends everything
+   it has read, so one agent that loads the whole step and then makes dozens of small edits pays
+   for the load dozens of times. A planner that reads little and workers that each load one group
+   pay for far less.
 
 ## Budgets
 
 **An entry holds at most 120 lines, frontmatter included.** This is the budget that compounds:
-every deposit pass reads every current entry before it may dedup against them, and `/librarian ask`
-greps the lot, so a long entry is paid for again on every future pass rather than once when it was
-written. At 30 entries the KB is already a fixed several-thousand-line read before any pass does
-useful work.
+`/librarian ask` greps every entry and reads its best matches whole, and every deposit hands each
+entry it touches to a worker that reads it whole, so a long entry is paid for again every time it
+is asked about or touched rather than once when it was written. The deposit planner dedups against
+titles alone, so a title has to say what its entry holds.
 
 Over budget means one of three things, in the order to try them:
 
@@ -166,7 +174,7 @@ gains `indexed: false` so the audit knows its absence from the index is delibera
 mistake. Promoting it back means deleting that line and adding it to `INDEX.md`.
 
 Demotion costs less than it sounds. A demoted entry stays **searchable** — `/librarian ask`
-greps every entry rather than the index, the deposit pass reads them all, and the audit keeps
+greps every entry rather than the index, the deposit planner sees every title, and the audit keeps
 running its `verify:`. What it loses is **passive** discovery: it no longer rides into every
 session on `INDEX.md`, so nothing puts it in front of an agent who did not think to ask.
 
