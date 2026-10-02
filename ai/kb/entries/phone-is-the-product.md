@@ -4,9 +4,9 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, d58a9cf, 962533c]
-last_verified: 2026-09-30
-verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, d58a9cf, 962533c, a7416fd, 3ccf224]
+last_verified: 2026-10-02
+verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js && grep -q 'bandAt(colors, index)' src/components/ItemRow.tsx && grep -q "from '../../../src/theme.ts'" ai/ux/source/tokens.mjs
 related: [maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props]
 ---
 
@@ -50,9 +50,32 @@ suggestion rows below the header's edge, which iOS reaches only through Fabric's
 test. The installed dev client predates both native modules ([native-build-toolchain](native-build-toolchain.md)).
 
 **The design is the mockups in `ai/ux/primary/`** — each screen, some in several states, day and
-moonlit, measured by pixel against the simulator. Step 5's 18 arrived in commit `962533c`, after its
-description said no image covered those screens: the images replaced that prose about looks, while
-the description's constraints and done-when still governed.
+moonlit, compared by measure against the simulator. Where a description's prose about looks and
+its images differ, the images win; its constraints and done-when still govern (task 20 step 5's 18
+arrived in `962533c`, after its description said no image covered those screens).
+
+**The four oldest Lists and List detail mockups are stale — do not build to them.**
+[lists-screen-quiet-horizon](../../../ai/ux/primary/lists-screen-quiet-horizon.png) and
+[list-detail-screen-quiet-horizon](../../../ai/ux/primary/list-detail-screen-quiet-horizon.png)
+(and their `-moonlit` pairs) stay untouched as records, but since task 24 step 1 they are wrong
+three ways:
+
+- They show **create mode without its header button**, not the resting state. The resting design
+  is search mode: `lists-screen-search-resting*` and `list-detail-screen-search-resting*`.
+- Their toggles carry a count (`Show 2 deleted`, `Show 1 deleted`). The designed label is
+  `Show deleted`, always, with no number.
+- List detail's items sit on one pale ground with hairlines. The app has drawn one band per item
+  row (`ItemRow` → `bandAt`) since `a7416fd`, and every newer List detail mockup does too.
+
+Task 24 step 1 added nine stems for search, sort and the bin: `lists-screen-{search,
+search-resting,bin,bin-empty}` and `list-detail-screen-{search,search-resting,search-sorted,bin,
+bin-empty}`. Its log records each one's state, copy, a11y labels, and the geometry to measure by.
+
+**Mockups are rendered, never hand-drawn.** The harness in `ai/ux/source/`
+([README](../../../ai/ux/source/README.md)) imports `src/theme.ts` and `bandAt` directly, so the
+palettes are the real ones, and it is calibrated against simulator shots. Change a mockup by
+editing its scene and re-rendering, never by editing a PNG, and never overwrite one the user has
+not asked to change. It renders the set's 390×844 pt @3x, not the 18 Pro's size.
 
 **Task screenshots are records of their day, like the logs, not the current design.** The user
 can hand-tune a look after the shots are taken, in the same commit. **The band rim on Lists is the

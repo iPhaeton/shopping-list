@@ -15,7 +15,7 @@ Run `npm run kb:audit` to check every entry still holds.
 **Scope**
 
 - [Scope boundaries](ai/kb/entries/scope-boundaries.md) — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and paged lists, required unique names, leaving a list, Day/Night/Auto themes, and list and item limits (overshoot accepted, no locks) in; invites out; `ai/suggestions/*.md` is never scope (constraint)
-- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iOS simulator — the iPhone 18 Pro now, which no longer overlays the 390×844 mockups — shooting only the screens a step changed, and web only has to work; fix web on the web side, never bend the phone design; the mockups in `ai/ux/primary/` are the design, task screenshots are not (Lists' faint band rim is deliberate, never "restore" it); steps 5–6's screens are unverified on Android; web shows no checked state and has no browser back (constraint)
+- [The phone is the product](ai/kb/entries/phone-is-the-product.md) — since task 20: looks are signed off on the iOS simulator — the iPhone 18 Pro now, which no longer overlays the 390×844 mockups — shooting only the screens a step changed, and web only has to work; fix web on the web side, never bend the phone design; the mockups in `ai/ux/primary/` are the design, rendered by `ai/ux/source/` and never hand-edited — except the four oldest Lists/List detail ones, stale since task 24 — and task screenshots are not (Lists' faint band rim is deliberate, never "restore" it); steps 5–6's screens are unverified on Android; web shows no checked state and has no browser back (constraint)
 
 **Auth**
 

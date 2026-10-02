@@ -43,3 +43,6 @@ yarn-error.*
 
 #mcp
 .playwright-mcp
+
+# Mockup harness: tokens.json is regenerated from src/theme.ts on every render
+ai/ux/source/tokens.json

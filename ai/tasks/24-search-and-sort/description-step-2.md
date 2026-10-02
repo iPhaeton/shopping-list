@@ -16,6 +16,8 @@ differ, this description wins.
 | Create / Add bar | shown | hidden. The slot holds what step 1 settled |
 | empty | `No lists yet` / `Nothing on this list`, as today | `The bin is empty` |
 | toggle | rendered while the bin has rows | rendered while the bin has rows **or** while it is checked |
+| toggle label | `Show deleted`, **no count** | `Show deleted` |
+| row tag | none | **none**: the `Deleted` tag goes |
 
 Step 3 adds search and sort to the "off" column only. **The bin is never searched, sorted another
 way, or loaded in full.**
@@ -149,8 +151,16 @@ Both [ListsScreen](../../../src/screens/ListsScreen.tsx) and
 - `more` reads only the shown stream's cursor, and `loadNextPage` passes that stream.
 - **The toggle renders while `binned > 0 || showDeleted`** (`inBin` on List detail). In bin mode,
   restoring the last row would otherwise remove the only way back, and this is the only route to
-  `The bin is empty`. Its label at zero comes from step 1. Update `ShowDeletedToggle`'s doc comment,
-  which says it renders only when there is something in it.
+  `The bin is empty`. Update `ShowDeletedToggle`'s doc comment, which says it renders only when there
+  is something in it.
+- **The toggle's label is always `Show deleted`, visible and as its a11y label, with no count.** This
+  is the user's call in step 1's review. `ShowDeletedToggle`'s `count` and `more` props fed only the
+  label (`Show 3 deleted`, `Show 100+ deleted`), so remove them. The screens still count the bin, but
+  only to decide whether the toggle renders.
+- **Remove the `Deleted` tag** from [ListRow](../../../src/components/ListRow.tsx) and
+  [ItemRow](../../../src/components/ItemRow.tsx) (the `deleted ? <Text style={styles.tag}>` line and
+  `styles.tag`). In a bin-only view every row is deleted, so it says nothing. A binned row still
+  shows `Restore` to whoever may restore it.
 - The Create / Add bar is not rendered in bin mode, and the slot holds what step 1 settled. List
   detail's read-only notice and binned-list notice (with `Restore`) are not write controls and stay.
 - `showDeleted` stays screen-local and resets on arrival, as today.
@@ -171,6 +181,8 @@ Both [ListsScreen](../../../src/screens/ListsScreen.tsx) and
 - Screens, through a11y labels ([queries-go-through-a11y-labels](../../kb/entries/queries-go-through-a11y-labels.md)):
   - The toggle switches modes. On: only binned rows, in deletion order, no Create / Add bar.
   - The toggle survives restoring the last binned row, and `The bin is empty` shows.
+  - The toggle reads `Show deleted` with one binned row, with a hundred and a further page, and with
+    none while checked. No row shows `Deleted`.
   - `onEndReached` asks only for the shown stream: `loadMoreLists('bin')` in bin mode,
     `loadMoreLists('live')` otherwise; the same for `loadMore`.
 
@@ -200,7 +212,12 @@ Use read-rooted-at-list-members' method and its seeding traps: `explain (analyze
    - No Create / Add bar in bin mode, on either screen.
    - Live mode still pages by scroll, and never requests a bin page. Check the network tab.
 4. **Phone:** iPhone 18 Pro simulator, both themes, the two changed screens in bin mode only, compared
-   by measure against step 1's `*-bin` mockups. Screenshots in `screenshots/step-2/`.
+   by measure against step 1's mockups. Check `lists-screen-bin` and `list-detail-screen-bin` with rows,
+   and `lists-screen-bin-empty` and `list-detail-screen-bin-empty` after the last restore.
+   - Step 2 has no search mode yet, so its bin sentence sits on the bar's 52 pt.
+   - The 44 pt of sky under it in the mockups arrives with step 3.
+
+   Screenshots in `screenshots/step-2/`.
 5. **Commands:** `npm test`, `npm run typecheck`, `npm run kb:audit`. The audit is expected to go red
    on `list-cache-holds-acknowledged-rows` (its `verify:` pins `VERSION = 7`). Leave that for the
    librarian.

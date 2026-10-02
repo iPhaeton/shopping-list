@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+/* The app's own font files. render.sh serves the repo root, so node_modules is reachable. */
+@font-face { font-family: NS400; src: url(../../../node_modules/@expo-google-fonts/nunito-sans/400Regular/NunitoSans_400Regular.ttf); }
+@font-face { font-family: NS500; src: url(../../../node_modules/@expo-google-fonts/nunito-sans/500Medium/NunitoSans_500Medium.ttf); }
+@font-face { font-family: NS600; src: url(../../../node_modules/@expo-google-fonts/nunito-sans/600SemiBold/NunitoSans_600SemiBold.ttf); }
+@font-face { font-family: SS400; src: url(../../../node_modules/@expo-google-fonts/source-serif-4/400Regular/SourceSerif4_400Regular.ttf); }
+html, body { margin: 0; padding: 0; background: #000; }
+/* React Native's View defaults. */
+.v { display: flex; flex-direction: column; position: relative; box-sizing: border-box; flex-shrink: 0; min-width: 0; }
+.row { flex-direction: row; }
+.t { display: block; position: relative; line-height: normal; white-space: pre-wrap; margin: 0; }
+.abs { position: absolute; }
+svg { display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="mock.js"></script>
+</body>
+</html>
