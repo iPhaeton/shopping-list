@@ -1,18 +1,21 @@
 import { initialState, listsReducer } from './listsReducer';
-import type { Cursor, Item, List, ListCursors, Stream } from './types';
+import type { CursorOf, Item, List, ListCursors, Stream, StreamPage } from './types';
 
-/** One page of one stream, as `fetchItems` answers it; `items: null` means the read failed. */
-export type FetchPage = (
+/**
+ * One page of one stream, as `fetchItems` answers it; `items: null` means the read failed. Each
+ * stream pages by its own cursor — the live rows by `(createdAt, id)`, the bin by `(deletedAt, id)`.
+ */
+export type FetchPage = <S extends Stream>(
   listId: string,
-  stream: Stream,
-  after: Cursor | null
-) => Promise<{ items: Item[] | null; next: Cursor | null }>;
+  stream: S,
+  after: CursorOf<S> | null
+) => Promise<{ items: Item[] | null; next: CursorOf<S> | null }>;
 
 /** One page of one stream of lists, as `fetchLists` answers it; `lists: null` means it failed. */
-export type FetchListPage = (
-  stream: Stream,
-  after: Cursor | null
-) => Promise<{ lists: List[] | null; next: Cursor | null; error: string | null }>;
+export type FetchListPage = <S extends Stream>(
+  stream: S,
+  after: CursorOf<S> | null
+) => Promise<{ lists: List[] | null; next: CursorOf<S> | null; error: string | null }>;
 
 export type ListPages =
   | { lists: List[]; cursors: ListCursors; error: null }
@@ -41,17 +44,19 @@ export async function reloadListPages(
   previous: List[],
   fetchPage: FetchListPage
 ): Promise<ListPages> {
-  type Page = { lists: List[]; next: Cursor | null };
-  const reread = async (stream: Stream): Promise<Page[] | string> => {
+  type Page = { lists: List[]; stream: StreamPage };
+  const reread = async <S extends Stream>(stream: S): Promise<Page[] | string> => {
     const wanted = stampedLists(previous, stream);
     const pages: Page[] = [];
     let held = 0;
-    let next: Cursor | null = null;
+    let next: CursorOf<S> | null = null;
 
     do {
-      const page = await fetchPage(stream, next);
+      // Annotated: `next` is fed from this page, so TypeScript cannot infer the one from the other.
+      const page: { lists: List[] | null; next: CursorOf<S> | null; error: string | null } =
+        await fetchPage(stream, next);
       if (page.lists === null) return page.error ?? 'Could not load your lists.';
-      pages.push({ lists: page.lists, next: page.next });
+      pages.push({ lists: page.lists, stream: streamPage(stream, page.next) });
       held += stampedLists(page.lists, stream);
       next = page.next;
     } while (next !== null && held < wanted);
@@ -64,14 +69,8 @@ export async function reloadListPages(
   if (typeof bin === 'string') return { lists: null, cursors: null, error: bin };
 
   let state = initialState;
-  for (const [name, pages] of [['live', live], ['bin', bin]] as const) {
-    for (const page of pages) {
-      state = listsReducer(state, {
-        type: 'lists/pageLoaded',
-        lists: page.lists,
-        stream: { name, next: page.next },
-      });
-    }
+  for (const page of [...live, ...bin]) {
+    state = listsReducer(state, { type: 'lists/pageLoaded', lists: page.lists, stream: page.stream });
   }
 
   return { lists: state.lists, cursors: state.listCursors, error: null };
@@ -118,16 +117,15 @@ export async function reloadPages(
     // row carries) needs the loop below at all.
     if (list.itemsLoaded) continue;
 
-    let failed = false;
-
-    streams: for (const stream of ['live', 'bin'] as const) {
+    // One stream re-read into `lists`; `false` when a page failed.
+    const reread = async <S extends Stream>(stream: S, after: CursorOf<S> | null): Promise<boolean> => {
       const wanted = loadedRows(before, stream);
 
       let current = lists.find((candidate) => candidate.id === list.id) ?? list;
       // Starts `null` — a fresh list carries no items at all now, so the first request is always
       // for page 1. `exhausted`, not `next !== null`, is what ends the loop: `null` here means
       // "haven't asked yet," not "stream ended".
-      let next = cursorOf(current, stream);
+      let next = after;
       let exhausted = false;
       let asked = false;
       // At least one page always goes out, even when `wanted` is 0: a stream that was empty last
@@ -137,11 +135,7 @@ export async function reloadPages(
       while (!exhausted && (!asked || loadedRows(current, stream) < wanted)) {
         const page = await fetchPage(list.id, stream, next);
         asked = true;
-        if (page.items === null) {
-          lists = replace(lists, list);
-          failed = true;
-          break streams;
-        }
+        if (page.items === null) return false;
 
         lists = listsReducer(
           { ...initialState, lists },
@@ -149,14 +143,18 @@ export async function reloadPages(
             type: 'items/pageLoaded',
             listId: list.id,
             items: page.items,
-            stream: { name: stream, next: page.next },
+            stream: streamPage(stream, page.next),
           }
         ).lists;
         current = lists.find((candidate) => candidate.id === list.id) ?? list;
         next = page.next;
         exhausted = next === null;
       }
-    }
+      return true;
+    };
+
+    const failed = !(await reread('live', list.nextLive)) || !(await reread('bin', list.nextBin));
+    if (failed) lists = replace(lists, list);
 
     // Flipped even when neither stream needed a fetch — a previously-opened, genuinely empty list
     // still counts as loaded, or a nudge would flash it into a spinner for nothing.
@@ -186,8 +184,13 @@ function loadedRows(list: List, stream: Stream): number {
   }).length;
 }
 
-function cursorOf(list: List, stream: Stream): Cursor | null {
-  return stream === 'live' ? list.nextLive : list.nextBin;
+/**
+ * A page's `stream` payload, for a stream known here only as a type parameter. The cast is the one
+ * place that holds: TypeScript cannot narrow `S` from `name`, and `CursorOf<S>` is exactly the
+ * cursor the union pairs with that name.
+ */
+function streamPage<S extends Stream>(name: S, next: CursorOf<S> | null): StreamPage {
+  return { name, next } as StreamPage;
 }
 
 function replace(lists: List[], list: List): List[] {

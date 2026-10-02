@@ -22,14 +22,34 @@ export type Item = {
 };
 
 /**
- * Where the next page of a stream starts: the `(created_at, id)` of the last row loaded. Keyset
+ * Where the next page of the live stream starts: the `(created_at, id)` of the last row loaded. Keyset
  * rather than an offset, because the live stream loses rows while you scroll — somebody bins one —
  * and an offset would then skip a row. The `id` tie-break is what makes it exact.
  */
 export type Cursor = { createdAt: string; id: string };
 
-/** A list's items arrive as two streams, paged independently: the live rows and the bin. */
+/**
+ * Where the next page of the bin starts: the `(deleted_at, id)` of the last row loaded, since the bin
+ * is read newest deletion first. Paged by the order it is shown in, so a page only ever continues
+ * below the rows already on screen.
+ *
+ * A key that changes does not break the keyset, because `deleted_at` only moves two ways: to `now()`
+ * (binned again), which lands the row on page 1, or to `null` (restored), which takes it out of the
+ * bin. Neither can put a row behind the cursor, so paging skips nothing.
+ */
+export type BinCursor = { deletedAt: string; id: string };
+
+/**
+ * A list's items arrive as two streams, paged independently: the live rows and the bin. Each is its
+ * own view, too: "Show deleted" swaps one for the other rather than mixing them.
+ */
 export type Stream = 'live' | 'bin';
+
+/** The cursor each stream pages by. */
+export type CursorOf<S extends Stream> = S extends 'live' ? Cursor : BinCursor;
+
+/** A stream's name and where its next page starts — what a page read hands the reducer. */
+export type StreamPage = { name: 'live'; next: Cursor | null } | { name: 'bin'; next: BinCursor | null };
 
 /**
  * What you may do with a list you can see. `reader` reads it, `writer` also adds items, renames
@@ -81,16 +101,17 @@ export type List = {
    * a cursor that does not exist.
    */
   nextLive: Cursor | null;
-  /** The same for the bin. */
-  nextBin: Cursor | null;
+  /** The same for the bin, which is paged by when each row was deleted. */
+  nextBin: BinCursor | null;
 };
 
 /**
  * Where the next page of each stream of *lists* starts — the list-level twin of `List.nextLive` /
- * `List.nextBin`. `createdAt` is the membership's `created_at` (`List.joinedAt`), `id` the list id.
- * `null` means the stream has ended — or, before the first fetch, that nothing was asked yet.
+ * `List.nextBin`. The live cursor's `createdAt` is the membership's `created_at` (`List.joinedAt`);
+ * the bin's `deletedAt` is the list's own `deleted_at`. `id` is the list id in both. `null` means the
+ * stream has ended — or, before the first fetch, that nothing was asked yet.
  */
-export type ListCursors = { live: Cursor | null; bin: Cursor | null };
+export type ListCursors = { live: Cursor | null; bin: BinCursor | null };
 
 /**
  * How many live lists you own, and are on in total — what the database's two list limits count
@@ -140,7 +161,7 @@ export type Action =
   | {
       type: 'lists/pageLoaded';
       lists: List[];
-      stream?: { name: Stream; next: Cursor | null };
+      stream?: StreamPage;
     }
   /**
    * A page of one list's rows, read from the database. Idempotent by id — a row already here is
@@ -153,7 +174,7 @@ export type Action =
       type: 'items/pageLoaded';
       listId: string;
       items: Item[];
-      stream?: { name: Stream; next: Cursor | null };
+      stream?: StreamPage;
     }
   /**
    * The first page of both streams, fetched together on entering a list. One combined action
@@ -166,7 +187,7 @@ export type Action =
       type: 'items/firstPageLoaded';
       listId: string;
       live: { items: Item[]; next: Cursor | null };
-      bin: { items: Item[]; next: Cursor | null };
+      bin: { items: Item[]; next: BinCursor | null };
     }
   | { type: 'list/created'; id: string; name: string }
   | { type: 'list/renamed'; id: string; name: string }

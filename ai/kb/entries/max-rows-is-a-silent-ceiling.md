@@ -4,10 +4,10 @@ title: PostgREST's `max_rows` silently caps embedded arrays too — `MAX_ROWS` m
 type: gotcha
 status: current
 tags: [supabase, postgrest, pagination, config, persistence]
-sources: [ai/tasks/11-pagination/implementation-log-step-1.md, ai/suggestions/pagination.md, supabase/config.toml, src/lib/listsApi.ts, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md]
-last_verified: 2026-10-01
-verify: test "$(grep -oE '^max_rows = [0-9]+' supabase/config.toml | grep -oE '[0-9]+')" = "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const LIST_PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && ! awk '/^\[remotes\.production\]/{f=1} f' supabase/config.toml | grep -q '^max_rows' && test "$(grep -c '\.limit(limit)' src/lib/listsApi.ts)" = 2 && test "$(grep -c 'if (limit > MAX_ROWS)' src/lib/listsApi.ts)" = 2 && test "$(grep -c 'rows.length < limit' src/lib/listsApi.ts)" = 2 && ! grep -q 'limit(MAX_ROWS)' src/lib/listsApi.ts
-related: [read-rooted-at-list-members, deletion-is-a-tombstone, supabase-config-push-sends-the-whole-root, scope-boundaries, supabase-local-stack]
+sources: [ai/tasks/11-pagination/implementation-log-step-1.md, ai/suggestions/pagination.md, supabase/config.toml, src/lib/listsApi.ts, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md]
+last_verified: 2026-10-02
+verify: test "$(grep -oE '^max_rows = [0-9]+' supabase/config.toml | grep -oE '[0-9]+')" = "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const LIST_PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && ! awk '/^\[remotes\.production\]/{f=1} f' supabase/config.toml | grep -q '^max_rows' && test "$(grep -c '\.limit(limit)' src/lib/listsApi.ts)" = 4 && test "$(grep -c '\.limit(' src/lib/listsApi.ts)" = 4 && test "$(grep -c 'if (limit > MAX_ROWS)' src/lib/listsApi.ts)" = 2 && test "$(grep -c 'rows.length < limit' src/lib/listsApi.ts)" = 2 && ! grep -q 'limit(MAX_ROWS)' src/lib/listsApi.ts
+related: [keyset-paging-in-the-order-shown, read-rooted-at-list-members, deletion-is-a-tombstone, supabase-config-push-sends-the-whole-root, scope-boundaries, supabase-local-stack]
 indexed: false
 ---
 
@@ -31,7 +31,9 @@ the assertion below is the only guard left.
 - `PAGE_SIZE` (400 items, from a 100 kB-per-request budget at ~40-character titles) and
   `LIST_PAGE_SIZE` (100 lists, the user's number) stay `<= MAX_ROWS`, and `fetchItems` and
   `fetchLists` each **throw** on a `limit` above it rather than trusting the caller — a thrown page
-  is loud, a capped one is not. A new paged read copies that assertion.
+  is loud, a capped one is not. Since task 24 step 2 each hands off to one query builder per stream
+  (live and bin), so four `.limit(limit)`s sit behind those two guards. A new paged read, or a new
+  stream, copies the assertion and the short-page rule; the `verify:` counts all three.
 - **Never set `max_rows` under `[remotes.production]`**, and do not raise it in the cloud dashboard:
   `config push` sends the whole root and the remote inherits the root value
   ([supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)), which

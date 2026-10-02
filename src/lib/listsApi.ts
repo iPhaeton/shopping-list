@@ -1,4 +1,4 @@
-import type { Cursor, Item, List, ListCounts, Role, Stream } from '../state/types';
+import type { BinCursor, Cursor, CursorOf, Item, List, ListCounts, Role, Stream } from '../state/types';
 import { ITEMS_FULL, LIMIT_CODES, LISTS_FULL, OWNED_LISTS_FULL } from './limits';
 import { supabase } from './supabase';
 
@@ -99,13 +99,22 @@ type MembershipRow = { role: Role; created_at: string; lists: ListRow };
  * `user_id = auth.uid()`, which is an index qual on `(user_id, created_at)` — so the client still
  * filters nothing, and none of this is a rule a bug here could get wrong.
  *
- * **Paged the way `fetchItems` is, keyset on `(created_at, list_id)` of the membership** — when you
- * joined, which is the order the Lists screen has always shown. The stream is picked through the
- * `!inner` embed's `deleted_at`, which filters the membership rows themselves, not just the embed.
- * The `gte` beside the keyset `or` is redundant in meaning and there for the plan, as in
- * `fetchItems`: it makes the index condition a range starting at the cursor. The bin cannot use the
- * index for its filter — it walks your memberships in join order and discards the live ones — so
- * its cost tracks the memberships after the cursor rather than the page.
+ * **The live stream is paged the way `fetchItems` pages it, keyset on `(created_at, list_id)` of the
+ * membership** — when you joined, which is the order the Lists screen has always shown. The stream
+ * is picked through the `!inner` embed's `deleted_at`, which filters the membership rows themselves,
+ * not just the embed. The `gte` beside the keyset `or` is redundant in meaning and there for the
+ * plan, as in `fetchItems`: it makes the index condition a range starting at the cursor.
+ *
+ * **The bin is paged newest deletion first, keyset on the list's `(deleted_at, id)`**, the order the
+ * bin view shows. Both the order and the keyset go through the embed:
+ * - `order=lists(deleted_at).desc` orders the *parent* rows by the to-one embed's column.
+ *   `referencedTable` would order the embed's own rows instead, which does nothing for a to-one.
+ * - The keyset `or` *is* given `referencedTable`. With `!inner`, an embed filter drops the parent row.
+ *
+ * No index can serve an order whose key is across the join, so every bin page — not only page 1 —
+ * walks all of your memberships, joins `lists` by primary key, sorts and takes a page. That cost is
+ * accepted, and measured in task 24 step 2: 1,638 buffers / ~1 ms at 402 memberships, 8,086 / ~5 ms
+ * at 2,000. The `lte` is kept as the twin of the live `gte`, though nothing here can use it.
  *
  * `next` follows `fetchItems`' rule: the last row of a **full** page, `null` otherwise, which is why
  * `limit` is asserted against `MAX_ROWS` rather than trusted.
@@ -113,20 +122,34 @@ type MembershipRow = { role: Role; created_at: string; lists: ListRow };
  * **Items are not part of this read.** `fetchItems` reads a list's items — both streams, a page at
  * a time — once you actually enter that list, never for every row on this screen.
  */
-export async function fetchLists(
-  stream: Stream,
-  after: Cursor | null,
+export async function fetchLists<S extends Stream>(
+  stream: S,
+  after: CursorOf<S> | null,
   limit = LIST_PAGE_SIZE
-): Promise<{ lists: List[] | null; next: Cursor | null; error: string | null }> {
+): Promise<{ lists: List[] | null; next: CursorOf<S> | null; error: string | null }> {
   if (limit > MAX_ROWS) {
     throw new Error(`fetchLists: a page of ${limit} rows would be silently capped at ${MAX_ROWS}`);
   }
 
-  let query = supabase.from('list_members').select(MEMBERSHIP_COLUMNS);
-  query =
-    stream === 'live'
-      ? query.is('lists.deleted_at', null)
-      : query.not('lists.deleted_at', 'is', null);
+  const { data, error } = await (stream === 'live'
+    ? liveListPage(after as Cursor | null, limit)
+    : binListPage(after as BinCursor | null, limit));
+
+  if (error) return { lists: null, next: null, error: error.message };
+  const rows = data as unknown as MembershipRow[];
+  const last = rows[rows.length - 1];
+  const next =
+    rows.length < limit
+      ? null
+      : stream === 'live'
+        ? { createdAt: last.created_at, id: last.lists.id }
+        : { deletedAt: last.lists.deleted_at as string, id: last.lists.id };
+  return { lists: rows.map(toList), next: next as CursorOf<S> | null, error: null };
+}
+
+/** `fetchLists`' live stream: when you joined, oldest first. */
+function liveListPage(after: Cursor | null, limit: number) {
+  let query = supabase.from('list_members').select(MEMBERSHIP_COLUMNS).is('lists.deleted_at', null);
   if (after) {
     // Quoted, because a timestamp carries `:` and `+`, both reserved inside a logic tree.
     query = query
@@ -135,16 +158,27 @@ export async function fetchLists(
         `created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",list_id.gt."${after.id}")`
       );
   }
-  const { data, error } = await query.order('created_at').order('list_id').limit(limit);
+  return query.order('created_at').order('list_id').limit(limit);
+}
 
-  if (error) return { lists: null, next: null, error: error.message };
-  const rows = data as unknown as MembershipRow[];
-  const last = rows[rows.length - 1];
-  return {
-    lists: rows.map(toList),
-    next: rows.length < limit ? null : { createdAt: last.created_at, id: last.lists.id },
-    error: null,
-  };
+/** `fetchLists`' bin: when each list was deleted, newest first. */
+function binListPage(after: BinCursor | null, limit: number) {
+  let query = supabase
+    .from('list_members')
+    .select(MEMBERSHIP_COLUMNS)
+    .not('lists.deleted_at', 'is', null);
+  if (after) {
+    query = query
+      .lte('lists.deleted_at', after.deletedAt)
+      .or(
+        `deleted_at.lt."${after.deletedAt}",and(deleted_at.eq."${after.deletedAt}",id.lt."${after.id}")`,
+        { referencedTable: 'lists' }
+      );
+  }
+  return query
+    .order('lists(deleted_at)', { ascending: false })
+    .order('list_id', { ascending: false })
+    .limit(limit);
 }
 
 /**
@@ -160,22 +194,38 @@ export async function fetchLists(
  * decisive in the plan, since it is what turns the index condition into a range starting at the
  * cursor rather than at the first row of the list (measured: 23 buffers against 121).
  *
+ * **The bin is read newest deletion first, keyset on `(deleted_at, id)` descending**, and its `lte`
+ * is the descending twin of that `gte`. Its index is the partial `items_bin_order_idx` on
+ * `(list_id, deleted_at, id)`. With it, page 1 — the page every list open and every re-read asks
+ * for — is a backward walk of this list's bin that stops after one page. Without it, page 1 walked
+ * every list's deletions, newest first.
+ *
  * `next` is the last row when the page came back **full**, and `null` otherwise: a short page is
  * the last page. That rule is why a page must never be silently shortened by the cap, so `limit`
  * is asserted against `MAX_ROWS` rather than trusted.
  */
-export async function fetchItems(
+export async function fetchItems<S extends Stream>(
   listId: string,
-  stream: Stream,
-  after: Cursor | null,
+  stream: S,
+  after: CursorOf<S> | null,
   limit = PAGE_SIZE
-): Promise<{ items: Item[] | null; next: Cursor | null; error: string | null }> {
+): Promise<{ items: Item[] | null; next: CursorOf<S> | null; error: string | null }> {
   if (limit > MAX_ROWS) {
     throw new Error(`fetchItems: a page of ${limit} rows would be silently capped at ${MAX_ROWS}`);
   }
 
-  let query = supabase.from('items').select(ITEM_COLUMNS).eq('list_id', listId);
-  query = stream === 'live' ? query.is('deleted_at', null) : query.not('deleted_at', 'is', null);
+  const { data, error } = await (stream === 'live'
+    ? liveItemPage(listId, after as Cursor | null, limit)
+    : binItemPage(listId, after as BinCursor | null, limit));
+
+  if (error) return { items: null, next: null, error: error.message };
+  const rows = data as unknown as ItemRow[];
+  return { items: rows.map(toItem), next: cursorAfter(rows, stream, limit), error: null };
+}
+
+/** `fetchItems`' live stream: when each row was added, oldest first. */
+function liveItemPage(listId: string, after: Cursor | null, limit: number) {
+  let query = supabase.from('items').select(ITEM_COLUMNS).eq('list_id', listId).is('deleted_at', null);
   if (after) {
     // Quoted, because a timestamp carries `:` and `+`, both reserved inside a logic tree.
     query = query
@@ -184,11 +234,24 @@ export async function fetchItems(
         `created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",id.gt."${after.id}")`
       );
   }
-  const { data, error } = await query.order('created_at').order('id').limit(limit);
+  return query.order('created_at').order('id').limit(limit);
+}
 
-  if (error) return { items: null, next: null, error: error.message };
-  const rows = data as unknown as ItemRow[];
-  return { items: rows.map(toItem), next: cursorAfter(rows, limit), error: null };
+/** `fetchItems`' bin: when each row was deleted, newest first. */
+function binItemPage(listId: string, after: BinCursor | null, limit: number) {
+  let query = supabase
+    .from('items')
+    .select(ITEM_COLUMNS)
+    .eq('list_id', listId)
+    .not('deleted_at', 'is', null);
+  if (after) {
+    query = query
+      .lte('deleted_at', after.deletedAt)
+      .or(
+        `deleted_at.lt."${after.deletedAt}",and(deleted_at.eq."${after.deletedAt}",id.lt."${after.id}")`
+      );
+  }
+  return query.order('deleted_at', { ascending: false }).order('id', { ascending: false }).limit(limit);
 }
 
 /**
@@ -511,9 +574,16 @@ function toItem(row: ItemRow): Item {
   };
 }
 
-/** Where the page after `rows` starts — or `null` when a short page says the stream has ended. */
-function cursorAfter(rows: ItemRow[], limit = PAGE_SIZE): Cursor | null {
+/**
+ * Where the page after `rows` starts, in `stream`'s own key — or `null` when a short page says the
+ * stream has ended.
+ */
+function cursorAfter<S extends Stream>(rows: ItemRow[], stream: S, limit: number): CursorOf<S> | null {
   if (rows.length < limit) return null;
   const last = rows[rows.length - 1];
-  return { createdAt: last.created_at, id: last.id };
+  const next: Cursor | BinCursor =
+    stream === 'live'
+      ? { createdAt: last.created_at, id: last.id }
+      : { deletedAt: last.deleted_at as string, id: last.id };
+  return next as CursorOf<S>;
 }

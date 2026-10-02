@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [state, reducer, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/23-list-limits/implementation-log-step-1.md, src/state/useListWrites.ts]
-last_verified: 2026-10-01
+last_verified: 2026-10-02
 verify: ! grep -qE 'randomUUID|Date\.now|Math\.random|toISOString|newId' src/state/listsReducer.ts && grep -q 'newId()' src/state/useListWrites.ts && grep -q 'joinedAt: null,' src/state/listsReducer.ts && ! grep -qE 'joinedAt|createdAt' src/state/useListWrites.ts
 related: [writes-retry-from-an-outbox, server-stamps-done-at, update-list-identity-preserving, expo-crypto-undefined-under-jest]
 indexed: false

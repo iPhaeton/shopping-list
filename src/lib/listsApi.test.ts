@@ -45,7 +45,7 @@ function respondWith(response: Response) {
   const builder: Record<string, unknown> = {
     then: (resolve: (value: Response) => unknown) => Promise.resolve(response).then(resolve),
   };
-  for (const method of ['select', 'eq', 'is', 'not', 'or', 'gte', 'order', 'limit', 'maybeSingle']) {
+  for (const method of ['select', 'eq', 'is', 'not', 'or', 'gte', 'lte', 'order', 'limit', 'maybeSingle']) {
     builder[method] = (...args: unknown[]) => {
       calls.push([method, args]);
       return builder;
@@ -105,12 +105,14 @@ beforeEach(() => {
 });
 
 /**
- * Lists are paged the way items are: two streams, keyset on `(created_at, list_id)` of the
- * membership. What is worth pinning is the root, the stream filter through the inner embed, the
- * keyset with its redundant `gte`, and the order that makes the cursor mean anything.
+ * Lists are paged the way items are: two streams, the live one keyset on `(created_at, list_id)` of
+ * the membership, the bin on the list's own `(deleted_at, id)`, newest first. What is worth pinning
+ * is the root, the stream filter through the inner embed, each keyset with its redundant bound, and
+ * the order that makes each cursor mean anything.
  */
 describe('fetchLists', () => {
   const AFTER = { createdAt: '2026-09-01T10:00:00+00:00', id: 'l1' };
+  const BIN_AFTER = { deletedAt: '2026-09-10T08:00:00+00:00', id: 'l7' };
 
   it('reads the live stream from list_members, in the order each list entered the account', async () => {
     const { calls } = respondWith({ data: [], error: null });
@@ -132,13 +134,63 @@ describe('fetchLists', () => {
     expect(argsOf(calls, 'gte')).toEqual([]);
   });
 
-  it('reads the bin with the opposite filter', async () => {
+  /**
+   * The bin is shown newest deletion first, so it is paged that way. `lists(deleted_at)` orders the
+   * membership rows by the to-one embed's column; `referencedTable` would order the embed's own
+   * rows, which does nothing for a to-one — checked against PostgREST v14.5, task 24 step 2.
+   */
+  it('reads the bin from list_members too, newest deletion first', async () => {
     const { calls } = respondWith({ data: [], error: null });
 
     await fetchLists('bin', null);
 
+    expect(argsOf(calls, 'from')).toEqual([['list_members']]);
+    expect(argsOf(calls, 'select')[0][0]).toContain('lists!inner');
     expect(argsOf(calls, 'is')).toEqual([]);
     expect(argsOf(calls, 'not')).toEqual([['lists.deleted_at', 'is', null]]);
+    expect(argsOf(calls, 'eq')).toEqual([]);
+    expect(argsOf(calls, 'order')).toEqual([
+      ['lists(deleted_at)', { ascending: false }],
+      ['list_id', { ascending: false }],
+    ]);
+    expect(argsOf(calls, 'limit')).toEqual([[LIST_PAGE_SIZE]]);
+    expect(argsOf(calls, 'or')).toEqual([]);
+    expect(argsOf(calls, 'lte')).toEqual([]);
+    expect(argsOf(calls, 'gte')).toEqual([]);
+  });
+
+  /** With `!inner`, a filter on the embed drops the membership row, so the keyset goes there. */
+  it('continues the bin from a cursor on the list’s (deleted_at, id), through the embed', async () => {
+    const { calls } = respondWith({ data: [], error: null });
+
+    await fetchLists('bin', BIN_AFTER);
+
+    expect(argsOf(calls, 'lte')).toEqual([['lists.deleted_at', BIN_AFTER.deletedAt]]);
+    expect(argsOf(calls, 'or')).toEqual([
+      [
+        'deleted_at.lt."2026-09-10T08:00:00+00:00",and(deleted_at.eq."2026-09-10T08:00:00+00:00",id.lt."l7")',
+        { referencedTable: 'lists' },
+      ],
+    ]);
+    expect(argsOf(calls, 'gte')).toEqual([]);
+    expect(argsOf(calls, 'order')).toEqual([
+      ['lists(deleted_at)', { ascending: false }],
+      ['list_id', { ascending: false }],
+    ]);
+  });
+
+  it('hands back a bin cursor in the bin’s own key', async () => {
+    respondWith({
+      data: [
+        membership(3, 'owner', '2026-09-10T09:00:00+00:00'),
+        membership(1, 'owner', '2026-09-10T08:00:00+00:00'),
+      ],
+      error: null,
+    });
+
+    const { next } = await fetchLists('bin', null, 2);
+
+    expect(next).toEqual({ deletedAt: '2026-09-10T08:00:00+00:00', id: 'l1' });
   });
 
   it('continues from a cursor on (created_at, list_id)', async () => {
@@ -153,6 +205,8 @@ describe('fetchLists', () => {
         'created_at.gt."2026-09-01T10:00:00+00:00",and(created_at.eq."2026-09-01T10:00:00+00:00",list_id.gt."l1")',
       ],
     ]);
+    expect(argsOf(calls, 'lte')).toEqual([]);
+    expect(argsOf(calls, 'order')).toEqual([['created_at'], ['list_id']]);
   });
 
   it('hands back a cursor only when the page came back full', async () => {
@@ -229,12 +283,14 @@ describe('fetchLists', () => {
 // --- The next page of a stream ----------------------------------------------------------------
 
 /**
- * The one read rooted at `items`. What is worth pinning is the keyset: the `or` that continues
- * from `(created_at, id)`, the redundant `gte` that gives the planner a range to start from, and
- * the order that makes the cursor mean anything.
+ * The one read rooted at `items`. What is worth pinning is each stream's keyset: the `or` that
+ * continues from `(created_at, id)` — or, for the bin, from `(deleted_at, id)` downwards — the
+ * redundant bound that gives the planner a range to start from, and the order that makes the cursor
+ * mean anything.
  */
 describe('fetchItems', () => {
   const AFTER = { createdAt: '2026-09-01T10:00:00+00:00', id: 'i1' };
+  const BIN_AFTER = { deletedAt: '2026-09-10T08:00:00+00:00', id: 'i7' };
 
   it('reads one stream of one list from a cursor, in cursor order', async () => {
     const { calls } = respondWith({ data: [], error: null });
@@ -253,15 +309,49 @@ describe('fetchItems', () => {
     ]);
     expect(argsOf(calls, 'order')).toEqual([['created_at'], ['id']]);
     expect(argsOf(calls, 'limit')).toEqual([[PAGE_SIZE]]);
+    expect(argsOf(calls, 'lte')).toEqual([]);
   });
 
-  it('reads the bin with the opposite filter', async () => {
+  it('reads page 1 of the bin newest deletion first', async () => {
     const { calls } = respondWith({ data: [], error: null });
 
-    await fetchItems('l1', 'bin', AFTER);
+    await fetchItems('l1', 'bin', null);
 
+    expect(argsOf(calls, 'from')).toEqual([['items']]);
+    expect(argsOf(calls, 'eq')).toEqual([['list_id', 'l1']]);
     expect(argsOf(calls, 'is')).toEqual([]);
     expect(argsOf(calls, 'not')).toEqual([['deleted_at', 'is', null]]);
+    expect(argsOf(calls, 'order')).toEqual([
+      ['deleted_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    expect(argsOf(calls, 'limit')).toEqual([[PAGE_SIZE]]);
+    expect(argsOf(calls, 'or')).toEqual([]);
+    expect(argsOf(calls, 'lte')).toEqual([]);
+  });
+
+  /** The `lte` is the descending twin of the live stream's `gte`: the range the index walk starts at. */
+  it('continues the bin downwards from a cursor on (deleted_at, id)', async () => {
+    const { calls } = respondWith({ data: [], error: null });
+
+    await fetchItems('l1', 'bin', BIN_AFTER);
+
+    expect(argsOf(calls, 'lte')).toEqual([['deleted_at', BIN_AFTER.deletedAt]]);
+    expect(argsOf(calls, 'or')).toEqual([
+      [
+        'deleted_at.lt."2026-09-10T08:00:00+00:00",and(deleted_at.eq."2026-09-10T08:00:00+00:00",id.lt."i7")',
+      ],
+    ]);
+    expect(argsOf(calls, 'gte')).toEqual([]);
+  });
+
+  it('hands back a bin cursor in the bin’s own key', async () => {
+    const rows = page(3).map((row, i) => ({ ...row, deleted_at: `2026-09-10T0${9 - i}:00:00+00:00` }));
+    respondWith({ data: rows, error: null });
+
+    const { next } = await fetchItems('l1', 'bin', null, 3);
+
+    expect(next).toEqual({ deletedAt: '2026-09-10T07:00:00+00:00', id: rows[2].id });
   });
 
   it('starts from the beginning when there is no cursor', async () => {

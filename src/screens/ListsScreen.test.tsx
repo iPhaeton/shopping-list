@@ -5,7 +5,7 @@ import { LISTS_FULL, OWNED_LISTS_FULL } from '../lib/limits';
 import { fetchListCounts, fetchLists, insertList, setListDeleted } from '../lib/listsApi';
 import type { ListsScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
-import type { Cursor, List, Stream } from '../state/types';
+import type { BinCursor, Cursor, List } from '../state/types';
 import { ListsScreen } from './ListsScreen';
 
 /**
@@ -46,7 +46,7 @@ beforeEach(async () => {
  * tombstone to the live stream and the rest to the bin — a single page each, unless a cursor says
  * that stream has more.
  */
-function serveLists(lists: List[], next: Partial<Record<Stream, Cursor>> = {}) {
+function serveLists(lists: List[], next: { live?: Cursor; bin?: BinCursor } = {}) {
   jest.mocked(fetchLists).mockImplementation(async (stream) => ({
     lists: lists.filter((list) => (list.deletedAt === null) === (stream === 'live')),
     next: next[stream] ?? null,
@@ -234,24 +234,35 @@ it('leaves deleted lists off the screen until they are asked for', async () => {
 });
 
 /**
- * Deleted rows arrive in the same fetch as live ones, so this is instant: no spinner and no round
- * trip. That is most of why the bin reads better than a separate screen would.
+ * "Show deleted" switches the whole screen to the bin: the binned lists and nothing else, and the
+ * Create bar gives way to a sentence, since nothing is created there. Page 1 of the bin arrives with
+ * every read of the lists, so the switch is instant: no spinner and no round trip.
  */
-it('reveals them behind the switch, with no second request', async () => {
+it('switches the screen to the bin and back, with no second request', async () => {
   withBin();
 
   await renderScreen();
   jest.mocked(fetchLists).mockClear();
 
-  const toggle = screen.getByRole('switch', { name: 'Show 1 deleted' });
+  const toggle = screen.getByRole('switch', { name: 'Show deleted' });
   expect(toggle).not.toBeChecked();
 
   await fireEvent.press(toggle);
 
-  expect(screen.getByLabelText('Show 1 deleted')).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeChecked();
   expect(screen.getByText('Hardware')).toBeOnTheScreen();
-  expect(screen.getByText('Deleted')).toBeOnTheScreen();
+  expect(screen.queryByText('Groceries')).not.toBeOnTheScreen();
+  expect(screen.getByText('Deleted lists, newest first.')).toBeOnTheScreen();
+  expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+  // Every row here is deleted, so no row says so.
+  expect(screen.queryByText('Deleted')).not.toBeOnTheScreen();
   expect(fetchLists).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+  expect(screen.getByText('Groceries')).toBeOnTheScreen();
+  expect(screen.queryByText('Hardware')).not.toBeOnTheScreen();
+  expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
 });
 
 /** A control that reveals nothing is noise, and there is nothing else in the app like it. */
@@ -260,7 +271,30 @@ it('does not offer the switch when the bin is empty', async () => {
 
   await renderScreen();
 
-  expect(screen.queryByLabelText('Show 1 deleted')).not.toBeOnTheScreen();
+  expect(screen.queryByRole('switch', { name: 'Show deleted' })).not.toBeOnTheScreen();
+});
+
+/**
+ * Restoring the bin's last list must not take away the only way back to the live lists, so a
+ * checked switch stays — over the one place that says the bin is empty.
+ */
+it('keeps the switch once the last binned list is restored, and says the bin is empty', async () => {
+  withBin();
+
+  await renderScreen();
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+  await fireEvent.press(screen.getByLabelText('Restore Hardware'));
+
+  expect(setListDeleted).toHaveBeenCalledWith('l2', false);
+  expect(screen.getByText('The bin is empty')).toBeOnTheScreen();
+  expect(screen.getByText('Deleted lists wait here for 30 days.')).toBeOnTheScreen();
+  expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeChecked();
+
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+  expect(screen.getByText('Groceries')).toBeOnTheScreen();
+  expect(screen.getByText('Hardware')).toBeOnTheScreen();
+  expect(screen.queryByRole('switch', { name: 'Show deleted' })).not.toBeOnTheScreen();
 });
 
 it('sends a list to the bin and brings it back', async () => {
@@ -271,7 +305,7 @@ it('sends a list to the bin and brings it back', async () => {
   await fireEvent.press(screen.getByLabelText('Delete Groceries'));
   expect(setListDeleted).toHaveBeenCalledWith('l1', true);
 
-  await fireEvent.press(screen.getByLabelText('Show 2 deleted'));
+  await fireEvent.press(screen.getByLabelText('Show deleted'));
   await fireEvent.press(screen.getByLabelText('Restore Hardware'));
   expect(setListDeleted).toHaveBeenCalledWith('l2', false);
 });
@@ -303,6 +337,7 @@ it('still says the account has no lists when the only one is in the bin', async 
  */
 const joined = (n: number) => `2026-09-02T00:00:${String(n).padStart(2, '0')}+00:00`;
 const cursorAt = (n: number): Cursor => ({ createdAt: joined(n), id: `l${n}` });
+const binCursorAt = (n: number): BinCursor => ({ deletedAt: BINNED_AT, id: `l${n}` });
 
 /** List `n` as a page carries it: joined in the order of `n`. */
 function listAt(n: number, deletedAt: string | null = null): List {
@@ -320,8 +355,8 @@ function listAt(n: number, deletedAt: string | null = null): List {
 }
 
 /** Reaching the end is an event on the `FlatList`; a row inside it is where the event walks up from. */
-async function scrollToEnd() {
-  await fireEvent(screen.getByLabelText('List 1'), 'endReached');
+async function scrollToEnd(row = 'List 1') {
+  await fireEvent(screen.getByLabelText(row), 'endReached');
 }
 
 /** The list rows in the order they are drawn. */
@@ -375,52 +410,73 @@ describe('more lists than a page', () => {
     expect(screen.queryByLabelText('Loading more lists')).not.toBeOnTheScreen();
   });
 
-  /** The count is what is loaded, not what exists, until the bin's last page is in. */
-  it('says the bin holds more than it has loaded', async () => {
-    const binned = Array.from({ length: 100 }, (_, i) => listAt(i + 2, BINNED_AT));
-    serveLists([listAt(1), ...binned], { bin: cursorAt(101) });
-
+  /**
+   * No count, ever — the user's call (task 24 step 1). It could only say what is loaded, not what
+   * exists, so it needed a `+` until the bin's last page was in.
+   */
+  it('reads Show deleted with one list in the bin', async () => {
+    serveLists([listAt(1), listAt(2, BINNED_AT)]);
     await renderScreen();
 
-    expect(screen.getByRole('switch', { name: 'Show 100+ deleted' })).toBeOnTheScreen();
+    expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeOnTheScreen();
+    expect(screen.getByText('Show deleted')).toBeOnTheScreen();
   });
 
-  it('loads the bin as well once it is showing', async () => {
-    serveLists([listAt(1), listAt(2, BINNED_AT)], { bin: cursorAt(2) });
+  it('reads Show deleted with a hundred in the bin and more to come', async () => {
+    const binned = Array.from({ length: 100 }, (_, i) => listAt(i + 2, BINNED_AT));
+    serveLists([listAt(1), ...binned], { bin: binCursorAt(101) });
     await renderScreen();
 
-    // Hidden, the bin's cursor is not followed.
-    jest.mocked(fetchLists).mockClear();
-    await scrollToEnd();
-    expect(fetchLists).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeOnTheScreen();
+    expect(screen.queryByText(/Show \d/)).not.toBeOnTheScreen();
+  });
 
+  /** The bin is its own view: a scroll asks for the next page of the stream on screen, never both. */
+  it('asks only for the stream on screen at the end', async () => {
+    serveLists([listAt(1), listAt(2, BINNED_AT)], { live: cursorAt(1), bin: binCursorAt(2) });
+    await renderScreen();
+
+    jest.mocked(fetchLists).mockClear();
+    jest.mocked(fetchLists).mockResolvedValueOnce({ lists: [], next: null, error: null });
+    await scrollToEnd();
+    expect(jest.mocked(fetchLists).mock.calls).toEqual([['live', cursorAt(1)]]);
+
+    jest.mocked(fetchLists).mockClear();
     jest
       .mocked(fetchLists)
-      .mockResolvedValueOnce({ lists: [listAt(3, BINNED_AT)], next: null, error: null });
-    await fireEvent.press(screen.getByLabelText('Show 1+ deleted'));
-    await scrollToEnd();
+      .mockResolvedValueOnce({ lists: [listAt(3, '2026-09-09T09:00:00.000Z')], next: null, error: null });
+    await fireEvent.press(screen.getByLabelText('Show deleted'));
+    await scrollToEnd('List 2');
 
     expect(await screen.findByText('List 3')).toBeOnTheScreen();
-    expect(fetchLists).toHaveBeenCalledWith('bin', cursorAt(2));
-    // Every list is loaded now, so the count is exact and the `+` is gone.
-    expect(screen.getByLabelText('Show 2 deleted')).toBeOnTheScreen();
+    expect(jest.mocked(fetchLists).mock.calls).toEqual([['bin', binCursorAt(2)]]);
   });
 
   /**
-   * The two streams arrive end to end, so with the bin showing the screen sorts by when each list
-   * was joined rather than drawing them in arrival order — and a list created here, not yet
-   * acknowledged, stays last.
+   * The live lists by when they were joined, a list created here and not yet acknowledged last —
+   * sorted, since the two streams arrive end to end.
    */
-  it('orders lists by when they were joined, the bin interleaved, a new one last', async () => {
+  it('orders the live lists by when they were joined, a new one last', async () => {
     serveLists([listAt(1), listAt(3), listAt(2, BINNED_AT), listAt(4, BINNED_AT)]);
     await renderScreen();
     await createList('List 0');
 
     expect(rowLabels()).toEqual(['List 1', 'List 3', 'List 0']);
+  });
 
-    await fireEvent.press(screen.getByLabelText('Show 2 deleted'));
+  /** The bin newest deletion first, the order it is paged in, however the lists were joined. */
+  it('orders the bin by when each list was deleted, newest first', async () => {
+    serveLists([
+      listAt(1),
+      listAt(2, '2026-09-10T09:00:00.000Z'),
+      listAt(3, '2026-09-12T09:00:00.000Z'),
+      listAt(4, '2026-09-11T09:00:00.000Z'),
+    ]);
+    await renderScreen();
 
-    expect(rowLabels()).toEqual(['List 1', 'List 2', 'List 3', 'List 4', 'List 0']);
+    await fireEvent.press(screen.getByLabelText('Show deleted'));
+
+    expect(rowLabels()).toEqual(['List 3', 'List 4', 'List 2']);
   });
 });
 
@@ -489,6 +545,17 @@ describe('at a list limit', () => {
 
     expect(screen.getByText(OWNED_LISTS_FULL)).toBeOnTheScreen();
     expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+  });
+
+  /** Nothing is created from the bin, so there it says what the bin is instead. */
+  it('gives way to the bin sentence while the bin is shown', async () => {
+    serveLists([GROCERIES, { ...GROCERIES, id: 'l2', name: 'Hardware', deletedAt: '2026-09-10T09:00:00.000Z' }]);
+    await renderAtCounts(100, 100);
+
+    await fireEvent.press(screen.getByLabelText('Show deleted'));
+
+    expect(screen.getByText('Deleted lists, newest first.')).toBeOnTheScreen();
+    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
   });
 
   /** The sentence says "delete one", so deleting one has to bring the bar back. */

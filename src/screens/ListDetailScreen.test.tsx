@@ -608,24 +608,63 @@ it('leaves deleted items off the list until they are asked for', async () => {
   await renderWithBin();
 
   expect(screen.queryByLabelText('Bread')).not.toBeOnTheScreen();
-  expect(screen.getByLabelText('Show 1 deleted')).not.toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Show deleted' })).not.toBeChecked();
 });
 
-it('reveals them behind the checkbox, with no second request', async () => {
+/**
+ * "Show deleted" switches the list to its bin: the binned items and nothing else, and the Add bar
+ * gives way to a sentence, since nothing is added there. Page 1 of the bin arrived when the list was
+ * opened, so the switch is instant: no spinner and no round trip.
+ */
+it('switches the list to its bin and back, with no second request', async () => {
   await renderWithBin();
   jest.mocked(fetchLists).mockClear();
+  jest.mocked(fetchItems).mockClear();
 
-  await fireEvent.press(screen.getByLabelText('Show 1 deleted'));
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
 
-  expect(screen.getByLabelText('Show 1 deleted')).toBeChecked();
+  expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeChecked();
   expect(screen.getByLabelText('Bread')).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Milk')).not.toBeOnTheScreen();
+  expect(screen.getByText('Deleted items, newest first.')).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Add an item')).not.toBeOnTheScreen();
+  // Every row here is deleted, so no row says so.
+  expect(screen.queryByText('Deleted')).not.toBeOnTheScreen();
   expect(fetchLists).not.toHaveBeenCalled();
+  expect(fetchItems).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+  expect(screen.getByLabelText('Milk')).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Bread')).not.toBeOnTheScreen();
+  expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
 });
 
-it('does not offer the checkbox when nothing has been deleted', async () => {
+it('does not offer the switch when nothing has been deleted', async () => {
   await renderAs('writer');
 
-  expect(screen.queryByLabelText('Show 1 deleted')).not.toBeOnTheScreen();
+  expect(screen.queryByRole('switch', { name: 'Show deleted' })).not.toBeOnTheScreen();
+});
+
+/**
+ * Restoring the bin's last item must not take away the only way back to the list, so a checked
+ * switch stays — over the one place that says the bin is empty.
+ */
+it('keeps the switch once the last binned item is restored, and says the bin is empty', async () => {
+  await renderWithBin('writer');
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+  await fireEvent.press(screen.getByLabelText('Restore Bread'));
+
+  expect(setItemDeleted).toHaveBeenCalledWith('i2', false);
+  expect(screen.getByText('The bin is empty')).toBeOnTheScreen();
+  expect(screen.getByText('Deleted items wait here for 30 days.')).toBeOnTheScreen();
+  expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeChecked();
+
+  await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+  expect(itemLabels()).toEqual(['Milk', 'Bread']);
+  expect(screen.queryByRole('switch', { name: 'Show deleted' })).not.toBeOnTheScreen();
 });
 
 it('sends an item to the bin and brings it back', async () => {
@@ -634,9 +673,20 @@ it('sends an item to the bin and brings it back', async () => {
   await fireEvent.press(screen.getByLabelText('Delete Milk'));
   expect(setItemDeleted).toHaveBeenCalledWith('i1', true);
 
-  await fireEvent.press(screen.getByLabelText('Show 2 deleted'));
+  await fireEvent.press(screen.getByLabelText('Show deleted'));
   await fireEvent.press(screen.getByLabelText('Restore Bread'));
   expect(setItemDeleted).toHaveBeenCalledWith('i2', false);
+});
+
+/** The read-only notice is not a write control, so a reader keeps it in the bin too. */
+it('keeps a reader’s read-only notice in the bin', async () => {
+  await renderWithBin('reader');
+
+  await fireEvent.press(screen.getByLabelText('Show deleted'));
+
+  expect(screen.getByText('Read only — you can see this list but not change it.')).toBeOnTheScreen();
+  expect(screen.queryByText('Deleted items, newest first.')).not.toBeOnTheScreen();
+  expect(screen.getByLabelText('Bread')).toBeOnTheScreen();
 });
 
 it('gives a reader no way to delete an item', async () => {
@@ -648,7 +698,7 @@ it('gives a reader no way to delete an item', async () => {
 /** A binned item cannot be ticked: there is nothing live to check off. */
 it('will not let a deleted item be toggled', async () => {
   await renderWithBin('writer');
-  await fireEvent.press(screen.getByLabelText('Show 1 deleted'));
+  await fireEvent.press(screen.getByLabelText('Show deleted'));
 
   expect(screen.getByLabelText('Bread')).toBeDisabled();
 });
@@ -656,13 +706,10 @@ it('will not let a deleted item be toggled', async () => {
 /** Nor renamed, for the same reason — Restore is the one thing to offer it. */
 it('offers a deleted item no rename, only a restore', async () => {
   await renderWithBin('writer');
-  await fireEvent.press(screen.getByLabelText('Show 1 deleted'));
+  await fireEvent.press(screen.getByLabelText('Show deleted'));
 
   expect(screen.queryByLabelText('Rename Bread')).not.toBeOnTheScreen();
   expect(screen.getByLabelText('Restore Bread')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Rename Milk')).toBeOnTheScreen();
-  // Said in words too, not only by the icon that replaced the trash.
-  expect(screen.getByText('Deleted')).toBeOnTheScreen();
 });
 
 /**
@@ -753,7 +800,8 @@ const row = (id: string, title: string, n: number, deletedAt: string | null = nu
   createdAt: T(n),
 });
 const AFTER_BREAD = { createdAt: T(2), id: 'i2' };
-const AFTER_JAM = { createdAt: T(12), id: 'b2' };
+/** The bin pages newest deletion first: Old jam (deleted at 21) above Jam (at 20), so Jam is last. */
+const AFTER_JAM = { deletedAt: T(20), id: 'b2' };
 
 /** Page 1 of both streams loaded, each with more to come. */
 async function renderPaged() {
@@ -764,8 +812,8 @@ async function renderPaged() {
         items: [
           row('i1', 'Milk', 1),
           row('i2', 'Bread', 2),
-          row('b1', 'Old jam', 11, BINNED_AT),
-          row('b2', 'Jam', 12, BINNED_AT),
+          row('b1', 'Old jam', 11, T(21)),
+          row('b2', 'Jam', 12, T(20)),
         ],
         nextLive: AFTER_BREAD,
         nextBin: AFTER_JAM,
@@ -781,9 +829,13 @@ async function renderPaged() {
   await screen.findByLabelText('Milk');
 }
 
-/** Reaching the end is an event on the `FlatList`; a row inside it is where the event walks up from. */
-async function scrollToEnd() {
-  await fireEvent(screen.getByLabelText('Milk'), 'endReached');
+/**
+ * Reaching the end is an event on the `FlatList`; a row inside it is where the event walks up from.
+ * In the bin, start from a row's `Restore`: its checkbox is disabled, and RNTL fires nothing from a
+ * disabled element.
+ */
+async function scrollToEnd(row = 'Milk') {
+  await fireEvent(screen.getByLabelText(row), 'endReached');
 }
 
 /**
@@ -814,21 +866,27 @@ describe('a list longer than a page', () => {
     expect(itemLabels()).toEqual(['Milk', 'Bread', 'Eggs']);
   });
 
-  it('loads the bin as well once it is showing', async () => {
+  /** The bin is its own view: a scroll there asks for the bin's next page and nothing else. */
+  it('loads only the next page of the bin while it is showing', async () => {
     jest
       .mocked(fetchItems)
-      .mockResolvedValueOnce({ items: [row('i3', 'Eggs', 3)], next: null, error: null })
-      .mockResolvedValueOnce({ items: [row('b3', 'Rye', 13, BINNED_AT)], next: null, error: null });
+      .mockResolvedValueOnce({ items: [row('b3', 'Rye', 13, T(19))], next: null, error: null });
     await renderPaged();
 
-    await fireEvent.press(screen.getByLabelText('Show 2+ deleted'));
-    await scrollToEnd();
+    await fireEvent.press(screen.getByLabelText('Show deleted'));
+    await scrollToEnd('Restore Jam');
 
     expect(await screen.findByLabelText('Rye')).toBeOnTheScreen();
-    expect(fetchItems).toHaveBeenCalledWith('l1', 'live', AFTER_BREAD);
-    expect(fetchItems).toHaveBeenCalledWith('l1', 'bin', AFTER_JAM);
-    // Every row is loaded now, so the count is exact and the `+` is gone.
-    expect(screen.getByLabelText('Show 3 deleted')).toBeOnTheScreen();
+    expect(jest.mocked(fetchItems).mock.calls).toEqual([['l1', 'bin', AFTER_JAM]]);
+    // No count, however many are loaded or still to come.
+    expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeOnTheScreen();
+  });
+
+  it('reads Show deleted with a further page of the bin still to come', async () => {
+    await renderPaged();
+
+    expect(screen.getByRole('switch', { name: 'Show deleted' })).toBeOnTheScreen();
+    expect(screen.queryByText(/Show \d/)).not.toBeOnTheScreen();
   });
 
   it('shows a spinner at the foot of the list while the page is on its way', async () => {
@@ -847,22 +905,34 @@ describe('a list longer than a page', () => {
     expect(screen.queryByLabelText('Loading more items')).not.toBeOnTheScreen();
   });
 
-  /**
-   * The two streams load unevenly — page 2 of the live rows lands after page 1 of the bin — so the
-   * combined view sorts by when each row was created rather than showing them in arrival order.
-   */
-  it('interleaves live and deleted rows by date when both are showing', async () => {
-    jest
-      .mocked(fetchItems)
-      .mockResolvedValueOnce({ items: [row('i3', 'Eggs', 3)], next: null, error: null })
-      .mockResolvedValueOnce({ items: [row('b3', 'Rye', 13, BINNED_AT)], next: null, error: null });
+  /** Live mode never asks for a page of the bin, however much of it is still to come. */
+  it('asks only for the live rows at the end in live mode', async () => {
+    jest.mocked(fetchItems).mockResolvedValueOnce({ items: [row('i3', 'Eggs', 3)], next: null, error: null });
     await renderPaged();
 
-    await fireEvent.press(screen.getByLabelText('Show 2+ deleted'));
     await scrollToEnd();
+    await screen.findByLabelText('Eggs');
+
+    expect(jest.mocked(fetchItems).mock.calls).toEqual([['l1', 'live', AFTER_BREAD]]);
+  });
+
+  /**
+   * The bin newest deletion first, the order it is paged in — not the order the rows were added, and
+   * with a page loaded on scroll landing below the rows already shown.
+   */
+  it('orders the bin by when each row was deleted, newest first', async () => {
+    jest
+      .mocked(fetchItems)
+      .mockResolvedValueOnce({ items: [row('b3', 'Rye', 13, T(19))], next: null, error: null });
+    await renderPaged();
+
+    await fireEvent.press(screen.getByLabelText('Show deleted'));
+    expect(itemLabels()).toEqual(['Old jam', 'Jam']);
+
+    await scrollToEnd('Restore Jam');
     await screen.findByLabelText('Rye');
 
-    expect(itemLabels()).toEqual(['Milk', 'Bread', 'Eggs', 'Old jam', 'Jam', 'Rye']);
+    expect(itemLabels()).toEqual(['Old jam', 'Jam', 'Rye']);
   });
 });
 

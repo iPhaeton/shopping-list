@@ -312,14 +312,28 @@ export function useHydration({
 
 /**
  * Whether a list sorts inside the pages of its stream loaded so far: the stream has ended (its
- * cursor is `null`, so every list of it is loaded), or `(joinedAt, id)` is at or before the cursor.
- * A list past the cursor is left for the page that brings it, so nothing is shown out of place
- * ahead of lists not yet loaded. Timestamps compare as strings, as `inCreationOrder` compares them:
- * both sides come from the same database in the same format.
+ * cursor is `null`, so every list of it is loaded), or the list sorts at or before the cursor in
+ * that stream's own order. A list past the cursor is left for the page that brings it, so nothing is
+ * shown out of place ahead of lists not yet loaded.
+ *
+ * Each stream has its own order. The live one is `(joinedAt, id)` ascending. The bin is
+ * `(deletedAt, id)` descending, so a list binned since the bin was read sorts first, and is in range.
+ * Get the bin's direction wrong and the only symptom is a newly binned list missing until a scroll
+ * brings it, so it has its own test.
+ *
+ * Timestamps compare as strings, as `inCreationOrder` compares them: both sides come from the same
+ * database in the same format.
  */
-function withinLoadedRange(list: List, cursors: ListCursors): boolean {
-  const cursor = list.deletedAt === null ? cursors.live : cursors.bin;
-  if (cursor === null || list.joinedAt === null) return true;
-  if (list.joinedAt !== cursor.createdAt) return list.joinedAt < cursor.createdAt;
-  return list.id <= cursor.id;
+export function withinLoadedRange(list: List, cursors: ListCursors): boolean {
+  if (list.deletedAt === null) {
+    const cursor = cursors.live;
+    if (cursor === null || list.joinedAt === null) return true;
+    if (list.joinedAt !== cursor.createdAt) return list.joinedAt < cursor.createdAt;
+    return list.id <= cursor.id;
+  }
+
+  const cursor = cursors.bin;
+  if (cursor === null) return true;
+  if (list.deletedAt !== cursor.deletedAt) return list.deletedAt > cursor.deletedAt;
+  return list.id >= cursor.id;
 }

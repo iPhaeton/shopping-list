@@ -12,9 +12,9 @@ appId: com.shoppingloop.app
 - extendedWaitUntil:
     visible: Add an item
     timeout: 10000
-- tapOn: Show 1 deleted
+- tapOn: Show deleted
 - takeScreenshot: list-detail-bin-shown-${THEME}
-- tapOn: Show 1 deleted
+- tapOn: Show deleted
 - tapOn: Rename list
 - takeScreenshot: list-detail-rename-open-${THEME}
 - tapOn: Rename list

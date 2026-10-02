@@ -8,6 +8,7 @@ sources: [ai/tasks/17-user-names/implementation-log-step-1.md, src/state/Session
 last_verified: 2026-09-21
 verify: grep -q "hasResolvedOnce.current ? 'live' : 'restored'" src/state/SessionContext.tsx && grep -q "_recoverAndRefresh" src/state/SessionContext.tsx && grep -q "_notifyAllSubscribers('SIGNED_IN', currentSession)" node_modules/@supabase/auth-js/dist/module/GoTrueClient.js
 related: [session-still-valid-guards-writes, supabase-client-module-boundary, restored-session-state-waits-for-evidence]
+indexed: false
 ---
 
 `supabase.auth.onAuthStateChange`'s callback receives the literal event string `'SIGNED_IN'` for two

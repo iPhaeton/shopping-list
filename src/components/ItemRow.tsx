@@ -26,7 +26,7 @@ type Props = {
 /**
  * One item on its own band of color — the same ramp as a `ListRow` on Lists, through `bandAt`, but
  * flat: rows meet in straight lines, not `Band`'s waves, and the one wavy edge on the screen is
- * `Hillside`'s hill above the first row. Every mark on it — title, ring, tick, tag, glyphs — is in
+ * `Hillside`'s hill above the first row. Every mark on it — title, ring, tick, glyphs — is in
  * the band's `ink`, which `bandAt` picks to clear AA on that band; no fixed color could, as the Day
  * ramp runs from pale to darker than the text and the ink flips from dark to light partway down.
  * Memoised, with callbacks taking the item's id, so the screen hands every row the same functions
@@ -47,9 +47,9 @@ export const ItemRow = memo(function ItemRow({
   // `doneAt` records when the item was checked off; nothing here shows the time, only the fact.
   const done = item.doneAt !== null;
 
-  // In the bin, and only on screen because "Show deleted" is ticked. It is a real row still — the
-  // database keeps it for thirty days — so it stays readable rather than being greyed into
-  // illegibility, and the checkbox stops working because there is nothing to check off.
+  // In the bin, and only on screen because "Show deleted" switched the screen to it. It is a real row
+  // still — the database keeps it for thirty days — so it stays readable rather than being greyed
+  // into illegibility, and the checkbox stops working because there is nothing to check off.
   const deleted = item.deletedAt !== null;
 
   // The rename editor, in place of the row rather than in a bar at the top of the screen, so on a
@@ -115,11 +115,9 @@ export const ItemRow = memo(function ItemRow({
         </Text>
       </Pressable>
 
-      {/* The tag takes the pencil's place: a binned row gets no rename, for the reason its checkbox
-          is disabled — a rename would come straight back `target_deleted`, and Restore is the one
-          thing to offer it. */}
-      {deleted ? <Text style={[styles.tag, { color: band.ink }]}>Deleted</Text> : null}
-
+      {/* A binned row gets no rename, for the reason its checkbox is disabled — a rename would come
+          straight back `target_deleted`, and Restore is the one thing to offer it. No tag says it
+          is deleted: the bin view shows nothing else. */}
       {onRename && !deleted ? (
         <IconButton label={`Rename ${item.title}`} fill={band.iconFill} onPress={() => setEditing(true)}>
           <PencilIcon color={band.ink} size={16} />
@@ -187,10 +185,5 @@ const useStyles = themedStyles(() => ({
   titleDone: {
     fontFamily: fonts.sans,
     textDecorationLine: 'line-through',
-  },
-  tag: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 12,
-    textTransform: 'uppercase',
   },
 }));

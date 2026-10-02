@@ -4,9 +4,9 @@ title: Realtime is a nudge fanned out to each member's per-user inbox topic, ans
 type: decision
 status: current
 tags: [supabase, realtime, rls, security, state, architecture]
-sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-5.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
-last_verified: 2026-10-01
-verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'refreshSoon(listId);' src/state/ListsContext.tsx && grep -q 'return subscribeToChanges(userId, onNudge, onNudge);' src/state/ListsContext.tsx && grep -q 'let connected = false;' src/lib/listsChannel.ts && grep -q 'if (connected) onResubscribe();' src/lib/listsChannel.ts
+sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-5.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
+last_verified: 2026-10-02
+verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'refreshSoon(listId);' src/state/ListsContext.tsx && grep -q 'return subscribeToChanges(userId, onNudge, onNudge);' src/state/ListsContext.tsx && grep -q 'let connected = false;' src/lib/listsChannel.ts && grep -q 'if (connected) onResubscribe();' src/lib/listsChannel.ts && grep -q 'return list.deletedAt > cursor.deletedAt;' src/state/useHydration.ts && grep -q 'return list.id >= cursor.id;' src/state/useHydration.ts
 related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, deletion-is-a-tombstone, supabase-local-stack, scope-boundaries, realtime-channel-shared-per-topic]
 ---
 
@@ -86,22 +86,22 @@ feature's braces, and it closes gaps this cannot.
 - **The fan-out's `where list_id = ?` wants `list_members`'s primary key** `(list_id, user_id)`, not the
   `(user_id, created_at)` index the read path was built around.
 
-**Deletion needed no migration or client change at all — measured.** A soft delete is an `UPDATE`
-([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), the item/list-rename triggers already fire on
-update, and `list_members` rows survive a soft delete, so the fan-out finds everyone normally. One
-artifact to recognise rather than debug: the nightly purge hard-deletes lists, whose cascade to
-`list_members` fires the `departed` arm, so members are nudged at 03:30 about a row they cannot see for
-a list that left their fetch 30 days ago — harmless, since delivery is at-most-once and sockets are
-almost certainly down.
+**Deletion needed no realtime change — measured.** A soft delete is an `UPDATE`
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)) the existing update triggers already fan out,
+and `list_members` rows survive it. One artifact to recognise rather than debug: the nightly purge's
+cascade to `list_members` fires the `departed` arm, nudging members at 03:30 about a list that left
+their fetch 30 days ago — harmless, since delivery is at-most-once and sockets are almost surely down.
 
 **What it does not solve.** Last-write-wins is unchanged — realtime makes it *visible*, not different.
 One gap survives by design: socket up, a single message dropped in flight, nothing else changes that
 list, app never backgrounded — the screen stays stale until a resubscribe or foreground. Echo
 suppression and a "just updated" affordance were offered and declined; your own write nudges you back
 in ~30 ms and that echo is the cheapest correct way to pick up server-stamped values. And since task 23
-a list newly shared with you shows on the nudge only if it sorts inside the pages of lists loaded so
-far; it joins the end of your live stream, so past a page it waits for the scroll that reaches it
-([scope-boundaries](scope-boundaries.md)). That is paging, not a lost message.
+a nudged list shows only if it sorts inside the pages loaded so far, in its own stream's order
+(`withinLoadedRange`): one newly shared with you joins the end of your live stream, so past a page it
+waits for the scroll that reaches it ([scope-boundaries](scope-boundaries.md)); one binned elsewhere
+heads the bin, which is `(deletedAt, id)` **descending**, and shows at once. That is paging, not a lost
+message. Flip the bin's comparison and the only symptom is a newly binned list missing until a scroll.
 
 **Schema-level proof on cloud, not delivery proof.** The migration was pushed and confirmed on
 2026-09-10 (`npx supabase db dump --linked -s realtime` shows the receive policy, the `public` dump
@@ -116,5 +116,5 @@ a removed member received, and the check will "fail" on a false positive.
 
 The `verify:` asserts the topic-only receive policy, exactly **one** policy on `realtime.messages`,
 membership read at write time, an update-only `lists` trigger, no `'postgres_changes'` in `src`, a
-`private` channel, `listId` decoded the same way, both callbacks on `refreshSoon`, and
-`onResubscribe` gated on the `connected` flag rather than fired on every `SUBSCRIBED`.
+`private` channel, `listId` decoded the same way, both callbacks on `refreshSoon`, `onResubscribe`
+gated on the `connected` flag, and the bin compared newest first.

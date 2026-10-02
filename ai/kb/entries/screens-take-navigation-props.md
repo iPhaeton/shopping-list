@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [navigation, screens, testing]
 sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-10-01
+last_verified: 2026-10-02
 verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && test "$(grep -c '<Stack.Screen' src/navigation/RootNavigator.tsx)" = "$(grep -c 'headerShown: false' src/navigation/RootNavigator.tsx)" && ! grep -rq 'headerRight' src --include='*.tsx' --exclude='*.test.tsx' && grep -q 'onBack={() => navigation.goBack()}' src/screens/AccountScreen.tsx && grep -qF 'label="Back" outline={colors.outline} onPress={() => navigation.goBack()}' src/screens/SharingScreen.tsx && grep -q 'setOptions).toHaveBeenCalledWith(expect.objectContaining({ title:' src/screens/ListDetailScreen.test.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels, react-native-screens-past-the-sdk-pin, expo-sdk-version, phone-is-the-product, maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque]
 ---

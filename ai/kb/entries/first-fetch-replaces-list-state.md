@@ -4,9 +4,9 @@ title: Hydration replaces list state, so nothing may write before status is 'rea
 type: gotcha
 status: current
 tags: [state, persistence, testing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-4.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts, src/state/useHydration.ts, src/state/ListsContext.tsx, src/state/reloadPages.ts, src/state/usePaging.ts]
-last_verified: 2026-10-01
-verify: grep -q 'lists: action.lists, listCursors: action.cursors' src/state/listsReducer.ts && grep -q 'reloadListPages(listsRef.current, fetchLists)' src/state/useHydration.ts && grep -q 'pages.lists === null) return { error: pages.error, lists: null };' src/state/useHydration.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/useHydration.ts && ! grep -q 'replay' src/state/listsReducer.ts && grep -q 'const hydrateLists = useCallback' src/state/useHydration.ts && grep -q "dirty = useRef<Set<string> | 'all'>" src/state/useHydration.ts && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'dirty.current = new Set();' && grep -A3 'const drainDirty = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current || fetching.current) return;' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q '(listId?: string)' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'drainDirty();' && ! grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'void refresh()' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && test "$(grep -c 'listsRef.current = loaded;' src/state/useHydration.ts)" = 2 && test "$(grep -c 'listCursorsRef.current = ' src/state/useHydration.ts)" = 2 && grep -q 'listCursorsRef.current = cached.cursors;' src/state/ListsContext.tsx && grep -q 'listsRef.current = lists;' src/state/ListsContext.tsx && grep -q 'listsRef.current = replay(' src/state/usePaging.ts && test "$(grep -c 'if (!retry.current) void flushRef.current?.();' src/state/useHydration.ts)" = 2 && grep -q 'flushRef.current = flush;' src/state/ListsContext.tsx && grep -q 'const listCounts = action.counts ?? state.listCounts;' src/state/listsReducer.ts && grep -q 'if (read.counts === null) return { error: read.error, lists: null };' src/state/useHydration.ts && grep -q "dispatch({ type: 'lists/loaded', lists: loaded, cursors });" src/state/useHydration.ts
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-4.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, src/state/listsReducer.ts, src/screens/ListsScreen.tsx, src/state/replay.ts, src/state/useHydration.ts, src/state/ListsContext.tsx, src/state/reloadPages.ts, src/state/usePaging.ts]
+last_verified: 2026-10-02
+verify: grep -q 'lists: action.lists, listCursors: action.cursors' src/state/listsReducer.ts && grep -q 'reloadListPages(listsRef.current, fetchLists)' src/state/useHydration.ts && grep -q 'pages.lists === null) return { error: pages.error, lists: null };' src/state/useHydration.ts && grep -q "status === 'loading'" src/screens/ListsScreen.tsx && grep -q 'replay(' src/state/useHydration.ts && ! grep -q 'replay' src/state/listsReducer.ts && grep -q 'const hydrateLists = useCallback' src/state/useHydration.ts && grep -q "dirty = useRef<Set<string> | 'all'>" src/state/useHydration.ts && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current) return;' && grep -A3 'const refresh = useCallback' src/state/useHydration.ts | grep -q 'dirty.current = new Set();' && grep -A3 'const drainDirty = useCallback' src/state/useHydration.ts | grep -q 'if (flushing.current || retry.current || fetching.current) return;' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q '(listId?: string)' && grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'drainDirty();' && ! grep -A15 'const refreshSoon = useCallback' src/state/useHydration.ts | grep -q 'void refresh()' && grep -q 'await hydrate();' src/state/ListsContext.tsx && grep -q "addEventListener('visibilitychange'" src/state/ListsContext.tsx && test "$(grep -c 'listsRef.current = loaded;' src/state/useHydration.ts)" = 2 && test "$(grep -c 'listCursorsRef.current = ' src/state/useHydration.ts)" = 2 && grep -q 'listCursorsRef.current = cached.cursors;' src/state/ListsContext.tsx && grep -q 'listsRef.current = lists;' src/state/ListsContext.tsx && grep -q 'listsRef.current = replay(' src/state/usePaging.ts && test "$(grep -c 'if (!retry.current) void flushRef.current?.();' src/state/useHydration.ts)" = 2 && grep -q 'flushRef.current = flush;' src/state/ListsContext.tsx && grep -q 'const listCounts = action.counts ?? state.listCounts;' src/state/listsReducer.ts && grep -q 'if (read.counts === null) return { error: read.error, lists: null };' src/state/useHydration.ts && grep -q "dispatch({ type: 'lists/loaded', lists: loaded, cursors });" src/state/useHydration.ts && grep -q 'asks one page further once the database has it, which keeps every row shown before' src/state/reloadPages.test.ts && grep -q 'asks one bin page further for a list binned on this device and not yet sent' src/state/reloadPages.test.ts
 related: [writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, queries-go-through-a11y-labels, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone]
 ---
 
@@ -47,6 +47,14 @@ step 2 `fetchListCounts()` runs beside the pages and **fails `hydrate` the same 
 counts pending creates and bins on top of the server's numbers, so falling back to state's counts,
 which already include them, would count them twice.
 
+**A row binned on this device counts toward the bin's depth, so a bin re-read can ask for one page
+more than was loaded — on purpose** (task 24 step 2). Its `joinedAt`/`createdAt` is the database's;
+only its `deletedAt` is the device's, so `stampedLists`/`loadedRows` count it. If the deletion has
+landed, the row now heads page 1 of the newest-first bin and has pushed the last row shown onto the
+next page, and the extra page is what keeps that row on screen. If it is still queued, the extra page
+is rows never shown — bounded at one page per stream per re-read, and accepted. Do not drop pending
+deletions from the count: that "fix" loses the last row in the first case.
+
 **Three fetch functions, and which one a caller reaches for is the part to get wrong.** `hydrate`
 (every loaded page) and `hydrateLists` (one or more named lists — see
 [realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)), with
@@ -79,18 +87,13 @@ since `useHydration` runs before `useOutbox` builds `flush` from `hydrate`) is n
 cycle, and `flush` never touches `fetching.current`. Guarded on `retry.current` alone, mirroring
 `enqueueOp`, so a fetch completing mid-backoff does not fire an out-of-schedule retry.
 
-**Step 9 gave the flush loop a second reason to call `hydrate` directly** (never `hydrateLists` — the
-flush loop does not know which list changed) **and made the *timing* load-bearing.** When a write
-comes back `target_deleted`, the loop awaits `hydrate()` before announcing anything; announcing first
-reads the pre-delete view and silently discards the write — see
-[writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md). A third guard, `stuck`, stops the
-loop while a blocked write sits at its head.
-
-**Three guarded doors onto `hydrate`/`hydrateLists`, each guarding something different.** `refresh`
-(`flushing`, `retry`) is the one every screen calls; `drainDirty` (`flushing`, `retry`, `fetching`) is
-realtime's own; the flush loop's direct `hydrate()` calls carry **no** guard, because they run *with*
-`flushing.current` already set. `refresh` still does not check `fetching` — that would make a
-user-triggered refresh silently do nothing while a nudge-driven fetch happens to be in flight.
+**The flush loop is the third door onto `hydrate`, and it is unguarded**: it runs *with*
+`flushing.current` set, and never calls `hydrateLists`, since it does not know which list changed.
+**There the *timing* is load-bearing.** On `target_deleted` it awaits `hydrate()` before announcing
+anything; announcing first reads the pre-delete view and silently discards the write
+([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)). A further guard, `stuck`, stops
+the loop while a blocked write sits at its head. `refresh` deliberately does not check `fetching`: a
+user's refresh would silently do nothing while a nudge-driven fetch was in flight.
 
 **The same trap lives on the refs, and it has now bitten three times.** `listsRef` and
 `listCursorsRef` mirror state through `useEffect`s — safe for a scroll callback, not for anything that
@@ -100,8 +103,7 @@ effects before its parent's. So every dispatch something reads back at once assi
 **the cold-start cache dispatch** in `ListsContext` (`hydrate` counts "loaded before" from the refs
 before its first await — without it a cold start re-read one page of lists, not the cached depth);
 and **`usePaging.loadList`**, which folds in one list fetched by id (List detail's mount effect asks
-`loadListItems` for it in the commit it appears, found nothing, and never asked again). Both task-23
-cases were caught by tests that fail without the assignment.
+`loadListItems` for it in the commit it appears, found nothing, and never asked again).
 
 **What to do:** any new harness, screen or effect that creates a list or item waits for
 `status === 'ready'` first — in a test, await something the loaded screen renders before firing
@@ -109,10 +111,9 @@ events. A new dispatch whose result a same-commit effect, or a not-yet-awaited r
 assigns the mirrored refs synchronously too. A new caller that knows which list changed reaches for
 `refreshSoon(listId)`, not `refresh`, which forces a full `hydrate`.
 
-The `verify:` command asserts: `lists/loaded` still assigns lists and cursors wholesale; `hydrate`
-re-reads list pages and bails on a failed one; `ListsScreen` still gates on `status`; the replay
-happens in the provider, not the reducer; the `dirty` machinery and the three guards are intact; the
-web `visibilitychange` listener is still there; all four synchronous ref assignments remain; and
-`counts` stays optional, a failed counts read fails `hydrate`, and `hydrateLists` dispatches none.
-The ref check counts the literal `listsRef.current = loaded;`, so renaming that variable fails it
-with the fact intact — which is why `hydrate` calls the replayed state `replayed`.
+The `verify:` asserts the wholesale replace, the list-page re-read and its bail-out, the `status`
+gate, replay in the provider, the `dirty` machinery and three guards, the web `visibilitychange`
+listener, all four synchronous ref assignments, optional counts that fail `hydrate` when their read
+fails and that `hydrateLists` never sends, and the two tests pinning the extra bin page. It counts the
+literal `listsRef.current = loaded;`, so renaming that variable fails it with the fact intact — why
+`hydrate` calls the replayed state `replayed`.

@@ -4,41 +4,32 @@ import { themedStyles } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
 
 /**
- * The bin, behind a switch.
+ * The switch between a screen's live rows and its bin. On, the screen shows the bin and nothing else,
+ * newest deletion first.
  *
- * **Rendered only when there is something in it** — `count` of zero means both screens leave this
- * out entirely. A toggle that reveals nothing is noise, and the app has no other permanently visible
- * control that does nothing when pressed.
+ * **Rendered while the bin has rows, or while it is checked.** A switch that reveals nothing is
+ * noise, so an empty bin hides it. But once you are in the bin, restoring its last row must not take
+ * away the only way back, so a checked switch stays, over `The bin is empty`.
+ *
+ * The label is always `Show deleted`, with no count — the user's call (task 24 step 1). A count
+ * could only say what is loaded, not what exists, so it needed a `+` until the bin's last page.
  *
  * The state is the screen's own `useState` rather than a stored preference: no new storage key, no
- * version to bump, nothing to migrate, and it resets to hidden every time you arrive — which is the
+ * version to bump, nothing to migrate, and it resets to off every time you arrive — which is the
  * right default, since the bin is somewhere you go deliberately. The cost is re-ticking it on each
  * screen, and that is accepted.
  *
- * The first page of deleted rows ships in the same fetch as the live ones, so ticking this is
- * instant: no spinner and no round trip. That is a large part of why this reads better than a
- * separate "trash" screen would. A bin longer than a page loads the rest on scroll, like the live
- * rows, and says so with a `+` — the count is what is loaded, not what exists, until the end.
+ * The first page of deleted rows ships with the fetch that opens the list (and, for lists, with every
+ * re-read), so ticking this is instant and works offline. The rest of the bin loads on scroll.
  */
 export function ShowDeletedToggle({
   checked,
-  count,
-  more = false,
   onChange,
 }: {
   checked: boolean;
-  /** How many deleted rows are hiding behind it — loaded so far, when `more` is set. */
-  count: number;
-  /** Whether there are deleted rows beyond the ones loaded. */
-  more?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   const styles = useStyles();
-  const label = more
-    ? `Show ${count}+ deleted`
-    : count === 1
-      ? 'Show 1 deleted'
-      : `Show ${count} deleted`;
 
   return (
     <Pressable
@@ -46,14 +37,14 @@ export function ShowDeletedToggle({
       // iOS "on/off" setting, not a multi-select box to tick before submitting anything.
       accessibilityRole="switch"
       accessibilityState={{ checked }}
-      accessibilityLabel={label}
+      accessibilityLabel="Show deleted"
       onPress={() => onChange(!checked)}
       hitSlop={4}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <View style={[styles.track, checked && styles.trackChecked]}>
         <View style={[styles.knob, checked && styles.knobChecked]} />
       </View>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>Show deleted</Text>
     </Pressable>
   );
 }

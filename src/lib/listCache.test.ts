@@ -19,11 +19,14 @@ const GROCERIES: List = {
   itemsLoaded: true,
   items: [{ id: 'i1', title: 'Milk', doneAt: null, deletedAt: null, createdAt: '2026-09-01T10:00:00Z' }],
   nextLive: { createdAt: '2026-09-01T10:00:00Z', id: 'i1' },
-  nextBin: null,
+  nextBin: { deletedAt: '2026-09-10T08:00:00Z', id: 'i7' },
 };
 
 /** How far each stream of lists was paged, so a cold start re-reads that many. */
-const CURSORS: ListCursors = { live: { createdAt: '2026-09-01T09:00:00+00:00', id: 'l1' }, bin: null };
+const CURSORS: ListCursors = {
+  live: { createdAt: '2026-09-01T09:00:00+00:00', id: 'l1' },
+  bin: { deletedAt: '2026-09-10T08:00:00+00:00', id: 'l9' },
+};
 
 /** What the database last counted, so a cold start offline still knows whether to warn. */
 const COUNTS: ListCounts = { owned: 100, total: 140 };
@@ -63,7 +66,7 @@ it('drops a blob from before lists were paged, which has no joinedAt and no list
 it('drops a blob whose list cursors are missing', async () => {
   await AsyncStorage.setItem(
     'lists:u1',
-    JSON.stringify({ v: 7, lists: [GROCERIES], cursors: { live: null }, counts: COUNTS })
+    JSON.stringify({ v: 8, lists: [GROCERIES], cursors: { live: null }, counts: COUNTS })
   );
 
   expect(await readCachedLists('u1')).toBeNull();
@@ -79,7 +82,27 @@ it('drops a blob from before the list limits, which has no counts', async () => 
 it('drops a blob whose counts are missing a number', async () => {
   await AsyncStorage.setItem(
     'lists:u1',
-    JSON.stringify({ v: 7, lists: [GROCERIES], cursors: CURSORS, counts: { owned: 100 } })
+    JSON.stringify({ v: 8, lists: [GROCERIES], cursors: CURSORS, counts: { owned: 100 } })
+  );
+
+  expect(await readCachedLists('u1')).toBeNull();
+});
+
+/**
+ * Before task 24 step 2 the bin was paged by when each row was created; now it is paged by when each
+ * was deleted, newest first. A v7 bin cursor is a `createdAt` position, and the new read would take
+ * it as a place in the wrong order.
+ */
+it('drops a blob from before the bin was paged newest deletion first', async () => {
+  const v7Cursor = { createdAt: '2026-09-01T09:00:00+00:00', id: 'l9' };
+  await AsyncStorage.setItem(
+    'lists:u1',
+    JSON.stringify({
+      v: 7,
+      lists: [{ ...GROCERIES, nextBin: { createdAt: '2026-09-01T10:00:00Z', id: 'i7' } }],
+      cursors: { live: CURSORS.live, bin: v7Cursor },
+      counts: COUNTS,
+    })
   );
 
   expect(await readCachedLists('u1')).toBeNull();

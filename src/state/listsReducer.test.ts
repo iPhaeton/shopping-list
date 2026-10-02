@@ -1,6 +1,9 @@
 import {
+  binItems,
+  binLists,
   countDone,
   inCreationOrder,
+  inDeletionOrder,
   inJoinOrder,
   initialState,
   listsReducer,
@@ -602,6 +605,16 @@ describe('liveItems, liveLists and countDone', () => {
     expect(liveLists(state.lists).map((list) => list.name)).toEqual(['Hardware']);
   });
 
+  it('keeps only the tombstones in the bin, for items and for lists', () => {
+    const state = listsReducer(
+      listsReducer(withBinnedItem(), { type: 'list/created', id: 'l2', name: 'Hardware' }),
+      { type: 'list/setDeleted', id: 'l1', deletedAt: DELETED_AT }
+    );
+
+    expect(binItems(state.lists[0]).map((item) => item.title)).toEqual(['Bread']);
+    expect(binLists(state.lists).map((list) => list.name)).toEqual(['Groceries']);
+  });
+
   /** Without this a list reads "2 of 47 done" with 42 of them in the bin. */
   it('does not count a done item that has since been binned', () => {
     const done = listsReducer(withBinnedItem(), {
@@ -652,6 +665,27 @@ describe('items/pageLoaded', () => {
     expect(state.lists[0].nextLive).toBeNull();
     expect(state.lists[0].nextBin).toBeNull();
     expect(state.lists[0].items[0].deletedAt).toBe(DELETED_AT);
+  });
+
+  /** The bin pages newest deletion first, so its cursor is a deletion stamp, not a creation one. */
+  it('carries a bin cursor on (deletedAt, id), and treats an unchanged one as no move', () => {
+    const BIN_CURSOR = { deletedAt: DELETED_AT, id: 'i1' };
+    const state = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1, DELETED_AT)],
+      stream: { name: 'bin', next: BIN_CURSOR },
+    });
+    expect(state.lists[0].nextBin).toEqual(BIN_CURSOR);
+    expect(state.lists[0].nextLive).toBeNull();
+
+    const again = listsReducer(state, {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1, DELETED_AT)],
+      stream: { name: 'bin', next: { ...BIN_CURSOR } },
+    });
+    expect(again).toBe(state);
   });
 
   /**
@@ -920,6 +954,7 @@ function joinedList(id: string, joinedAt: string | null, deletedAt: string | nul
 }
 
 const LIST_CURSOR = { createdAt: T2, id: 'l2' };
+const BIN_LIST_CURSOR = { deletedAt: DELETED_AT, id: 'l9' };
 
 describe('lists/pageLoaded', () => {
   it('appends a page and moves its stream cursor, leaving the other alone', () => {
@@ -933,14 +968,14 @@ describe('lists/pageLoaded', () => {
     expect(state.listCursors).toEqual({ live: LIST_CURSOR, bin: null });
   });
 
-  it('moves the bin cursor for a page of the bin', () => {
+  it('moves the bin cursor for a page of the bin, on (deletedAt, id)', () => {
     const state = listsReducer(initialState, {
       type: 'lists/pageLoaded',
       lists: [joinedList('l9', T1, DELETED_AT)],
-      stream: { name: 'bin', next: LIST_CURSOR },
+      stream: { name: 'bin', next: BIN_LIST_CURSOR },
     });
 
-    expect(state.listCursors).toEqual({ live: null, bin: LIST_CURSOR });
+    expect(state.listCursors).toEqual({ live: null, bin: BIN_LIST_CURSOR });
   });
 
   /**
@@ -998,7 +1033,7 @@ describe('lists/pageLoaded', () => {
     const before = listsReducer(initialState, {
       type: 'lists/loaded',
       lists: [],
-      cursors: { live: LIST_CURSOR, bin: LIST_CURSOR },
+      cursors: { live: LIST_CURSOR, bin: BIN_LIST_CURSOR },
     });
 
     const state = listsReducer(before, {
@@ -1007,7 +1042,7 @@ describe('lists/pageLoaded', () => {
     });
 
     expect(state.lists.map((list) => list.id)).toEqual(['l9']);
-    expect(state.listCursors).toEqual({ live: LIST_CURSOR, bin: LIST_CURSOR });
+    expect(state.listCursors).toEqual({ live: LIST_CURSOR, bin: BIN_LIST_CURSOR });
   });
 });
 
@@ -1035,5 +1070,45 @@ describe('inJoinOrder', () => {
 
     expect(sorted).not.toBe(lists);
     expect(lists.map((list) => list.id)).toEqual(['b', 'a']);
+  });
+});
+
+/**
+ * The bin's order, on both screens: newest deletion first, the order both bin reads page in, so a
+ * page loaded on scroll lands below the rows already shown.
+ */
+describe('inDeletionOrder', () => {
+  const D1 = '2026-09-10T08:00:00.000Z';
+  const D2 = '2026-09-10T09:00:00.000Z';
+  const D3 = '2026-09-10T10:00:00.000Z';
+
+  it('sorts binned items by deletedAt, newest first, then id descending', () => {
+    const items = [
+      fetched('b', 'Deleted second', T1, D2),
+      fetched('a1', 'Tie, second by id', T3, D1),
+      fetched('c', 'Deleted last', T2, D3),
+      fetched('a2', 'Tie, first by id', T2, D1),
+    ];
+
+    expect(inDeletionOrder(items).map((item) => item.id)).toEqual(['c', 'b', 'a2', 'a1']);
+  });
+
+  it('sorts binned lists the same way, whenever they were joined', () => {
+    const lists = [
+      joinedList('b', T3, D2),
+      joinedList('a1', T1, D1),
+      joinedList('c', T1, D3),
+      joinedList('a2', T2, D1),
+    ];
+
+    expect(inDeletionOrder(lists).map((list) => list.id)).toEqual(['c', 'b', 'a2', 'a1']);
+  });
+
+  it('returns a new array and leaves the input alone', () => {
+    const items = [fetched('a', 'Older', T1, D1), fetched('b', 'Newer', T2, D2)];
+    const sorted = inDeletionOrder(items);
+
+    expect(sorted).not.toBe(items);
+    expect(items.map((item) => item.id)).toEqual(['a', 'b']);
   });
 });

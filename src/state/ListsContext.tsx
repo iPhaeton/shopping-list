@@ -16,7 +16,7 @@ import { loadOutbox } from '../lib/outbox';
 import { initialState, listsReducer } from './listsReducer';
 import { replayState } from './replay';
 import type { Blocked } from './restorePlan';
-import type { List, ListCounts, ListCursors, WriteAction } from './types';
+import type { List, ListCounts, ListCursors, Stream, WriteAction } from './types';
 import { useBlockedWrites } from './useBlockedWrites';
 import { useHydration } from './useHydration';
 import { useListWrites } from './useListWrites';
@@ -74,11 +74,11 @@ type ListsContextValue = {
   /** Server truth again, on demand. A read, so it is safe to call at any time after mount. */
   refresh: () => Promise<void>;
   /**
-   * The next page of a list's live rows — and of its bin too, when the screen is showing it.
-   * Resolves once the page is in state, or at once when there is nothing to load: no cursor, or a
-   * page for that list already in flight. A read, so it is safe to call at any time after mount.
+   * The next page of one stream of a list's rows — whichever the screen is showing, the live rows or
+   * the bin. Resolves once the page is in state, or at once when there is nothing to load: no cursor,
+   * or a page for that list already in flight. A read, so it is safe to call at any time after mount.
    */
-  loadMore: (listId: string, includeBin: boolean) => Promise<void>;
+  loadMore: (listId: string, stream: Stream) => Promise<void>;
   /**
    * A list's first page of both streams — call this on entering it. A no-op once `itemsLoaded` is
    * already true, or while a fetch for that list is already in flight. A read, so it is safe to
@@ -86,11 +86,11 @@ type ListsContextValue = {
    */
   loadListItems: (listId: string) => Promise<void>;
   /**
-   * The next page of lists — live, and the bin too when the screen is showing it. Resolves once the
-   * page is in state, or at once when there is nothing to load: no cursor, or a page already in
-   * flight. A read, so it is safe to call at any time after mount.
+   * The next page of one stream of lists — live, or the bin while the screen is showing it. Resolves
+   * once the page is in state, or at once when there is nothing to load: no cursor, or a page already
+   * in flight. A read, so it is safe to call at any time after mount.
    */
-  loadMoreLists: (includeBin: boolean) => Promise<void>;
+  loadMoreLists: (stream: Stream) => Promise<void>;
   /**
    * One list by id, for a screen whose list is not in state — it can sort past the pages loaded so
    * far once somebody else bins it. Resolves to the list, or `null` when this account cannot see it.

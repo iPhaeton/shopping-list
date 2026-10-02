@@ -23,11 +23,11 @@
 -- PARAMETERS -- a `-v name=value` on the command line wins over the default here.
 \if :{?user_id}
 \else
-  \set user_id '8d6d4eb9-db34-4adc-9277-b5e986f83a6d'
+  \set user_id 'c0309447-2392-4c47-a7fb-b63c1f3aae60'
 \endif
 \if :{?list_count}
 \else
-  \set list_count 99
+  \set list_count 5000
 \endif
 \if :{?min_items}
 \else

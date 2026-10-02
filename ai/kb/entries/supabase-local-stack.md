@@ -4,8 +4,8 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, a572bd3]
-last_verified: 2026-09-29
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, a572bd3]
+last_verified: 2026-10-02
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && grep -q 'is already defined and IS NOT overwritten' node_modules/@expo/env/build/index.js && grep -qF "mode !== 'test' && \`.env.local\`, \`.env.\${mode}\`, \`.env\`" node_modules/@expo/env/build/index.js
 related: [trigram-index-needs-three-characters, cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
@@ -72,19 +72,20 @@ Three things bite here:
   overwrites a key already set, so a shell value is missing from the `env: export` line. On
   2026-09-09 (SDK 54) the file beat the shell, through the dev-only `expo/virtual/env` spreading the
   `.env*` files over `process.env`; that code is still there, but its `require.context` now comes out
-  empty, for an unidentified reason. Read the bundle before trusting either order. The `verify:` pins
-  `@expo/env`'s order; no static check can see the empty context.
+  empty, for an unidentified reason, and no static check can see that. Read the bundle first.
 
-**After editing a migration or `supabase/config.toml`:** `npx supabase start` on running containers
-applies no migrations, and the auth container does not reread `config.toml` while it is up. Both
-symptoms — "my table isn't there", "my template override did nothing" — clear with:
+**A new migration: `npx supabase migration up --local`** applies only what is pending and keeps
+every row, the load-test users below included. **An edited migration or `supabase/config.toml`**
+needs more: `start` on running containers applies nothing, and auth does not reread the config while
+up. "My table isn't there" and "my template override did nothing" clear only with this, which
+**wipes every row**:
 
 ```bash
 npx supabase stop && npx supabase start && npx supabase db reset
 ```
 
 **The local stack may hold 1,000,000 load-test users** — `supabase/scripts/seed-1m-users.sql`
-(commit `a572bd3`), emails `%@loadtest.invalid`, present on 2026-09-29. With them,
+(commit `a572bd3`), emails `%@loadtest.invalid`, present on 2026-10-02. With them,
 `search_users_by_name` takes ~3.5 s cold (245 ms warm), and under build load it hit the
 authenticated role's 8 s `statement_timeout` (HTTP 500, `57014`). Their names also sort ahead of
 seeded ones: "Jor" answers `Aaliyah Jordan 107351`… before `seed.mjs`'s Jordan. Count them before a
@@ -92,8 +93,7 @@ sharing test; the script's own cleanup line or a `db reset` removes them.
 
 **`db reset` wipes the `auth` schema too, and the browser does not know that.** A tab still holding
 a session from before the reset fails its next token refresh with a 400 on `/auth/v1/token`. Nothing
-is broken — clear the site's local storage, or sign in again. It has already been mistaken for a
-real auth failure once, mid-Playwright-run.
+is broken — clear the site's local storage, or sign in again.
 
 **To simulate being offline, abort requests to port 54321 — not `setOffline`.**
 `page.context().setOffline(true)` also blocks the Metro bundle, so the app never boots and a restart
@@ -116,5 +116,5 @@ refuses an UPDATE or DELETE by matching zero rows rather than erroring
 what actually landed; looks are signed off on the simulator ([phone-is-the-product](phone-is-the-product.md)).
 Both native builds have signed in against local too — Android with Google (task 13), iOS by OTP with
 Maestro reading Mailpit (task 20; [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md)).
-Cloud's SMTP and templates are live and have sent one real code, but no device has completed a
-sign-in against production ([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).
+No device has completed a sign-in against production
+([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).

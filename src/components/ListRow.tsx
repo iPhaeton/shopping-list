@@ -47,7 +47,6 @@ export const ListRow = memo(function ListRow({
           {subtitle ? (
             <Text style={[styles.summary, { color: band.ink }]}>{subtitle}</Text>
           ) : null}
-          {deleted ? <Text style={[styles.tag, { color: band.ink }]}>Deleted</Text> : null}
         </View>
         {onSetDeleted ? <View style={styles.actionSpacer} /> : null}
         <ChevronIcon color={band.ink} size={16} />
@@ -96,12 +95,6 @@ const useStyles = themedStyles(() => ({
   summary: {
     fontFamily: fonts.sans,
     fontSize: 15,
-  },
-  tag: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    marginTop: 2,
   },
   // Reserves room for the icon button, which renders in its own absolutely positioned layer below
   // so it stays a separate accessible element rather than nesting inside the row's own Pressable.

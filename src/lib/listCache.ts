@@ -45,8 +45,13 @@ import { inOrder } from './storageQueue';
  * whether to show the Create bar or the sentence that replaces it at a limit. Missing, it would read
  * as `undefined`, and `undefined >= 100` is `false`: the bar would come back at the limit until the
  * first fetch, quietly. `outbox.ts` stays at `1` once more: no queued action changed shape.
+ *
+ * **`8` since the bin is its own view (task 24 step 2).** The bin is paged newest deletion first now,
+ * so its cursors — `cursors.bin`, and every list's `nextBin` — are `(deletedAt, id)` positions. A v7
+ * blob holds `(createdAt, id)` ones, which the new read would take as a place in the wrong order and
+ * page from there. `outbox.ts` stays at `1`: no queued action changed shape.
  */
-const VERSION = 7;
+const VERSION = 8;
 
 const keyFor = (userId: string) => `lists:${userId}`;
 

@@ -1,4 +1,14 @@
-import type { Action, Cursor, Item, List, ListCounts, ListCursors, State } from './types';
+import type {
+  Action,
+  BinCursor,
+  Cursor,
+  Item,
+  List,
+  ListCounts,
+  ListCursors,
+  State,
+  StreamPage,
+} from './types';
 
 /** Before the first fetch: no lists, and no list cursors — "nothing asked yet", not "ended". */
 export const NO_LIST_CURSORS: ListCursors = { live: null, bin: null };
@@ -40,9 +50,7 @@ export function listsReducer(state: State, action: Action): State {
       return {
         ...state,
         lists: insertFetched(state.lists, fresh, (list) => list.joinedAt === null),
-        listCursors: action.stream
-          ? { ...state.listCursors, [action.stream.name]: action.stream.next }
-          : state.listCursors,
+        listCursors: action.stream ? withCursor(state.listCursors, action.stream) : state.listCursors,
       };
     }
 
@@ -279,14 +287,15 @@ function updateList(state: State, listId: string, update: (list: List) => List):
 }
 
 /**
- * The rows a screen shows unless it has been asked for the bin as well.
+ * The rows a screen shows unless it has been switched to the bin — and, below, the rows it shows
+ * when it has.
  *
- * Everything that counts or renders has to go through one of these two. A tombstone reads exactly
+ * Everything that counts or renders has to go through one of these four. A tombstone reads exactly
  * like a live row otherwise, so the mistake is invisible in any test that does not delete something
  * first: a list quietly reads "2 of 47 done" with 42 of them in the bin, and "Nothing on this list"
  * stops appearing once a list has ever held anything.
  *
- * Both return a new array, so a screen passing one to a `FlatList` should memoise it.
+ * All four return a new array, so a screen passing one to a `FlatList` should memoise it.
  */
 export function liveItems(list: List): Item[] {
   return list.items.filter((item) => item.deletedAt === null);
@@ -296,12 +305,20 @@ export function liveLists(lists: List[]): List[] {
   return lists.filter((list) => list.deletedAt === null);
 }
 
+export function binItems(list: List): Item[] {
+  return list.items.filter((item) => item.deletedAt !== null);
+}
+
+export function binLists(lists: List[]): List[] {
+  return lists.filter((list) => list.deletedAt !== null);
+}
+
 export function countDone(list: List): number {
   return liveItems(list).filter((item) => item.doneAt !== null).length;
 }
 
 /**
- * The order the server sends rows in — `(created_at, id)` — with rows the database has not
+ * The order the server sends live rows in — `(created_at, id)` — with rows the database has not
  * stamped yet last, in the order they were added.
  *
  * Needed because `items` is two streams end to end plus whatever was added since, and a row that
@@ -314,13 +331,25 @@ export function inCreationOrder(items: Item[]): Item[] {
 }
 
 /**
- * `inCreationOrder` for lists: the order `fetchLists` pages them in — `(joinedAt, id)`, when you
- * joined each — with an optimistic list last. Needed for the same two reasons one level up: the
+ * `inCreationOrder` for lists: the order `fetchLists` pages the live ones in — `(joinedAt, id)`, when
+ * you joined each — with an optimistic list last. Needed for the same two reasons one level up: the
  * array is two streams end to end plus lists fetched one at a time, and a list that moves between
  * streams keeps its place in it. Returns a new array, so memoise it.
  */
 export function inJoinOrder(lists: List[]): List[] {
   return [...lists].sort((a, b) => byStamp(a.joinedAt, a.id, b.joinedAt, b.id));
+}
+
+/**
+ * The bin's order, for items and lists alike: `(deletedAt, id)` descending, newest deletion first —
+ * the order both bin reads page in, so a page loaded on scroll lands below the rows on screen.
+ *
+ * A row binned on this device carries the tap's device time until a re-read replaces it with the
+ * database's stamp, so clock skew can misplace it until then. Accepted: it heals itself. Meant for
+ * binned rows only; a live row's `null` would sort first. Returns a new array, so memoise it.
+ */
+export function inDeletionOrder<T extends { id: string; deletedAt: string | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => byStamp(b.deletedAt, b.id, a.deletedAt, a.id));
 }
 
 /** `(stamp, id)` ascending, `null` stamps last and in their original order (the sort is stable). */
@@ -332,9 +361,18 @@ function byStamp(aStamp: string | null, aId: string, bStamp: string | null, bId:
   return aId < bId ? -1 : aId > bId ? 1 : 0;
 }
 
-function sameCursor(a: Cursor | null, b: Cursor | null): boolean {
+function sameCursor(a: Cursor | BinCursor | null, b: Cursor | BinCursor | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.createdAt === b.createdAt && a.id === b.id;
+  return a.id === b.id && stampOf(a) === stampOf(b);
+}
+
+function stampOf(cursor: Cursor | BinCursor): string {
+  return 'deletedAt' in cursor ? cursor.deletedAt : cursor.createdAt;
+}
+
+/** `cursors` with `page`'s stream moved to where its next page starts. */
+function withCursor(cursors: ListCursors, page: StreamPage): ListCursors {
+  return page.name === 'live' ? { ...cursors, live: page.next } : { ...cursors, bin: page.next };
 }
 
 /**

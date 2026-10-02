@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddBar } from '../components/AddBar';
 import { Band } from '../components/Band';
+import { BarSentence } from '../components/BarSentence';
 import { BlockedBanner } from '../components/BlockedBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -18,11 +19,11 @@ import { listLimitSentence } from '../lib/limits';
 import type { ListsScreenProps } from '../navigation/types';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
-import { inJoinOrder, liveLists } from '../state/listsReducer';
+import { binLists, inDeletionOrder, inJoinOrder, liveLists } from '../state/listsReducer';
 import { canManageList } from '../state/roles';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { List } from '../state/types';
-import { fonts, radius, spacing } from '../theme';
+import { fonts, spacing } from '../theme';
 
 /** A stable empty array while loading, so the `FlatList`'s `data` prop never allocates a new one. */
 const NONE: List[] = [];
@@ -63,30 +64,38 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
 
   const loading = status === 'loading';
 
-  // Memoised because `liveLists` and `inJoinOrder` return a fresh array every call, which would give
-  // the `FlatList` a new `data` prop on every render.
+  // Memoised because the filters and sorts return a fresh array every call, which would give the
+  // `FlatList` a new `data` prop on every render.
   //
-  // Sorted, both views, as List detail sorts its items: `lists` is two paged streams end to end plus
-  // lists fetched one at a time, and a list that moves between streams keeps its place in the
-  // array. With the bin shown, the sort is what interleaves the two streams by when you joined.
+  // One stream at a time: the live lists by when you joined, or — with "Show deleted" on — the bin
+  // and nothing else, newest deletion first, each in the order its stream is paged in. Sorted either
+  // way, as List detail sorts its items: `lists` is two paged streams end to end plus lists fetched
+  // one at a time, and a list that moves between streams keeps its place in the array.
   const live = useMemo(() => liveLists(lists), [lists]);
-  const ordered = useMemo(() => inJoinOrder(showDeleted ? lists : live), [showDeleted, lists, live]);
+  const bin = useMemo(() => binLists(lists), [lists]);
+  const ordered = useMemo(
+    () => (showDeleted ? inDeletionOrder(bin) : inJoinOrder(live)),
+    [showDeleted, bin, live]
+  );
   const visible = loading ? NONE : ordered;
-  const binned = lists.length - live.length;
+  // Counted only to decide whether the toggle shows: its label carries no number.
+  const binned = bin.length;
 
   // At either list limit the Create bar gives way to the sentence saying so, rather than letting a
   // list appear and vanish a moment later when the database refuses it. The counts are approximate
   // — another member's share moves them unseen — so this is a warning, never the enforcement.
   const full = listLimitSentence(listCounts);
 
-  // Whether a scroll to the end has anything to fetch: the bin's cursor only counts while the bin
-  // is on screen. With no cursor the `FlatList` gets no handler at all, so nothing fires.
-  const more = listCursors.live !== null || (showDeleted && listCursors.bin !== null);
+  // Whether a scroll to the end has anything to fetch — in the stream on screen only, so live mode
+  // never asks for a page of the bin, nor the bin for a live one. With no cursor the `FlatList` gets
+  // no handler at all, so nothing fires.
+  const stream = showDeleted ? 'bin' : 'live';
+  const more = listCursors[stream] !== null;
 
   const loadNextPage = async () => {
     setLoadingMore(true);
     try {
-      await loadMoreLists(showDeleted);
+      await loadMoreLists(stream);
     } finally {
       setLoadingMore(false);
     }
@@ -135,23 +144,20 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
       ) : (
         <>
           <SyncBanner pending={pending} />
-          {full ? (
-            <View style={styles.full}>
-              <Text style={styles.fullText}>{full}</Text>
-            </View>
+          {/* Nothing is created from the bin, so it says what it is in the bar's place. */}
+          {showDeleted ? (
+            <BarSentence>Deleted lists, newest first.</BarSentence>
+          ) : full ? (
+            <BarSentence>{full}</BarSentence>
           ) : (
             <AddBar placeholder="New list name" buttonLabel="Create" onSubmit={(name) => createList(name)} />
           )}
         </>
       )}
       <Horizon ground={bandAt(colors, 0).color}>
-        {!loading && binned > 0 ? (
-          <ShowDeletedToggle
-            checked={showDeleted}
-            count={binned}
-            more={listCursors.bin !== null}
-            onChange={setShowDeleted}
-          />
+        {/* Kept while checked, so restoring the bin's last list does not take away the way back. */}
+        {!loading && (binned > 0 || showDeleted) ? (
+          <ShowDeletedToggle checked={showDeleted} onChange={setShowDeleted} />
         ) : null}
       </Horizon>
     </View>
@@ -203,7 +209,13 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
           // while loading too: the horizon's hill is this band's top edge, and without it the hill
           // would float on sky.
           <Band index={0} style={styles.footer}>
-            {loading ? null : (
+            {loading ? null : showDeleted ? (
+              <EmptyState
+                title="The bin is empty"
+                hint="Deleted lists wait here for 30 days."
+                ink={bandAt(colors, 0).ink}
+              />
+            ) : (
               <EmptyState
                 title="No lists yet"
                 hint="Name your first list above — for example, Groceries."
@@ -270,27 +282,6 @@ const useStyles = themedStyles((colors) => ({
     fontFamily: fonts.serif,
     fontSize: 40,
     color: colors.text,
-  },
-  // The Create bar's own surface — outline, shadow, the 20pt inset — holding the sentence in its
-  // place, so the header keeps its shape at a limit. Two lines on a phone, so a minimum height
-  // rather than the bar's fixed one, and `radius.lg`, the pill's cousin for content that tall.
-  full: {
-    justifyContent: 'center',
-    minHeight: 52,
-    marginHorizontal: 20,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.surfaceOutline,
-    backgroundColor: colors.surface,
-    boxShadow: `0px 3px 16px ${colors.barShadow}`,
-  },
-  fullText: {
-    color: colors.text,
-    fontFamily: fonts.sans,
-    fontSize: 15,
-    lineHeight: 20,
   },
   loadingBlock: {
     alignItems: 'center',

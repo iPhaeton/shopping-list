@@ -22,8 +22,8 @@ import { subscribeToChanges } from '../lib/listsChannel';
 import { ITEMS_FULL } from '../lib/limits';
 import { loadOutbox, saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
-import { NO_LIST_COUNTS, NO_LIST_CURSORS } from './listsReducer';
-import type { Cursor, List, Stream } from './types';
+import { inDeletionOrder, inJoinOrder, NO_LIST_COUNTS, NO_LIST_CURSORS } from './listsReducer';
+import type { BinCursor, Cursor, List, Stream } from './types';
 
 /**
  * `src/lib/listsApi.ts` is mocked at the module boundary, the same seam the auth suites use for
@@ -79,7 +79,10 @@ const api = {
  * the live stream and the rest to the bin, as a single page — or the given cursors, for a test that
  * wants a stream with more to come.
  */
-function pageOf(lists: List[], stream: Stream, next: Partial<Record<Stream, Cursor>> = {}) {
+/** Where each stream's next page starts, in that stream's own key. */
+type NextCursors = { live?: Cursor; bin?: BinCursor };
+
+function pageOf(lists: List[], stream: Stream, next: NextCursors = {}) {
   return {
     lists: lists.filter((list) => (list.deletedAt === null) === (stream === 'live')),
     next: next[stream] ?? null,
@@ -88,12 +91,12 @@ function pageOf(lists: List[], stream: Stream, next: Partial<Record<Stream, Curs
 }
 
 /** Every read of the lists from here on answers from `lists`, both streams. */
-function serveLists(lists: List[], next: Partial<Record<Stream, Cursor>> = {}) {
+function serveLists(lists: List[], next: NextCursors = {}) {
   api.fetchLists.mockImplementation(async (stream) => pageOf(lists, stream, next));
 }
 
 /** The next read of the lists — both of its streams — answers from `lists`, and only that one. */
-function serveListsOnce(lists: List[], next: Partial<Record<Stream, Cursor>> = {}) {
+function serveListsOnce(lists: List[], next: NextCursors = {}) {
   api.fetchLists
     .mockImplementationOnce(async (stream) => pageOf(lists, stream, next))
     .mockImplementationOnce(async (stream) => pageOf(lists, stream, next));
@@ -248,11 +251,11 @@ function Probe() {
       <Button label="restore item" onPress={() => setItemDeleted('l1', 'i1', false)} />
       <Button label="restore blocked" onPress={restoreBlocked} />
       <Button label="discard blocked" onPress={discardBlocked} />
-      <Button label="load more" onPress={() => void loadMore('l1', false)} />
-      <Button label="load more with bin" onPress={() => void loadMore('l1', true)} />
+      <Button label="load more" onPress={() => void loadMore('l1', 'live')} />
+      <Button label="load more bin" onPress={() => void loadMore('l1', 'bin')} />
       <Button label="enter list" onPress={() => void loadListItems(lists[0]?.id ?? 'l1')} />
-      <Button label="load more lists" onPress={() => void loadMoreLists(false)} />
-      <Button label="load more lists with bin" onPress={() => void loadMoreLists(true)} />
+      <Button label="load more lists" onPress={() => void loadMoreLists('live')} />
+      <Button label="load more lists bin" onPress={() => void loadMoreLists('bin')} />
     </>
   );
 }
@@ -1328,11 +1331,12 @@ const fetched = (id: string, title: string, n: number, deletedAt: string | null 
   createdAt: T(n),
 });
 const AFTER_BREAD = { createdAt: T(2), id: 'i2' };
-const AFTER_JAM = { createdAt: T(12), id: 'b2' };
+/** The bin pages newest deletion first: Old jam (deleted at 21) above Jam (at 20), so Jam is last. */
+const AFTER_JAM = { deletedAt: T(20), id: 'b2' };
 /** Page 1 of both streams, each with more to come. */
 const PAGED = {
   ...GROCERIES,
-  items: [fetched('i1', 'Milk', 1), fetched('i2', 'Bread', 2), fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+  items: [fetched('i1', 'Milk', 1), fetched('i2', 'Bread', 2), fetched('b1', 'Old jam', 11, T(21)), fetched('b2', 'Jam', 12, T(20))],
   nextLive: AFTER_BREAD,
   nextBin: AFTER_JAM,
 };
@@ -1357,26 +1361,27 @@ describe('loading more', () => {
     expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', AFTER_BREAD);
   });
 
-  it('reads the bin as well when asked', async () => {
+  /** The bin is its own view, so a page of it is asked for alone — never alongside a live one. */
+  it('reads only the bin when the bin is asked for', async () => {
     serveLists([PAGED]);
-    api.fetchItems
-      .mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null })
-      .mockResolvedValueOnce({ items: [fetched('b3', 'Rye', 13, T(20))], next: null, error: null });
+    api.fetchItems.mockResolvedValueOnce({ items: [fetched('b3', 'Rye', 13, T(19))], next: null, error: null });
     await renderProbe();
 
-    await fireEvent.press(screen.getByLabelText('load more with bin'));
+    await fireEvent.press(screen.getByLabelText('load more bin'));
 
     await waitFor(() => expect(screen.getByText(/Rye \[binned\]/)).toBeOnTheScreen());
-    expect(api.fetchItems).toHaveBeenCalledWith('l1', 'live', AFTER_BREAD);
+    expect(api.fetchItems).toHaveBeenCalledTimes(1);
     expect(api.fetchItems).toHaveBeenCalledWith('l1', 'bin', AFTER_JAM);
-    expect(screen.getByText(/^l1 Groceries: /)).toBeOnTheScreen();
+    // The live cursor is untouched: live mode asks for its own next page when it is shown.
+    expect(screen.getByText(/^l1 Groceries \[more\]: /)).toBeOnTheScreen();
   });
 
   it('asks for nothing when every row is already here', async () => {
     serveLists([GROCERIES]);
     await renderProbe();
 
-    await fireEvent.press(screen.getByLabelText('load more with bin'));
+    await fireEvent.press(screen.getByLabelText('load more'));
+    await fireEvent.press(screen.getByLabelText('load more bin'));
 
     expect(api.fetchItems).not.toHaveBeenCalled();
   });
@@ -1436,7 +1441,7 @@ describe('a re-fetch with pages loaded', () => {
         error: null,
       })
       .mockResolvedValueOnce({
-        items: [fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+        items: [fetched('b1', 'Old jam', 11, T(21)), fetched('b2', 'Jam', 12, T(20))],
         next: AFTER_JAM,
         error: null,
       });
@@ -1465,7 +1470,7 @@ describe('a re-fetch with pages loaded', () => {
       })
       .mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null })
       .mockResolvedValueOnce({
-        items: [fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+        items: [fetched('b1', 'Old jam', 11, T(21)), fetched('b2', 'Jam', 12, T(20))],
         next: AFTER_JAM,
         error: null,
       });
@@ -1530,7 +1535,7 @@ it('fetches the tombstone a blocked write landed on when the bin does not reach 
       error: null,
     })
     .mockResolvedValueOnce({
-      items: [fetched('b1', 'Old jam', 11, T(20)), fetched('b2', 'Jam', 12, T(20))],
+      items: [fetched('b1', 'Old jam', 11, T(21)), fetched('b2', 'Jam', 12, T(20))],
       next: AFTER_JAM,
       error: null,
     });
@@ -1584,17 +1589,31 @@ function member(n: number, deletedAt: string | null = null, name = `Member ${n}`
   };
 }
 
-/** `fetchLists` over `all`, `size` lists a page, keyset on `(joinedAt, id)` like the real read. */
+/**
+ * `fetchLists` over `all`, `size` lists a page, keyset like the real read: the live lists on
+ * `(joinedAt, id)` ascending, the bin on `(deletedAt, id)` descending.
+ */
 function servePagedLists(all: List[], size: number) {
   api.fetchLists.mockImplementation(async (stream, after) => {
-    const rest = pageOf(all, stream).lists.filter((list) => {
+    const ordered =
+      stream === 'live' ? inJoinOrder(pageOf(all, 'live').lists) : inDeletionOrder(pageOf(all, 'bin').lists);
+    const rest = ordered.filter((list) => {
       if (after === null) return true;
+      if ('deletedAt' in after) {
+        const at = list.deletedAt as string;
+        return at < after.deletedAt || (at === after.deletedAt && list.id < after.id);
+      }
       const at = list.joinedAt as string;
       return at > after.createdAt || (at === after.createdAt && list.id > after.id);
     });
     const page = rest.slice(0, size);
     const last = page[page.length - 1];
-    const next = page.length === size ? { createdAt: last.joinedAt as string, id: last.id } : null;
+    const next =
+      page.length < size
+        ? null
+        : stream === 'live'
+          ? { createdAt: last.joinedAt as string, id: last.id }
+          : { deletedAt: last.deletedAt as string, id: last.id };
     return { lists: page, next, error: null };
   });
 }
@@ -1630,17 +1649,26 @@ describe('lists, paged', () => {
     expect(screen.getByText('list cursors: m04, end')).toBeOnTheScreen();
   });
 
-  it('reads the next page of the bin only when asked', async () => {
-    servePagedLists([member(1), ...[2, 3, 4].map((n) => member(n, BINNED_AT))], 2);
+  /**
+   * The bin pages newest deletion first and only when asked: page 1 holds the two most recently
+   * binned, and the next page continues below them on `(deletedAt, id)`. Asking for it asks for no
+   * live page, and the live scroll asks for no bin page.
+   */
+  it('reads the next page of the bin only when asked, newest deletion first', async () => {
+    const binnedAt = (n: number) => `2026-09-10T09:00:0${n}.000Z`;
+    // Joined 2, 3, 4, deleted in the opposite order: m02 last, so it leads the bin.
+    servePagedLists([member(1), member(2, binnedAt(9)), member(3, binnedAt(5)), member(4, binnedAt(1))], 2);
     await renderProbe();
     expect(screen.getByText('list cursors: end, m03')).toBeOnTheScreen();
+    expect(screen.queryByText(row(4))).not.toBeOnTheScreen();
 
+    api.fetchLists.mockClear();
     await fireEvent.press(screen.getByLabelText('load more lists'));
-    expect(api.fetchLists).not.toHaveBeenCalledWith('bin', cursorAt(3));
+    expect(api.fetchLists).not.toHaveBeenCalled();
 
-    await fireEvent.press(screen.getByLabelText('load more lists with bin'));
+    await fireEvent.press(screen.getByLabelText('load more lists bin'));
     await waitFor(() => expect(screen.getByText(row(4))).toBeOnTheScreen());
-    expect(api.fetchLists).toHaveBeenCalledWith('bin', cursorAt(3));
+    expect(api.fetchLists.mock.calls).toEqual([['bin', { deletedAt: binnedAt(5), id: 'm03' }]]);
     expect(screen.getByText('list cursors: end, end')).toBeOnTheScreen();
   });
 
@@ -1734,9 +1762,9 @@ describe('lists, paged', () => {
     await renderProbe();
 
     api.renameList.mockResolvedValue(BLOCKED);
-    // Page 1 of the bin is full of lists binned earlier, and l1 sorts after them.
-    const OLDER = { ...member(1, BINNED_AT), joinedAt: '2026-09-01T07:00:00+00:00' };
-    serveLists([OLDER], { bin: { createdAt: OLDER.joinedAt, id: OLDER.id } });
+    // Page 1 of the bin is full of lists binned since l1 was, and l1 sorts after them.
+    const SINCE = { ...member(1, BINNED_AT), joinedAt: '2026-09-01T07:00:00+00:00' };
+    serveLists([SINCE], { bin: { deletedAt: BINNED_AT, id: SINCE.id } });
     api.fetchList.mockResolvedValue({
       list: { ...BINNED_LIST, items: [], itemsLoaded: false },
       error: null,

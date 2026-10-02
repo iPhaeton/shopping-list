@@ -4,11 +4,11 @@ import { fetchItems, fetchList, fetchLists } from '../lib/listsApi';
 import { foldPage } from './foldPage';
 import { initialState, listsReducer } from './listsReducer';
 import { replay } from './replay';
-import type { Action, Cursor, List, ListCursors, Stream, WriteAction } from './types';
+import type { Action, List, ListCursors, Stream, WriteAction } from './types';
 
 /**
- * The next page on scroll — of a list's rows, and of the lists themselves — live, and the bin once
- * the screen asks for it; and one list by id, for a list something needs but has not paged to. Split
+ * The next page on scroll — of a list's rows, and of the lists themselves — of whichever stream the
+ * screen is showing; and one list by id, for a list something needs but has not paged to. Split
  * out of `ListsContext` because, unlike the fetch/retry core around `hydrate`/`flush`, paging shares
  * no guard with either: it reads `listsRef`/`listCursorsRef`/`live` and folds a page in through
  * `foldPage`, and that is the whole surface it needs.
@@ -32,37 +32,41 @@ export function usePaging({
   const pagingLists = useRef(false);
 
   /**
-   * The next page of one list, on scroll.
+   * The next page of one stream of one list, on scroll.
    *
    * A read, so it carries none of `refresh`'s guards and may overlap a `hydrate`: a page that lands
    * during one is either included in the re-read `hydrate` does anyway, or dropped by the replace
    * and reloaded on the next scroll — both correct, neither worth a guard. What must not overlap is
    * still a flush and a fetch, and nothing here touches that.
    *
-   * The bin only when asked, because the screen only shows it when asked, and one list at a time:
-   * a scroll fires `onEndReached` more than once, and the second call finds the first in `paging`.
-   * A page that fails is silent — the cursor is untouched, so the next scroll simply asks again —
-   * since `error` is for a write the database refused, and a read hiccup is not that.
+   * Only the stream the screen is showing, since the screen shows one at a time: live mode never
+   * asks for a page of the bin, and the bin never for a live one. One list at a time: a scroll fires
+   * `onEndReached` more than once, and the second call finds the first in `paging`. A page that
+   * fails is silent — the cursor is untouched, so the next scroll simply asks again — since `error`
+   * is for a write the database refused, and a read hiccup is not that.
    */
-  const loadMore = useCallback(async (listId: string, includeBin: boolean) => {
+  const loadMore = useCallback(async (listId: string, stream: Stream) => {
     if (paging.current.has(listId)) return;
     const list = listsRef.current.find((candidate) => candidate.id === listId);
     if (!list) return;
-
-    const pages: [Stream, Cursor | null][] = [['live', list.nextLive]];
-    if (includeBin) pages.push(['bin', list.nextBin]);
+    if ((stream === 'live' ? list.nextLive : list.nextBin) === null) return;
 
     paging.current.add(listId);
     try {
-      for (const [stream, after] of pages) {
-        if (after === null) continue;
+      // One branch per stream, so each cursor is paired with its own stream's name.
+      const page =
+        stream === 'live'
+          ? await fetchItems(listId, 'live', list.nextLive).then(({ items, next }) => ({
+              items,
+              stream: { name: 'live', next } as const,
+            }))
+          : await fetchItems(listId, 'bin', list.nextBin).then(({ items, next }) => ({
+              items,
+              stream: { name: 'bin', next } as const,
+            }));
+      if (!live.current || !page.items) return;
 
-        const { items, next } = await fetchItems(listId, stream, after);
-        if (!live.current) return;
-        if (!items) continue;
-
-        foldPage(dispatch, queue, { type: 'items/pageLoaded', listId, items, stream: { name: stream, next } });
-      }
+      foldPage(dispatch, queue, { type: 'items/pageLoaded', listId, items: page.items, stream: page.stream });
     } finally {
       paging.current.delete(listId);
     }
@@ -105,30 +109,33 @@ export function usePaging({
   }, []);
 
   /**
-   * `loadMore` one level up: the next page of lists on the Lists screen's scroll — live, and the bin
-   * as well while "Show deleted" is on. Same rules, for the same reasons: a read, so it may overlap a
-   * `hydrate` (the page is either re-read by it or dropped by its replace and asked for again on the
-   * next scroll); one request at a time; a failed page is silent and leaves the cursor for the next
-   * scroll to retry.
+   * `loadMore` one level up: the next page of lists on the Lists screen's scroll — live, or the bin
+   * while "Show deleted" is on, never both. Same rules, for the same reasons: a read, so it may
+   * overlap a `hydrate` (the page is either re-read by it or dropped by its replace and asked for
+   * again on the next scroll); one request at a time; a failed page is silent and leaves the cursor
+   * for the next scroll to retry.
    */
-  const loadMoreLists = useCallback(async (includeBin: boolean) => {
+  const loadMoreLists = useCallback(async (stream: Stream) => {
     if (pagingLists.current) return;
 
     const cursors = listCursorsRef.current;
-    const pages: [Stream, Cursor | null][] = [['live', cursors.live]];
-    if (includeBin) pages.push(['bin', cursors.bin]);
+    if (cursors[stream] === null) return;
 
     pagingLists.current = true;
     try {
-      for (const [stream, after] of pages) {
-        if (after === null) continue;
+      const page =
+        stream === 'live'
+          ? await fetchLists('live', cursors.live).then(({ lists, next }) => ({
+              lists,
+              stream: { name: 'live', next } as const,
+            }))
+          : await fetchLists('bin', cursors.bin).then(({ lists, next }) => ({
+              lists,
+              stream: { name: 'bin', next } as const,
+            }));
+      if (!live.current || !page.lists) return;
 
-        const { lists, next } = await fetchLists(stream, after);
-        if (!live.current) return;
-        if (!lists) continue;
-
-        foldPage(dispatch, queue, { type: 'lists/pageLoaded', lists, stream: { name: stream, next } });
-      }
+      foldPage(dispatch, queue, { type: 'lists/pageLoaded', lists: page.lists, stream: page.stream });
     } finally {
       pagingLists.current = false;
     }
@@ -136,9 +143,9 @@ export function usePaging({
 
   /**
    * One list by id, folded in with no `stream` so the list cursors stay where they are — for a list
-   * that is needed but lies past the pages loaded so far. Somebody else binned it, and it now sorts
-   * past the loaded pages of the bin: the target of a blocked write, or the list List detail has
-   * open. Resolves to the list it folded in, or `null` when it is not visible to this account (or the
+   * that is needed but lies past the pages loaded so far. Somebody else binned it, and more than a
+   * page of lists has been binned since — the bin is newest first — so it sorts past the loaded
+   * pages of the bin: the target of a blocked write, or the list List detail has open. Resolves to the list it folded in, or `null` when it is not visible to this account (or the
    * read failed), so a caller can go on to what hangs off it.
    */
   const loadList = useCallback(async (listId: string): Promise<List | null> => {
@@ -160,3 +167,4 @@ export function usePaging({
 
   return { loadMore, loadListItems, loadMoreLists, loadList };
 }
+

@@ -4,8 +4,8 @@ title: A queued write can land on something in the bin — `target_deleted` is n
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, deletion, architecture]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
-last_verified: 2026-10-01
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, src/state/restorePlan.ts, src/state/useBlockedWrites.ts, src/state/useOutbox.ts, src/lib/listsApi.ts]
+last_verified: 2026-10-02
 verify: grep -q "create type public.write_outcome as enum ('applied', 'target_deleted');" supabase/migrations/20260910000000_deletion.sql && grep -q "verdict === 'ok' && outcome === 'target_deleted'" src/state/useOutbox.ts && grep -B6 'setBlocked({ op' src/state/useOutbox.ts | grep -q 'await hydrate();' && grep -B4 'setBlocked({ op' src/state/useOutbox.ts | grep -q 'await fetchMissingTarget(op, loaded);' && grep -q '?? (await loadList(listId))' src/state/useOutbox.ts && grep -q 'queueFirst(queue.current, restore)' src/state/useBlockedWrites.ts && grep -q 'restorePlan(lists, blocked).length > 0' src/state/useBlockedWrites.ts && grep -q "rpc('add_item'" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts && awk '/create function public.set_item_done/,/^\$\$;/' supabase/migrations/20260910000000_deletion.sql | grep -E "raise exception|return 'target_deleted'" | tail -2 | head -1 | grep -q 'raise exception'
 related: [deletion-is-a-tombstone, writes-retry-from-an-outbox, refused-writes-return-zero-rows, server-stamps-done-at, first-fetch-replaces-list-state, list-data-scoped-by-rls, queries-go-through-a11y-labels, session-revoked-write-redirects, limit-checks-pass-an-applied-resend]
 ---
@@ -44,13 +44,15 @@ duplicated into a return value that could not enforce it anyway.
   banner, no error, and a tick that never happened. Jest batched the two updates into one render and
   saw nothing; the browser caught it on the first real run. The regression test asserts the *order*
   (no prompt while the fetch is in flight) rather than the outcome, and was checked against the old
-  code to confirm it fails there. **`hydrate()` alone no longer reaches every tombstone**: it
-  re-reads only the pages already loaded, and a list or item somebody else binned can sort past the
-  loaded pages of its bin. So `fetchMissingTarget` ([useOutbox.ts](../../../src/state/useOutbox.ts))
-  reads each by id before the announcement — the list through `loadList` (task 23, once lists were
-  paged), then the item through `fetchItem` — and skipping either brings back the same silent
-  discard. "fetches the list a blocked write landed on when the bin pages do not reach it" fails
-  without the list read.
+  code to confirm it fails there. **`hydrate()` alone does not reach every tombstone**: it re-reads
+  only the pages already loaded. The bin is newest deletion first (task 24), so a list binned
+  elsewhere usually lands on page 1 — but not once more than a page of lists has been binned since
+  (rare, not impossible); and an item is missing whenever its list's items were never opened, which
+  is most blocked writes on items. So `fetchMissingTarget`
+  ([useOutbox.ts](../../../src/state/useOutbox.ts)) reads each by id before the announcement — the
+  list through `loadList`, then the item through `fetchItem` — and skipping either brings back the
+  same silent discard. "fetches the list a blocked write landed on when the bin pages do not reach
+  it" fails without the list read.
 - **Restores are prepended with `queueFirst`, not enqueued.** The blocked write is still first, so an
   append would send it before the thing meant to unblock it. And **both** tombstones are lifted when
   an item was binned inside a binned list — restoring only the list blocks the retry again on the

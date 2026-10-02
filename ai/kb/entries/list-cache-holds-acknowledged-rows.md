@@ -4,9 +4,9 @@ title: The list cache holds rows the database acknowledged — never the replaye
 type: gotcha
 status: current
 tags: [state, persistence, offline, cache]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, src/lib/listCache.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
-last_verified: 2026-10-01
-verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists, pages.cursors, read.counts)' src/state/useHydration.ts && grep -q 'writeCachedLists(userId, state.lists, state.listCursors, state.listCounts)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(.*replay' src/state/useHydration.ts && ! grep -q 'writeCachedLists(userId, loaded' src/state/useHydration.ts && grep -q '!isCounts(stored.counts)' src/lib/listCache.ts && grep -q 'const VERSION = 7;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, src/lib/listCache.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
+last_verified: 2026-10-02
+verify: grep -q "status === 'ready' && pending === 0" src/state/ListsContext.tsx && grep -q 'writeCachedLists(userId, lists, pages.cursors, read.counts)' src/state/useHydration.ts && grep -q 'writeCachedLists(userId, state.lists, state.listCursors, state.listCounts)' src/state/ListsContext.tsx && ! grep -q 'writeCachedLists(.*replay' src/state/useHydration.ts && ! grep -q 'writeCachedLists(userId, loaded' src/state/useHydration.ts && grep -q '!isCounts(stored.counts)' src/lib/listCache.ts && grep -q 'const VERSION = 8;' src/lib/listCache.ts && grep -q 'const VERSION = 1;' src/lib/outbox.ts
 related: [writes-retry-from-an-outbox, first-fetch-replaces-list-state, update-list-identity-preserving, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack, expo-crypto-undefined-under-jest]
 ---
 
@@ -60,8 +60,9 @@ migration instead if it ever comes to that. Step 7's sharing UI is the worked ex
 bumping either: it added a fourth `WriteAction` (`list/renamed`) and no field on `List`, so a cached
 v2 blob is still exactly right and a queued v1 op is still replayable.
 
-**The cache version is `7` since task 23 step 2, and every bump so far was required: each added a
-field that an old blob reads back as `undefined`, and each failed silently in its own way.** Step 9's
+**The cache version is `8` since task 24 step 2, and every bump so far was required.** The first
+five each added a field that an old blob reads back as `undefined`, and each failed silently in its
+own way. Step 9's
 `deletedAt` ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)): `undefined !== null` is
 **`true`**, so every cached row read as deleted and the first screen after the upgrade was empty.
 Step 11's `nextLive` / `nextBin`: `undefined` read as "there is more", so the first scroll asked for a
@@ -72,8 +73,12 @@ loaded list when `hydrate` sizes its re-read, and sorted among fetched ones. Tas
 `counts`: `undefined >= 100` is `false`, so at a limit the Create bar came back until the first
 fetch. The comparison bites outside the cache too, where no version helps: `toList` / `toItem` in
 [listsApi](../../../src/lib/listsApi.ts) coalesce the timestamps with `?? null`, because a column
-left out of the `select` string arrives `undefined`. `outbox.ts` stayed at `1` every time — no queued
-action changed shape, and `list/created` still mints `joinedAt: null` in the reducer.
+left out of the `select` string arrives `undefined`. **Task 24 step 2's bump added no field: a cursor
+changed meaning.** The bin now pages newest deletion first, so `cursors.bin` and every list's
+`nextBin` are `(deletedAt, id)` positions, and a v7 one is a `(createdAt, id)` place in the old order.
+`isCursors` only asks "object or `null`", so nothing but `v` tells the two apart — **bump on a change
+of meaning, not only of shape.** `outbox.ts` stayed at `1` every time — no queued action changed
+shape, and `list/created` still mints `joinedAt: null` in the reducer.
 
 **The cache holds every page that was loaded, cursors included — of each list's items since step 11,
 and of the lists themselves since task 23 step 1.** The blob is `{ v, lists, cursors, counts,
@@ -92,5 +97,5 @@ numbers plus writes it has since taken.
 
 The `verify:` command asserts all of it: the acknowledged-rows effect still exists, `hydrate` and the
 effect still pass the cursors and counts, `hydrate` caches the counts it read, nothing caches a
-replayed result, an old blob without counts is dropped, and the two versions are still `7` and `1` —
+replayed result, an old blob without counts is dropped, and the two versions are still `8` and `1` —
 a "tidy-up" that syncs them fails the check.

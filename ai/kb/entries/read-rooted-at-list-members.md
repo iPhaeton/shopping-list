@@ -4,10 +4,10 @@ title: The read starts at list_members, and every policy predicate is an uncorre
 type: decision
 status: current
 tags: [supabase, postgres, rls, performance, persistence]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql, supabase/migrations/20261001000000_list_limits.sql, src/lib/listsApi.ts]
-last_verified: 2026-10-01
-verify: grep -q "from('list_members')" src/lib/listsApi.ts && grep -Fq "'role, created_at, lists!inner ( id, name, deleted_at )'" src/lib/listsApi.ts && grep -Fq ".order('created_at').order('list_id').limit(limit)" src/lib/listsApi.ts && grep -A3 "\.gte('created_at', after.createdAt)" src/lib/listsApi.ts | grep -Fq 'and(created_at.eq."${after.createdAt}",list_id.gt."${after.id}")' && grep -q 'create index on public.list_members (user_id, created_at);' supabase/migrations/20260907000000_list_sharing.sql && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security invoker' && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q "set search_path = ''" && grep -q "from('items').select(ITEM_COLUMNS).eq('list_id', listId)" src/lib/listsApi.ts && grep -A3 "\.gte('created_at', after.createdAt)" src/lib/listsApi.ts | grep -Fq 'created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",id.gt."${after.id}")' && grep -q "create index on public.items (list_id, created_at);" supabase/migrations/20260831000000_lists.sql && awk '/^create function public.my_list_counts/,/^\$\$;/' supabase/migrations/*.sql | grep -q 'security invoker' && awk '/^create function public.my_list_counts/,/^\$\$;/' supabase/migrations/*.sql | grep -q 'from public.list_members m'
-related: [list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack]
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, supabase/migrations/20260907000000_list_sharing.sql, supabase/migrations/20261001000000_list_limits.sql, src/lib/listsApi.ts]
+last_verified: 2026-10-02
+verify: grep -q "from('list_members')" src/lib/listsApi.ts && grep -Fq "'role, created_at, lists!inner ( id, name, deleted_at )'" src/lib/listsApi.ts && test "$(grep -c 'select(MEMBERSHIP_COLUMNS)' src/lib/listsApi.ts)" -ge 2 && ! grep -A1 "from('lists')" src/lib/listsApi.ts | grep -q 'select(' && grep -q 'create index on public.list_members (user_id, created_at);' supabase/migrations/20260907000000_list_sharing.sql && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security invoker' && grep -A6 'create function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q "set search_path = ''" && grep -q "from('items').select(ITEM_COLUMNS).eq('list_id', listId)" src/lib/listsApi.ts && awk '/^create function public.my_list_counts/,/^\$\$;/' supabase/migrations/*.sql | grep -q 'security invoker' && awk '/^create function public.my_list_counts/,/^\$\$;/' supabase/migrations/*.sql | grep -q 'from public.list_members m'
+related: [keyset-paging-in-the-order-shown, list-data-scoped-by-rls, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, supabase-local-stack]
 ---
 
 Sharing had a hard performance requirement — 1,000,000 rows in `lists` and "the lists I can see" must
@@ -49,36 +49,17 @@ may pull it up into a semi-join; **an RLS policy qual becomes a `SubPlan` either
 pulled up.** So the clause stays. A plan measured on a scratch table with a different query shape is
 not evidence about a policy.
 
-**`fetchItems` is rooted at `items` on purpose — measured, not assumed.** It is the keyset
-continuation of one stream of one list: `.eq('list_id')` picks the list (RLS still decides
-visibility; this is not the client filtering for authorisation), the `or` is the `(created_at, id)`
-keyset, and **a redundant `created_at >= cursor` beside the `or` is what makes paging cheap.** At 1M
-items as `authenticated`, page of 400, cursor mid-stream:
+**Paging is its own decision:
+[keyset-paging-in-the-order-shown](keyset-paging-in-the-order-shown.md).** Both streams of
+`fetchLists` — live, and since task 24 step 2 the bin, ordered by the embed's `deleted_at` — keep
+this root and this `!inner` embed. `fetchItems` is rooted at `items` on purpose, measured: it pages
+one list's stream, `.eq('list_id')` picks the list, and RLS still decides visibility — the client is
+not filtering for authorisation. `fetchItem(id)` by primary key serves the blocked-write path
+([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)). **Neither lists read is an
+ordered index walk:** `auth.uid()` is an InitPlan the planner cannot see through, so a page of lists
+costs every membership after its cursor, and every page of the bin costs the whole account.
 
-| shape | index cond | buffers | time |
-|---|---|---|---|
-| `or` only | `list_id` | 121 | 3.2 ms |
-| `or` + `>=` | `list_id, created_at >=` | 23 | 0.40 ms |
-
-The bare `or` walks the list from its first row, so a full scroll is quadratic in list length; the
-`gte` turns the index condition into a range from the cursor. The `(list_id, created_at)` index is
-enough: a `(…, id)` index only removes a 27 kB incremental sort, and partial per-stream indexes save
-three buffers — the signal for those is a list whose bin dwarfs its live rows *and* is paged often.
-The step-11 log has the full table. `fetchItem(id)` by primary key serves the blocked-write path
-([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
-
-**`fetchLists` is paged the same way since task 23**, keyset on the membership's `(created_at,
-list_id)` — when you joined — with the same redundant `gte`, one stream per request (live or bin,
-through the embed's `deleted_at`). It carries no items. **Its plan is not an ordered index walk that
-stops at 100:** `auth.uid()` is an InitPlan the planner cannot see through, so it assumes the average
-~20 memberships per account and picks a Bitmap Index Scan on `(user_id, created_at)`, the nested loop
-into `lists_pkey`, then a top-N sort. **So cost tracks your memberships after the cursor, for either
-stream, and page 1 costs the whole account** — 1,649 buffers / ~2 ms at 402 memberships, 8,097 /
-~7 ms at 2,000, about what the old single read cost. The `gte` lands in the index cond and is what
-bounds a continuation (849 buffers against 1,649). No index was added; the signal for one is accounts
-with thousands of memberships. The step-23 log has the full table.
-
-**`my_list_counts()` is the third read rooted here** (task 23 step 2): invoker, from `list_members`
+**`my_list_counts()` is rooted here too** (task 23 step 2): invoker, from `list_members`
 with an explicit `user_id` predicate, beside page 1 on every full `hydrate` and costing about as much
 (1,632 buffers / ~1 ms at 402 memberships). **The limit checks are `security definer`, and that does
 not break the rule above**: `check_list_limits` counts somebody else's rows, once per membership
@@ -113,8 +94,8 @@ tracks the table — rather than measured; a 10M-row run was never done. Over HT
 
 **What to do:** treat rules 1–3 as the contract. A new policy on list data is another uncorrelated
 `in (select ... from public.my_memberships() ...)`; a new read of list data starts at `list_members`
-unless you have measured otherwise — `fetchItems` is the worked example. Keep the `gte` in both
-keyset reads. The `verify:` command asserts the list read still roots at `list_members` with an inner
-embed and its `(created_at, list_id)` keyset, that both keyset reads keep the `gte`, that both indexes
-the plans depend on still exist, that `my_memberships()` is still `security invoker` with its
-`search_path` clause intact, and that `my_list_counts()` is invoker and rooted at `list_members`.
+unless you have measured otherwise — `fetchItems` is the worked example. The `verify:` command
+asserts both lists reads still root at `list_members` with the inner embed and that nothing reads
+from `lists` directly, that the `(user_id, created_at)` index still exists, that `my_memberships()`
+is still `security invoker` with its `search_path` clause intact, that `fetchItems` still picks its
+list by `list_id`, and that `my_list_counts()` is invoker and rooted at `list_members`.

@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddBar } from '../components/AddBar';
+import { BarSentence } from '../components/BarSentence';
 import { BlockedBanner } from '../components/BlockedBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -18,7 +19,7 @@ import { SyncBanner } from '../components/SyncBanner';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
-import { inCreationOrder, liveItems } from '../state/listsReducer';
+import { binItems, inCreationOrder, inDeletionOrder, liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Item } from '../state/types';
@@ -93,25 +94,30 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
 
   // Memoised so the `FlatList` is not handed a new `data` array on every render.
   //
-  // Sorted, both views: `items` is two streams end to end plus whatever was added since, and a row
-  // that moved between them — restored from the bin — keeps its place in the array. With the bin
-  // shown, the sort is what interleaves page 2 of the live rows with page 1 of the bin by date.
+  // One stream at a time: the live rows oldest first, or — with "Show deleted" on — the bin and
+  // nothing else, newest deletion first, each in the order its stream is paged in. Sorted either
+  // way: `items` is two streams end to end plus whatever was added since, and a row that moved
+  // between them — restored from the bin — keeps its place in the array.
   const live = useMemo(() => (list ? liveItems(list) : []), [list]);
+  const bin = useMemo(() => (list ? binItems(list) : []), [list]);
   const visible = useMemo(
-    () => inCreationOrder(showDeleted && list ? list.items : live),
-    [showDeleted, list, live]
+    () => (showDeleted ? inDeletionOrder(bin) : inCreationOrder(live)),
+    [showDeleted, bin, live]
   );
-  const inBin = (list?.items.length ?? 0) - live.length;
+  // Counted only to decide whether the toggle shows: its label carries no number.
+  const inBin = bin.length;
 
-  // Whether a scroll to the end has anything to fetch: the bin's cursor only counts while the bin
-  // is on screen. With no cursor the `FlatList` gets no handler at all, so nothing fires.
+  // Whether a scroll to the end has anything to fetch — in the stream on screen only, so live mode
+  // never asks for a page of the bin, nor the bin for a live one. With no cursor the `FlatList` gets
+  // no handler at all, so nothing fires.
+  const stream = showDeleted ? 'bin' : 'live';
   const more =
-    list !== undefined && (list.nextLive !== null || (showDeleted && list.nextBin !== null));
+    list !== undefined && (stream === 'live' ? list.nextLive !== null : list.nextBin !== null);
 
   const loadNextPage = async () => {
     setLoadingMore(true);
     try {
-      await loadMore(listId, showDeleted);
+      await loadMore(listId, stream);
     } finally {
       setLoadingMore(false);
     }
@@ -169,12 +175,16 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // the header, since the blocked banner holds up every write behind it until it is answered.
   const pinned = Boolean(error || blocked);
 
-  // Where the Add bar sits on the mockup (y 172), whichever of the three the list calls for. Only
+  // Where the Add bar sits on the mockup (y 172), whichever of the four the list calls for. Only
   // once the items are in: before that nothing may write, and a notice about what you cannot do can
   // wait for the list it is about.
   let slot = null;
   if (list && loaded) {
-    if (editable) {
+    if (editable && showDeleted) {
+      // Nothing is added to the bin, so it says what it is in the bar's place. A reader's notice and
+      // a binned list's, below, are not write controls, so they stay in either view.
+      slot = <BarSentence>Deleted items, newest first.</BarSentence>;
+    } else if (editable) {
       slot = (
         <AddBar
           placeholder="Add an item"
@@ -291,13 +301,9 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
       </View>
 
       <Hillside ground={bandAt(colors, 0).color}>
-        {loaded && inBin > 0 && list ? (
-          <ShowDeletedToggle
-            checked={showDeleted}
-            count={inBin}
-            more={list.nextBin !== null}
-            onChange={setShowDeleted}
-          />
+        {/* Kept while checked, so restoring the bin's last item does not take away the way back. */}
+        {loaded && (inBin > 0 || showDeleted) && list ? (
+          <ShowDeletedToggle checked={showDeleted} onChange={setShowDeleted} />
         ) : null}
       </Hillside>
     </View>
@@ -325,6 +331,8 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
       color={last.ink}
       style={styles.loading}
     />
+  ) : showDeleted ? (
+    <EmptyState title="The bin is empty" hint="Deleted items wait here for 30 days." ink={last.ink} />
   ) : (
     <EmptyState
       title="Nothing on this list"

@@ -1,0 +1,14 @@
+-- The bin is its own view now (task 24 step 2), newest deletion first, and `fetchItems` pages it
+-- keyset on `(deleted_at, id)` descending: `list_id = ? and deleted_at is not null`, a redundant
+-- `deleted_at <= cursor` beside the keyset `or`, `order by deleted_at desc, id desc limit 400`.
+--
+-- This index makes that a backward walk of one list's bin from the cursor that stops after one page,
+-- however large the bin. The bin is unbounded: only the nightly purge trims it, 30 days on. Without
+-- the index the planner had two bad choices. Page 1 walked the purge's `items (deleted_at)` index
+-- backward through every list's recent deletions, keeping only this list's. A deep cursor
+-- intersected that index with `(list_id, created_at)` and sorted the rest of the list's bin
+-- (measured at 1.09M items: ai/tasks/24-search-and-sort/implementation-log-step-2.md).
+--
+-- Partial, so adding, ticking and renaming live items never touch it. The live stream keeps
+-- `(list_id, created_at)`, and the purge keeps `items (deleted_at)`.
+create index items_bin_order_idx on public.items (list_id, deleted_at, id) where deleted_at is not null;
