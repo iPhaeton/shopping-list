@@ -22,3 +22,4 @@
 21. Invitations
 (22. Share input always on screen)
 23. Filter out already invited users in the share list
+24. Lazy load deleted lists and items

@@ -6,23 +6,31 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddBar } from '../components/AddBar';
 import { BarSentence } from '../components/BarSentence';
 import { BlockedBanner } from '../components/BlockedBanner';
+import { CoverageLine } from '../components/CoverageLine';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Hillside } from '../components/Hillside';
 import { ChevronIcon } from '../components/icons';
 import { IconButton } from '../components/IconButton';
 import { ItemRow } from '../components/ItemRow';
+import { ModeButton } from '../components/ModeButton';
 import { PillButton } from '../components/PillButton';
+import { SearchField } from '../components/SearchField';
 import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { SkyFill } from '../components/Sky';
+import { SortButtons } from '../components/SortButtons';
 import { SyncBanner } from '../components/SyncBanner';
+import { coverageLine, NO_MATCHES_HINT, noMatchesTitle, searchSummary } from '../lib/searchCopy';
 import type { ListDetailScreenProps } from '../navigation/types';
+import { arrangeItems, isDefaultSort, nextSort, type SortKey } from '../state/arrange';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
-import { binItems, inCreationOrder, inDeletionOrder, liveItems } from '../state/listsReducer';
+import { binItems, inDeletionOrder, liveItems } from '../state/listsReducer';
 import { canEditItems, canManageList } from '../state/roles';
+import { useSorts } from '../state/SortContext';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Item } from '../state/types';
+import { useCompletion } from '../state/useCompletion';
 import { fonts, radius, spacing } from '../theme';
 
 /**
@@ -36,11 +44,15 @@ const HEADER_GAP = 13;
 const OVERSCROLL_SKY = 1000;
 
 /**
- * How tall the header's sky is on the mockup, top of the screen to the horizon strip. The strip
- * over the status bar draws its slice of a sky this tall, so it lines up with the header's own sky
- * underneath it.
+ * How tall the header's sky is on the mockup in search mode, top of the screen to the horizon strip
+ * — a first guess only. The header is 224–318pt depending on the mode and the lines under the slot,
+ * so the strip over the status bar draws its slice of a sky as tall as the header measures, and
+ * lines up with the header's own sky underneath it, as Sharing's does.
  */
-const DRAWN_SKY_H = 224;
+const SEARCH_SKY_H = 268;
+
+/** List detail's sort buttons, left to right in priority order. */
+const SORT_KEYS: readonly SortKey[] = ['todo', 'az', 'date'];
 
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const styles = useStyles();
@@ -62,10 +74,15 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     discardBlocked,
     loadMore,
     loadListItems,
+    loadAllItems,
     loadList,
     status,
+    readEpoch,
   } = useLists();
   const list = lists.find((candidate) => candidate.id === listId);
+  // This list's own item sort: each list keeps its own, and a list nobody re-sorted is oldest first.
+  const { itemSortFor, setItemSort } = useSorts();
+  const sort = useMemo(() => itemSortFor(listId), [itemSortFor, listId]);
 
   const [renaming, setRenaming] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -77,6 +94,16 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // only said once a read by id agrees. Back to `idle` whenever the list is there, so if a later
   // hydrate drops it again, it is looked up again the same way.
   const [lookup, setLookup] = useState<'idle' | 'pending' | 'done'>('idle');
+  // The search, and which of search or Add holds the slot. Never stored: both reset on leaving the
+  // list, and both survive a trip into the bin and back. Switching modes keeps the query — it
+  // filters in both, so an item added that does not match drops out of view as it lands (the
+  // user's call) — and the sort.
+  const [query, setQuery] = useState('');
+  const [mode, setMode] = useState<'search' | 'create' | null>(null);
+  // Whether the Add bar takes the focus when it mounts: only once Plus asked for it.
+  const [focusAdd, setFocusAdd] = useState(false);
+  // How tall the header's sky measures, for the strip over the status bar.
+  const [skyHeight, setSkyHeight] = useState(SEARCH_SKY_H);
 
   // A list reached from the bin. It is a real list still — restorable, and shared with the same
   // people — so it opens and reads normally; what it does not get is anything that would write to
@@ -92,27 +119,56 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // its items were not. `loadListItems`, triggered below, is on its way.
   const loaded = list?.itemsLoaded ?? false;
 
+  // A binned list is a tombstone, like the bin: no search, so no query applies to it. Its rows keep
+  // the list's stored sort.
+  const shownQuery = binned ? '' : query;
+
   // Memoised so the `FlatList` is not handed a new `data` array on every render.
   //
-  // One stream at a time: the live rows oldest first, or — with "Show deleted" on — the bin and
-  // nothing else, newest deletion first, each in the order its stream is paged in. Sorted either
-  // way: `items` is two streams end to end plus whatever was added since, and a row that moved
-  // between them — restored from the bin — keeps its place in the array.
+  // One stream at a time: the live rows, searched and sorted, or — with "Show deleted" on — the bin
+  // and nothing else, newest deletion first, the order it is paged in and never searched. Sorted
+  // either way: `items` is two streams end to end plus whatever was added since, and a row that
+  // moved between them — restored from the bin — keeps its place in the array.
   const live = useMemo(() => (list ? liveItems(list) : []), [list]);
   const bin = useMemo(() => (list ? binItems(list) : []), [list]);
   const visible = useMemo(
-    () => (showDeleted ? inDeletionOrder(bin) : inCreationOrder(live)),
-    [showDeleted, bin, live]
+    () => (showDeleted ? inDeletionOrder(bin) : arrangeItems(live, { sort, query: shownQuery })),
+    [showDeleted, bin, live, sort, shownQuery]
   );
   // Counted only to decide whether the toggle shows: its label carries no number.
   const inBin = bin.length;
 
+  // Nothing to search: no live row, and none still to load.
+  const emptyAndComplete = loaded && live.length === 0 && list?.nextLive === null;
+
+  // Search is the resting state, except where there is nothing to search and something to add.
+  // Decided once, on the first render with the rows known, and never switched by itself after that.
+  // A reader has no create mode, so whatever was decided, a reader sees search.
+  if (mode === null && loaded) setMode(editable && emptyAndComplete ? 'create' : 'search');
+  const shownMode = editable ? (mode ?? 'search') : 'search';
+
+  // A search or a non-default sort is right only over every live row, so the rest is loaded in the
+  // background while they apply — the results show at once, and the line says how far it got.
+  // "Complete" is never remembered: a cursor that comes back after a re-read needs it again.
+  const searching = shownQuery.trim() !== '';
+  const arranged = searching || !isDefaultSort(sort);
+  const needsCompleting =
+    list !== undefined && loaded && !showDeleted && arranged && list.nextLive !== null;
+  const completeItems = useCallback(
+    (signal: AbortSignal) => loadAllItems(listId, signal),
+    [loadAllItems, listId]
+  );
+  const completion = useCompletion(needsCompleting, completeItems, readEpoch);
+
   // Whether a scroll to the end has anything to fetch — in the stream on screen only, so live mode
   // never asks for a page of the bin, nor the bin for a live one. With no cursor the `FlatList` gets
-  // no handler at all, so nothing fires.
+  // no handler at all, so nothing fires; nor while the stream is being completed, since then the
+  // completion and `Try again` own paging.
   const stream = showDeleted ? 'bin' : 'live';
   const more =
-    list !== undefined && (stream === 'live' ? list.nextLive !== null : list.nextBin !== null);
+    list !== undefined &&
+    !needsCompleting &&
+    (stream === 'live' ? list.nextLive !== null : list.nextBin !== null);
 
   const loadNextPage = async () => {
     setLoadingMore(true);
@@ -175,20 +231,58 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // the header, since the blocked banner holds up every write behind it until it is answered.
   const pinned = Boolean(error || blocked);
 
-  // Where the Add bar sits on the mockup (y 172), whichever of the four the list calls for. Only
-  // once the items are in: before that nothing may write, and a notice about what you cannot do can
-  // wait for the list it is about.
+  const switchMode = () => {
+    if (shownMode === 'search') setFocusAdd(true);
+    setMode(shownMode === 'search' ? 'create' : 'search');
+  };
+
+  // Live mode only, once the rows are in, and only where there is a create mode to switch to — so
+  // never for a reader or on a binned list. Hidden over an empty, complete list in create mode,
+  // where there is nothing to search; the first item brings it back.
+  const modeButton =
+    list && loaded && editable && !showDeleted && !(shownMode === 'create' && emptyAndComplete) ? (
+      <ModeButton
+        mode={shownMode}
+        newLabel="New item"
+        dot={arranged}
+        summary={searchSummary(shownQuery, sort)}
+        onPress={switchMode}
+      />
+    ) : null;
+
+  // Where the Add bar sits on the mockup (y 172), whichever the list calls for. Only once the items
+  // are in: before that nothing may write, and a notice about what you cannot do can wait for the
+  // list it is about.
   let slot = null;
   if (list && loaded) {
-    if (editable && showDeleted) {
-      // Nothing is added to the bin, so it says what it is in the bar's place. A reader's notice and
-      // a binned list's, below, are not write controls, so they stay in either view.
-      slot = <BarSentence>Deleted items, newest first.</BarSentence>;
+    if (showDeleted && !binned) {
+      // Nothing is added to the bin, and it is never searched, so it says what it is in the slot —
+      // keeping the sort buttons' 44pt as sky when entered from search, so `Show deleted` stays
+      // under the finger that tapped it. A binned list's notice, below, is not a write control, so
+      // it stays in either view.
+      slot = (
+        <>
+          <BarSentence>Deleted items, newest first.</BarSentence>
+          {shownMode === 'search' ? <View style={styles.sortSky} /> : null}
+        </>
+      );
+    } else if (shownMode === 'search' && !binned) {
+      slot = (
+        <>
+          <SearchField placeholder="Search items" value={query} onChangeText={setQuery} />
+          <SortButtons
+            sort={sort}
+            keys={SORT_KEYS}
+            onPress={(key) => setItemSort(listId, nextSort(sort, key))}
+          />
+        </>
+      );
     } else if (editable) {
       slot = (
         <AddBar
           placeholder="Add an item"
           buttonLabel="Add"
+          autoFocus={focusAdd}
           onSubmit={(title) => addItem(list.id, title)}
         />
       );
@@ -215,12 +309,6 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           ) : null}
         </View>
       );
-    } else {
-      slot = (
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>Read only — you can see this list but not change it.</Text>
-        </View>
-      );
     }
   }
 
@@ -239,7 +327,11 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       />
-      <View style={{ paddingTop: (pinned ? 0 : insets.top) + HEADER_GAP }}>
+      <View
+        style={{ paddingTop: (pinned ? 0 : insets.top) + HEADER_GAP }}
+        onLayout={({ nativeEvent: { layout } }) => {
+          if (layout.height !== skyHeight) setSkyHeight(layout.height);
+        }}>
         <View
           style={styles.fill}
           pointerEvents="none"
@@ -259,6 +351,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           */}
           {list ? (
             <View style={styles.headerPills}>
+              {modeButton}
               {manageable ? (
                 <PillButton
                   label="Rename list"
@@ -298,6 +391,23 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         <SyncBanner pending={pending} />
 
         {slot ? <View style={styles.slot}>{slot}</View> : null}
+
+        {/* Under the slot, in either mode: how much of the list the results cover, then — for a
+            reader, whose slot holds the search — that the list is theirs to read only. */}
+        {completion.status ? (
+          <CoverageLine
+            text={coverageLine({
+              rows: 'items',
+              status: completion.status,
+              searching,
+              held: live.length,
+            })}
+            onRetry={completion.status === 'failed' ? completion.retry : undefined}
+          />
+        ) : null}
+        {list && loaded && !editable && !binned ? (
+          <CoverageLine text="Read only — you can see this list but not change it." />
+        ) : null}
       </View>
 
       <Hillside ground={bandAt(colors, 0).color}>
@@ -333,10 +443,23 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     />
   ) : showDeleted ? (
     <EmptyState title="The bin is empty" hint="Deleted items wait here for 30 days." ink={last.ink} />
-  ) : (
+  ) : live.length === 0 ? (
     <EmptyState
       title="Nothing on this list"
       hint={editable ? 'Add your first item above.' : 'Nobody has added anything yet.'}
+      ink={last.ink}
+    />
+  ) : (
+    // Never "No matches" over partial data: while rows are still to load, it says how many were
+    // searched, and the coverage line above says the rest.
+    <EmptyState
+      title={noMatchesTitle({
+        query: shownQuery,
+        rows: 'items',
+        partial: list.nextLive !== null,
+        held: live.length,
+      })}
+      hint={NO_MATCHES_HINT}
       ink={last.ink}
     />
   );
@@ -396,8 +519,8 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants">
-        <View style={styles.statusBarSkyFill}>
-          <SkyFill />
+        <View style={{ height: skyHeight }}>
+          <SkyFill initialHeight={skyHeight} />
         </View>
       </View>
     </View>
@@ -443,6 +566,7 @@ const useStyles = themedStyles((colors) => ({
   },
   headerPills: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
   },
   // A fixed line height, matching the rename bar that replaces it, so opening that bar moves
@@ -462,13 +586,9 @@ const useStyles = themedStyles((colors) => ({
   slot: {
     marginTop: 14,
   },
-  // The read-only line: a quiet pill in the sync banner's fill.
-  notice: {
-    marginHorizontal: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: radius.lg,
-    backgroundColor: colors.bannerSurface,
+  // The sort buttons' height and their gap above, kept as sky under the bin sentence.
+  sortSky: {
+    height: spacing.sm + 36,
   },
   // The binned-list notice: the same fill, as a card, since it has a button to hold.
   card: {
@@ -498,8 +618,5 @@ const useStyles = themedStyles((colors) => ({
     left: 0,
     right: 0,
     overflow: 'hidden',
-  },
-  statusBarSkyFill: {
-    height: DRAWN_SKY_H,
   },
 }));

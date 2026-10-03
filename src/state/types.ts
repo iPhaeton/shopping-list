@@ -157,11 +157,13 @@ export type Action =
    * list already here is left alone, and the new ones go in before the first optimistic list.
    * `stream` moves that stream's list cursor; omitted, the cursors stay where they are, which is
    * what a single-list read (a blocked write's target, or the list a screen has open) wants.
+   * `after` is as on `items/pageLoaded`.
    */
   | {
       type: 'lists/pageLoaded';
       lists: List[];
       stream?: StreamPage;
+      after?: Cursor | BinCursor | null;
     }
   /**
    * A page of one list's rows, read from the database. Idempotent by id — a row already here is
@@ -169,12 +171,20 @@ export type Action =
    * before the first optimistic row. `stream` moves that stream's cursor; omitted, the cursors
    * stay where they are, which is what a single-row read (the target of a blocked write) wants.
    * Not a write: nothing is owed to the database, so it never enters the outbox.
+   *
+   * `after` is the cursor the page was read from, in `stream`'s own key. Given, the page lands only
+   * if state's cursor for that stream still equals it — it continues where state ends — and is
+   * ignored whole otherwise. A `hydrate` that replaced state while the page was in the air may have
+   * dropped the page before it, and folding this one on top would leave a gap with a cursor past
+   * it. Omitted by a re-read that builds its pages from nothing, where every page continues the
+   * last by construction.
    */
   | {
       type: 'items/pageLoaded';
       listId: string;
       items: Item[];
       stream?: StreamPage;
+      after?: Cursor | BinCursor | null;
     }
   /**
    * The first page of both streams, fetched together on entering a list. One combined action

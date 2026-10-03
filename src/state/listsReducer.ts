@@ -39,6 +39,8 @@ export function listsReducer(state: State, action: Action): State {
     // (it may carry a rename or a tombstone newer than the page's copy), and new ones go in before
     // the first optimistic list, which the screen sorts last anyway.
     case 'lists/pageLoaded': {
+      if (!continues(action, action.stream && state.listCursors[action.stream.name])) return state;
+
       const known = new Set(state.lists.map((list) => list.id));
       const fresh = action.lists.filter((list) => !known.has(list.id));
 
@@ -61,6 +63,9 @@ export function listsReducer(state: State, action: Action): State {
     // the new item, which is where the next hydration will put it anyway.
     case 'items/pageLoaded': {
       return updateList(state, action.listId, (list) => {
+        const at = action.stream && (action.stream.name === 'live' ? list.nextLive : list.nextBin);
+        if (!continues(action, at)) return list;
+
         const known = new Set(list.items.map((item) => item.id));
         const fresh = action.items.filter((item) => !known.has(item.id));
 
@@ -352,13 +357,28 @@ export function inDeletionOrder<T extends { id: string; deletedAt: string | null
   return [...rows].sort((a, b) => byStamp(b.deletedAt, b.id, a.deletedAt, a.id));
 }
 
-/** `(stamp, id)` ascending, `null` stamps last and in their original order (the sort is stable). */
-function byStamp(aStamp: string | null, aId: string, bStamp: string | null, bId: string): number {
+/**
+ * `(stamp, id)` ascending, `null` stamps last and in their original order (the sort is stable).
+ * Exported for `arrange.ts`, whose date key is this order and its exact reverse.
+ */
+export function byStamp(aStamp: string | null, aId: string, bStamp: string | null, bId: string): number {
   if (aStamp === null || bStamp === null) {
     return aStamp === bStamp ? 0 : aStamp === null ? 1 : -1;
   }
   if (aStamp !== bStamp) return aStamp < bStamp ? -1 : 1;
   return aId < bId ? -1 : aId > bId ? 1 : 0;
+}
+
+/**
+ * Whether a page continues where state's stream ends: `at` is state's cursor for the page's stream.
+ * A page that carries no `after` is not checked — see the `after` note on `items/pageLoaded`.
+ */
+function continues(
+  action: { stream?: StreamPage; after?: Cursor | BinCursor | null },
+  at: Cursor | BinCursor | null | undefined
+): boolean {
+  if (action.after === undefined || action.stream === undefined || at === undefined) return true;
+  return sameCursor(at, action.after);
 }
 
 function sameCursor(a: Cursor | BinCursor | null, b: Cursor | BinCursor | null): boolean {

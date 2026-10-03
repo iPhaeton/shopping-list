@@ -1,0 +1,56 @@
+# Screenshots search and sort (task 24 step 3) as an owner whose lists include Groceries, with
+# done and to-do rows and more than one list matching "gro". Starts on Lists at rest, ends there with
+# every sort back to the default. Pass THEME (day or night, used in file names).
+appId: com.shoppingloop.app
+---
+- extendedWaitUntil:
+    visible: Search lists
+    timeout: 15000
+- takeScreenshot: lists-search-resting-${THEME}
+
+# Searching, A–Z on. Return closes the keyboard, as in the mockup.
+- tapOn: Search lists
+- waitForAnimationToEnd
+- inputText: gro
+- pressKey: Enter
+- tapOn: Sort by name
+- waitForAnimationToEnd
+- takeScreenshot: lists-search-${THEME}
+- tapOn: Clear search
+- tapOn: Sort by name
+- tapOn: Sort by name
+
+- tapOn: Groceries
+- extendedWaitUntil:
+    visible: Search items
+    timeout: 10000
+- takeScreenshot: list-detail-search-resting-${THEME}
+
+# Searching, To Do First and A–Z on: the multi-key case.
+- tapOn: Search items
+- waitForAnimationToEnd
+- inputText: mi
+- pressKey: Enter
+- tapOn: Sort by to do
+- tapOn: Sort by name
+- waitForAnimationToEnd
+- takeScreenshot: list-detail-search-${THEME}
+
+# Create mode with To Do First still applied: the magnifier carries the dot.
+- tapOn: Clear search
+- tapOn: Sort by name
+- tapOn: Sort by name
+- tapOn: New item
+- waitForAnimationToEnd
+- pressKey: Enter
+- waitForAnimationToEnd
+- takeScreenshot: list-detail-search-sorted-${THEME}
+
+# Back to rest: search mode, To Do off, so the stored sort is empty again.
+- tapOn: Search and sort
+- tapOn: Sort by to do
+- tapOn: Sort by to do
+- tapOn: Back
+- extendedWaitUntil:
+    visible: Search lists
+    timeout: 10000

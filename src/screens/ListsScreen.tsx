@@ -7,22 +7,30 @@ import { AddBar } from '../components/AddBar';
 import { Band } from '../components/Band';
 import { BarSentence } from '../components/BarSentence';
 import { BlockedBanner } from '../components/BlockedBanner';
+import { CoverageLine } from '../components/CoverageLine';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Horizon } from '../components/Horizon';
 import { ListRow } from '../components/ListRow';
+import { ModeButton } from '../components/ModeButton';
 import { PillButton } from '../components/PillButton';
+import { SearchField } from '../components/SearchField';
 import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { Sky } from '../components/Sky';
+import { SortButtons } from '../components/SortButtons';
 import { SyncBanner } from '../components/SyncBanner';
 import { listLimitSentence } from '../lib/limits';
+import { coverageLine, NO_MATCHES_HINT, noMatchesTitle, searchSummary } from '../lib/searchCopy';
 import type { ListsScreenProps } from '../navigation/types';
+import { arrangeLists, isDefaultSort, nextSort, type SortKey } from '../state/arrange';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
-import { binLists, inDeletionOrder, inJoinOrder, liveLists } from '../state/listsReducer';
+import { binLists, inDeletionOrder, liveLists } from '../state/listsReducer';
 import { canManageList } from '../state/roles';
+import { useSorts } from '../state/SortContext';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { List } from '../state/types';
+import { useCompletion } from '../state/useCompletion';
 import { fonts, spacing } from '../theme';
 
 /** A stable empty array while loading, so the `FlatList`'s `data` prop never allocates a new one. */
@@ -35,6 +43,9 @@ const NONE: List[] = [];
  * simpler and the overshoot only has to outlast a normal pull-to-refresh bounce.
  */
 const SKY_HEIGHT = 520;
+
+/** Lists' sort buttons, left to right in priority order. */
+const SORT_KEYS: readonly SortKey[] = ['az', 'date'];
 
 export function ListsScreen({ navigation }: ListsScreenProps) {
   const styles = useStyles();
@@ -53,7 +64,10 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
     restoreBlocked,
     discardBlocked,
     loadMoreLists,
+    loadAllLists,
+    readEpoch,
   } = useLists();
+  const { listSort, setListSort } = useSorts();
 
   // Local, and deliberately not remembered: the bin is somewhere you go on purpose, so arriving
   // here should always show the live lists.
@@ -61,25 +75,49 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   // Screen-local like `showDeleted`: it drives the footer spinner and nothing else. The provider
   // keeps its own guard against a second request.
   const [loadingMore, setLoadingMore] = useState(false);
+  // The search, and which of search or Create holds the slot. Never stored: both reset on leaving
+  // the screen, and both survive a trip into the bin and back. Switching modes keeps the query —
+  // it filters in both — and the sort, which is stored (`useSorts`).
+  const [query, setQuery] = useState('');
+  const [mode, setMode] = useState<'search' | 'create' | null>(null);
+  // Whether the Create bar takes the focus when it mounts: only once Plus asked for it.
+  const [focusCreate, setFocusCreate] = useState(false);
 
   const loading = status === 'loading';
 
   // Memoised because the filters and sorts return a fresh array every call, which would give the
   // `FlatList` a new `data` prop on every render.
   //
-  // One stream at a time: the live lists by when you joined, or — with "Show deleted" on — the bin
-  // and nothing else, newest deletion first, each in the order its stream is paged in. Sorted either
-  // way, as List detail sorts its items: `lists` is two paged streams end to end plus lists fetched
-  // one at a time, and a list that moves between streams keeps its place in the array.
+  // One stream at a time: the live lists, searched and sorted, or — with "Show deleted" on — the bin
+  // and nothing else, newest deletion first, the order it is paged in and never searched. Sorted
+  // either way, as List detail sorts its items: `lists` is two paged streams end to end plus lists
+  // fetched one at a time, and a list that moves between streams keeps its place in the array.
   const live = useMemo(() => liveLists(lists), [lists]);
   const bin = useMemo(() => binLists(lists), [lists]);
   const ordered = useMemo(
-    () => (showDeleted ? inDeletionOrder(bin) : inJoinOrder(live)),
-    [showDeleted, bin, live]
+    () => (showDeleted ? inDeletionOrder(bin) : arrangeLists(live, { sort: listSort, query })),
+    [showDeleted, bin, live, listSort, query]
   );
   const visible = loading ? NONE : ordered;
   // Counted only to decide whether the toggle shows: its label carries no number.
   const binned = bin.length;
+
+  // Nothing to search: no live list, and none still to load. A new account's first screen.
+  const emptyAndComplete = live.length === 0 && listCursors.live === null;
+
+  // Search is the resting state, except where there is nothing to search. Decided once, on the
+  // first render with the lists known, and never switched by itself after that — the first list
+  // created here must not swap the Create bar out from under the person creating it.
+  if (mode === null && !loading) setMode(emptyAndComplete ? 'create' : 'search');
+  const shownMode = mode ?? 'search';
+
+  // A search or a non-default sort is right only over every live list, so the rest is loaded in
+  // the background while they apply — the results show at once, and the line says how far it got.
+  // "Complete" is never remembered: a cursor that comes back after a re-read needs it again.
+  const searching = query.trim() !== '';
+  const arranged = searching || !isDefaultSort(listSort);
+  const needsCompleting = !loading && !showDeleted && arranged && listCursors.live !== null;
+  const completion = useCompletion(needsCompleting, loadAllLists, readEpoch);
 
   // At either list limit the Create bar gives way to the sentence saying so, rather than letting a
   // list appear and vanish a moment later when the database refuses it. The counts are approximate
@@ -88,9 +126,10 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
 
   // Whether a scroll to the end has anything to fetch — in the stream on screen only, so live mode
   // never asks for a page of the bin, nor the bin for a live one. With no cursor the `FlatList` gets
-  // no handler at all, so nothing fires.
+  // no handler at all, so nothing fires; nor while the stream is being completed, since then the
+  // completion and `Try again` own paging.
   const stream = showDeleted ? 'bin' : 'live';
-  const more = listCursors[stream] !== null;
+  const more = listCursors[stream] !== null && !needsCompleting;
 
   const loadNextPage = async () => {
     setLoadingMore(true);
@@ -106,6 +145,59 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
     [navigation]
   );
   const openAccount = useCallback(() => navigation.navigate('Account'), [navigation]);
+
+  const switchMode = () => {
+    if (shownMode === 'search') setFocusCreate(true);
+    setMode(shownMode === 'search' ? 'create' : 'search');
+  };
+
+  // Live mode only, once the lists are known. Hidden over an empty, complete stream in create mode,
+  // where there is nothing to search; the first list brings it back.
+  const modeButton =
+    !loading && !showDeleted && !(shownMode === 'create' && emptyAndComplete) ? (
+      <ModeButton
+        mode={shownMode}
+        newLabel="New list"
+        dot={arranged}
+        summary={searchSummary(query, listSort)}
+        onPress={switchMode}
+      />
+    ) : null;
+
+  // Whatever holds the Create bar's place. Nothing is created from the bin, so it says what it is
+  // there — and keeps the sort buttons' 44pt as sky when entered from search, so `Show deleted`
+  // stays under the finger that tapped it.
+  let slot;
+  if (showDeleted) {
+    slot = (
+      <>
+        <BarSentence>Deleted lists, newest first.</BarSentence>
+        {shownMode === 'search' ? <View style={styles.sortSky} /> : null}
+      </>
+    );
+  } else if (shownMode === 'search') {
+    slot = (
+      <>
+        <SearchField placeholder="Search lists" value={query} onChangeText={setQuery} />
+        <SortButtons
+          sort={listSort}
+          keys={SORT_KEYS}
+          onPress={(key) => setListSort(nextSort(listSort, key))}
+        />
+      </>
+    );
+  } else if (full) {
+    slot = <BarSentence>{full}</BarSentence>;
+  } else {
+    slot = (
+      <AddBar
+        placeholder="New list name"
+        buttonLabel="Create"
+        autoFocus={focusCreate}
+        onSubmit={(name) => createList(name)}
+      />
+    );
+  }
 
   const renderItem = useCallback(
     ({ item, index }: ListRenderItemInfo<List>) => (
@@ -135,7 +227,10 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
         <Text accessibilityRole="header" style={styles.title}>
           My Lists
         </Text>
-        <PillButton label="Account" onPress={openAccount} />
+        <View style={styles.titleActions}>
+          {modeButton}
+          <PillButton label="Account" onPress={openAccount} />
+        </View>
       </View>
       {loading ? (
         <View style={styles.loadingBlock}>
@@ -144,14 +239,19 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
       ) : (
         <>
           <SyncBanner pending={pending} />
-          {/* Nothing is created from the bin, so it says what it is in the bar's place. */}
-          {showDeleted ? (
-            <BarSentence>Deleted lists, newest first.</BarSentence>
-          ) : full ? (
-            <BarSentence>{full}</BarSentence>
-          ) : (
-            <AddBar placeholder="New list name" buttonLabel="Create" onSubmit={(name) => createList(name)} />
-          )}
+          {slot}
+          {completion.status ? (
+            <CoverageLine
+              text={coverageLine({
+                rows: 'lists',
+                status: completion.status,
+                searching,
+                held: live.length,
+                total: listCounts.total,
+              })}
+              onRetry={completion.status === 'failed' ? completion.retry : undefined}
+            />
+          ) : null}
         </>
       )}
       <Horizon ground={bandAt(colors, 0).color}>
@@ -215,10 +315,23 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
                 hint="Deleted lists wait here for 30 days."
                 ink={bandAt(colors, 0).ink}
               />
-            ) : (
+            ) : live.length === 0 ? (
               <EmptyState
                 title="No lists yet"
                 hint="Name your first list above — for example, Groceries."
+                ink={bandAt(colors, 0).ink}
+              />
+            ) : (
+              // Never "No matches" over partial data: while lists are still to load, it says how
+              // many were searched, and the coverage line above says the rest.
+              <EmptyState
+                title={noMatchesTitle({
+                  query,
+                  rows: 'lists',
+                  partial: listCursors.live !== null,
+                  held: live.length,
+                })}
+                hint={NO_MATCHES_HINT}
                 ink={bandAt(colors, 0).ink}
               />
             )}
@@ -277,6 +390,15 @@ const useStyles = themedStyles((colors) => ({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  titleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  // The sort buttons' height and their gap above, kept as sky under the bin sentence.
+  sortSky: {
+    height: spacing.sm + 36,
   },
   title: {
     fontFamily: fonts.serif,

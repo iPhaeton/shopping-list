@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject } from 'react';
 
 import { fetchItems, fetchList, fetchListCounts, fetchLists } from '../lib/listsApi';
 import { writeCachedLists } from '../lib/listCache';
@@ -63,6 +63,12 @@ export function useHydration({
   // while a write or another fetch is in the way — `drainDirty` is what acts on it once they clear.
   const nudge = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirty = useRef<Set<string> | 'all'>(new Set());
+
+  // How many reads have succeeded — the only way this app learns it is back online, since it has no
+  // connectivity library. A screen whose completion of a stream failed restarts it when this moves.
+  // Bumped by a `hydrate` that dispatched, and by a `hydrateLists` in which at least one read
+  // succeeded; a successful outbox retry is not one, since `flush` re-reads only after a refusal.
+  const [readEpoch, setReadEpoch] = useState(0);
 
   useEffect(() => {
     return () => {
@@ -134,6 +140,7 @@ export function useHydration({
       // to avoid for the blocked-write path.
       listsRef.current = loaded;
       listCursorsRef.current = pages.cursors;
+      setReadEpoch((epoch) => epoch + 1);
       // The fetched rows and counts, never the replayed view — see `writeCachedLists`.
       void writeCachedLists(userId, lists, pages.cursors, read.counts);
       return { error: null, lists: loaded };
@@ -209,6 +216,7 @@ export function useHydration({
       dispatch({ type: 'lists/loaded', lists: loaded, cursors });
       listsRef.current = loaded;
       listCursorsRef.current = cursors;
+      if (results.some(([, { error }]) => !error)) setReadEpoch((epoch) => epoch + 1);
     } finally {
       fetching.current = false;
       if (!retry.current) void flushRef.current?.();
@@ -307,7 +315,7 @@ export function useHydration({
     [drainDirty]
   );
 
-  return { hydrate, refresh, refreshSoon, drainDirty };
+  return { hydrate, refresh, refreshSoon, drainDirty, readEpoch };
 }
 
 /**

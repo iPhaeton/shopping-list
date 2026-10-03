@@ -21,7 +21,7 @@ import { useBlockedWrites } from './useBlockedWrites';
 import { useHydration } from './useHydration';
 import { useListWrites } from './useListWrites';
 import { useOutbox } from './useOutbox';
-import { usePaging } from './usePaging';
+import { usePaging, type Completion, type PageOutcome } from './usePaging';
 
 type ListsContextValue = {
   lists: List[];
@@ -59,6 +59,13 @@ type ListsContextValue = {
    * signal `refreshSoon()` already treats as `dirty = 'all'`. A fresh object every time, even for the
    * same listId twice in a row, so an effect keyed on it always re-fires. */
   lastNudge: { listId: string | undefined } | null;
+  /**
+   * How many reads of the database have succeeded since mount. There is no connectivity library, so
+   * a read that succeeds is how the app learns it is back online: a screen whose completion of a
+   * stream failed restarts it when this moves. Bumped by every full re-read that dispatched, and by
+   * every re-read of named lists in which at least one read succeeded — not by an outbox retry.
+   */
+  readEpoch: number;
   /** Returns the id of the new list, or null when `name` was blank. */
   createList: (name: string) => string | null;
   renameList: (listId: string, name: string) => void;
@@ -75,10 +82,11 @@ type ListsContextValue = {
   refresh: () => Promise<void>;
   /**
    * The next page of one stream of a list's rows — whichever the screen is showing, the live rows or
-   * the bin. Resolves once the page is in state, or at once when there is nothing to load: no cursor,
-   * or a page for that list already in flight. A read, so it is safe to call at any time after mount.
+   * the bin. Resolves once the page is in state (`loaded`), when it failed (`failed`, cursor
+   * untouched), or at once when there is nothing to load (`skipped`: no cursor, or a page for that
+   * list already in flight). A read, so it is safe to call at any time after mount.
    */
-  loadMore: (listId: string, stream: Stream) => Promise<void>;
+  loadMore: (listId: string, stream: Stream) => Promise<PageOutcome>;
   /**
    * A list's first page of both streams — call this on entering it. A no-op once `itemsLoaded` is
    * already true, or while a fetch for that list is already in flight. A read, so it is safe to
@@ -87,10 +95,17 @@ type ListsContextValue = {
   loadListItems: (listId: string) => Promise<void>;
   /**
    * The next page of one stream of lists — live, or the bin while the screen is showing it. Resolves
-   * once the page is in state, or at once when there is nothing to load: no cursor, or a page already
-   * in flight. A read, so it is safe to call at any time after mount.
+   * as `loadMore` does. A read, so it is safe to call at any time after mount.
    */
-  loadMoreLists: (stream: Stream) => Promise<void>;
+  loadMoreLists: (stream: Stream) => Promise<PageOutcome>;
+  /**
+   * Every remaining page of one list's live rows, one at a time, for a search or a sort that is only
+   * right over all of them: until the cursor is `null` (`complete`), the first page that fails
+   * (`failed`), 2,000 live rows held (`capped`), or `signal` aborts (`stopped`). See `usePaging`.
+   */
+  loadAllItems: (listId: string, signal: AbortSignal) => Promise<Completion>;
+  /** `loadAllItems` for the live lists. */
+  loadAllLists: (signal: AbortSignal) => Promise<Completion>;
   /**
    * One list by id, for a screen whose list is not in state — it can sort past the pages loaded so
    * far once somebody else bins it. Resolves to the list, or `null` when this account cannot see it.
@@ -189,7 +204,7 @@ export function ListsProvider({
     };
   }, []);
 
-  const { loadMore, loadListItems, loadMoreLists, loadList } = usePaging({
+  const { loadMore, loadListItems, loadMoreLists, loadAllItems, loadAllLists, loadList } = usePaging({
     listsRef,
     listCursorsRef,
     live,
@@ -197,7 +212,7 @@ export function ListsProvider({
     queue,
   });
 
-  const { hydrate, refresh, refreshSoon, drainDirty } = useHydration({
+  const { hydrate, refresh, refreshSoon, drainDirty, readEpoch } = useHydration({
     userId,
     dispatch,
     queue,
@@ -372,6 +387,7 @@ export function ListsProvider({
       pending,
       blocked,
       lastNudge,
+      readEpoch,
       createList,
       renameList,
       addItem,
@@ -385,6 +401,8 @@ export function ListsProvider({
       loadMore,
       loadListItems,
       loadMoreLists,
+      loadAllItems,
+      loadAllLists,
       loadList,
     }),
     [
@@ -397,6 +415,7 @@ export function ListsProvider({
       pending,
       blocked,
       lastNudge,
+      readEpoch,
       createList,
       renameList,
       addItem,
@@ -410,6 +429,8 @@ export function ListsProvider({
       loadMore,
       loadListItems,
       loadMoreLists,
+      loadAllItems,
+      loadAllLists,
       loadList,
     ]
   );

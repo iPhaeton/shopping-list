@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactNode } from 'react';
 
 import { LISTS_FULL, OWNED_LISTS_FULL } from '../lib/limits';
 import { fetchListCounts, fetchLists, insertList, setListDeleted } from '../lib/listsApi';
+import { subscribeToChanges } from '../lib/listsChannel';
 import type { ListsScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
+import { SortProvider } from '../state/SortContext';
 import type { BinCursor, Cursor, List } from '../state/types';
 import { ListsScreen } from './ListsScreen';
 
@@ -37,9 +40,22 @@ jest.mock('../lib/listsApi', () => ({
 jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
 
 // The provider queues writes on disk now; without this each test inherits the last one's outbox.
+// The served lists too: a test that serves none means an empty account, not the last test's.
 beforeEach(async () => {
   await AsyncStorage.clear();
+  serveLists([]);
 });
+
+/** What `App.tsx` mounts above the screens: the remembered sorts, then the signed-in lists. */
+function Providers({ children }: { children: ReactNode }) {
+  return (
+    <SortProvider>
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+        {children}
+      </ListsProvider>
+    </SortProvider>
+  );
+}
 
 /**
  * What the database holds, as `fetchLists` answers it: one stream at a time, the lists with no
@@ -58,18 +74,21 @@ async function renderScreen() {
   const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListsScreen {...({ navigation } as unknown as ListsScreenProps)} />
-    </ListsProvider>
+    </Providers>
   );
 
-  // The screen shows a spinner until the first fetch settles.
-  await screen.findByLabelText('New list name');
+  // The screen shows a spinner until the first fetch settles. Then search holds the slot — or the
+  // Create bar, for an account with no lists to search.
+  await screen.findByLabelText(/^(Search lists|New list name)$/);
 
   return { navigation };
 }
 
+/** Through the Create bar, switching to it first when search holds the slot. */
 async function createList(name: string) {
+  if (!screen.queryByLabelText('New list name')) await fireEvent.press(screen.getByLabelText('New list'));
   await fireEvent.changeText(screen.getByLabelText('New list name'), name);
   await fireEvent.press(screen.getByLabelText('Create'));
 }
@@ -125,9 +144,9 @@ it('shows a spinner instead of the empty state while loading', async () => {
   );
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListsScreen {...({ navigation: { navigate: jest.fn() } } as unknown as ListsScreenProps)} />
-    </ListsProvider>
+    </Providers>
   );
 
   expect(screen.getByLabelText('Loading your lists')).toBeOnTheScreen();
@@ -253,7 +272,7 @@ it('switches the screen to the bin and back, with no second request', async () =
   expect(screen.getByText('Hardware')).toBeOnTheScreen();
   expect(screen.queryByText('Groceries')).not.toBeOnTheScreen();
   expect(screen.getByText('Deleted lists, newest first.')).toBeOnTheScreen();
-  expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Search lists')).not.toBeOnTheScreen();
   // Every row here is deleted, so no row says so.
   expect(screen.queryByText('Deleted')).not.toBeOnTheScreen();
   expect(fetchLists).not.toHaveBeenCalled();
@@ -262,7 +281,7 @@ it('switches the screen to the bin and back, with no second request', async () =
 
   expect(screen.getByText('Groceries')).toBeOnTheScreen();
   expect(screen.queryByText('Hardware')).not.toBeOnTheScreen();
-  expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Search lists')).toBeOnTheScreen();
 });
 
 /** A control that reveals nothing is noise, and there is nothing else in the app like it. */
@@ -499,9 +518,9 @@ describe('at a list limit', () => {
     serveCounts(owned, total);
     const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
     await render(
-      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <Providers>
         <ListsScreen {...({ navigation } as unknown as ListsScreenProps)} />
-      </ListsProvider>
+      </Providers>
     );
     await waitFor(() => expect(screen.queryByLabelText('Loading your lists')).not.toBeOnTheScreen());
   }
@@ -562,10 +581,352 @@ describe('at a list limit', () => {
   it('brings the Create bar back when a list is binned', async () => {
     serveLists([GROCERIES]);
     await renderAtCounts(100, 100);
+    await fireEvent.press(screen.getByLabelText('New list'));
+    expect(screen.getByText(OWNED_LISTS_FULL)).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByLabelText('Delete Groceries'));
 
     expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
     expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
+  });
+});
+
+// --- Search and sort ----------------------------------------------------------------------------
+
+/**
+ * Search is the resting state (task 24 step 1): the field and the sort buttons hold the Create bar's
+ * place, and the header's Plus swaps the Create bar in. Search and sort run on the device over the
+ * lists held, and a search or a non-default sort completes the live stream in the background, with
+ * a line saying how far it got. Copy asserted verbatim, as step 1's log signs it off.
+ */
+describe('search and sort', () => {
+  const named = (n: number, name: string): List => ({ ...listAt(n), name });
+  /** Four live lists, joined in this order. */
+  const FOUR = [named(1, 'Groceries'), named(2, 'Hardware'), named(3, 'Big grocery run'), named(4, 'Pharmacy')];
+  const NAMES = new Set([...FOUR.map((list) => list.name), 'Grove Street party', 'Zoo trip']);
+
+  /** The list rows in the order they are drawn. */
+  function drawn(): string[] {
+    return screen
+      .getAllByRole('button')
+      .map((row) => String(row.props.accessibilityLabel))
+      .filter((label) => NAMES.has(label));
+  }
+
+  function serveCounts(owned: number, total: number) {
+    jest.mocked(fetchListCounts).mockResolvedValue({ counts: { owned, total }, error: null });
+  }
+
+  /**
+   * FOUR as page 1 of nine lists. A continuation answers with `rest`: a page, a failure, or nothing
+   * yet. Page 1 is always answered, so a re-read succeeds.
+   */
+  function servePartial(rest: () => Promise<{ lists: List[] | null; next: Cursor | null; error: string | null }>) {
+    serveCounts(9, 9);
+    jest.mocked(fetchLists).mockImplementation(async (stream, after) => {
+      if (stream === 'bin') return { lists: [], next: null, error: null };
+      if (after === null) return { lists: FOUR, next: cursorAt(4), error: null };
+      return rest();
+    });
+  }
+
+  const pending = () => new Promise<never>(() => {});
+  const failed = async () => ({ lists: null, next: null, error: 'Failed to fetch' });
+  const theRest = async () => ({ lists: [named(5, 'Grove Street party')], next: null, error: null });
+
+  /** How many continuation pages of live lists have been asked for. */
+  const continuations = () =>
+    jest.mocked(fetchLists).mock.calls.filter(([stream, after]) => stream === 'live' && after !== null).length;
+
+  // Call counts are asserted here, and nothing else clears them between tests.
+  beforeEach(() => jest.mocked(fetchLists).mockClear());
+  afterEach(() => serveCounts(0, 0));
+
+  it('shows no header button until the lists are known', async () => {
+    jest.mocked(fetchLists).mockReturnValueOnce(pending());
+
+    await render(
+      <Providers>
+        <ListsScreen {...({ navigation: { navigate: jest.fn() } } as unknown as ListsScreenProps)} />
+      </Providers>
+    );
+
+    expect(screen.getByLabelText('Loading your lists')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('New list')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search lists')).not.toBeOnTheScreen();
+  });
+
+  it('opens in search, oldest first, with Plus to make a new list', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+
+    expect(screen.getByLabelText('Search lists')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('New list')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Sort by name')).toHaveAccessibilityValue({ text: 'Off' });
+    expect(screen.getByLabelText('Sort by date added')).toHaveAccessibilityValue({ text: 'Oldest first' });
+    expect(screen.queryByLabelText('Sort by to do')).not.toBeOnTheScreen();
+    expect(drawn()).toEqual(['Groceries', 'Hardware', 'Big grocery run', 'Pharmacy']);
+  });
+
+  it('filters as it is typed, whatever the case and accents', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'GRÓ');
+
+    expect(drawn()).toEqual(['Groceries', 'Big grocery run']);
+  });
+
+  it('clears the query from the ×, which shows only while there is one', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+    expect(screen.queryByLabelText('Clear search')).not.toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+    await fireEvent.press(screen.getByLabelText('Clear search'));
+
+    expect(screen.getByLabelText('Search lists')).toHaveDisplayValue('');
+    expect(screen.queryByLabelText('Clear search')).not.toBeOnTheScreen();
+    expect(drawn()).toHaveLength(4);
+  });
+
+  it('cycles A–Z off, on, reversed and off again', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+    const byName = () => screen.getByLabelText('Sort by name');
+
+    await fireEvent.press(byName());
+    expect(byName()).toHaveAccessibilityValue({ text: 'A to Z' });
+    expect(screen.getByText('A–Z')).toBeOnTheScreen();
+    expect(drawn()).toEqual(['Big grocery run', 'Groceries', 'Hardware', 'Pharmacy']);
+
+    await fireEvent.press(byName());
+    expect(byName()).toHaveAccessibilityValue({ text: 'Z to A' });
+    expect(screen.getByText('Z–A')).toBeOnTheScreen();
+    expect(drawn()).toEqual(['Pharmacy', 'Hardware', 'Groceries', 'Big grocery run']);
+
+    await fireEvent.press(byName());
+    expect(byName()).toHaveAccessibilityValue({ text: 'Off' });
+    expect(drawn()).toEqual(['Groceries', 'Hardware', 'Big grocery run', 'Pharmacy']);
+  });
+
+  it('flips the date button, and never turns it off', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+    const byDate = () => screen.getByLabelText('Sort by date added');
+
+    await fireEvent.press(byDate());
+    expect(byDate()).toHaveAccessibilityValue({ text: 'Newest first' });
+    expect(drawn()).toEqual(['Pharmacy', 'Big grocery run', 'Hardware', 'Groceries']);
+
+    await fireEvent.press(byDate());
+    expect(byDate()).toHaveAccessibilityValue({ text: 'Oldest first' });
+    expect(drawn()).toEqual(['Groceries', 'Hardware', 'Big grocery run', 'Pharmacy']);
+  });
+
+  /** Both still apply in create mode, where neither shows: the magnifier's dot and value say so. */
+  it('keeps the query and the sort in create mode, and says so on the magnifier', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+    await fireEvent.press(screen.getByLabelText('Sort by name'));
+
+    await fireEvent.press(screen.getByLabelText('New list'));
+
+    expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search lists')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Sort by name')).not.toBeOnTheScreen();
+    expect(drawn()).toEqual(['Big grocery run', 'Groceries']);
+    expect(screen.getByLabelText('Search and sort')).toHaveAccessibilityValue({
+      text: 'Searching gro, A to Z, oldest first',
+    });
+
+    await fireEvent.press(screen.getByLabelText('Search and sort'));
+
+    expect(screen.getByLabelText('Search lists')).toHaveDisplayValue('gro');
+    expect(screen.getByLabelText('Sort by name')).toHaveAccessibilityValue({ text: 'A to Z' });
+  });
+
+  it('puts no dot on the magnifier at rest, and one for a sort alone', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('New list'));
+    expect(screen.getByLabelText('Search and sort')).not.toHaveAccessibilityValue({ text: /./ });
+
+    await fireEvent.press(screen.getByLabelText('Search and sort'));
+    await fireEvent.press(screen.getByLabelText('Sort by date added'));
+    await fireEvent.press(screen.getByLabelText('New list'));
+
+    expect(screen.getByLabelText('Search and sort')).toHaveAccessibilityValue({ text: 'newest first' });
+  });
+
+  /** Nothing to search yet: a new account's first screen, as it has always looked. */
+  it('opens in create mode with nothing to search, and brings the magnifier with the first list', async () => {
+    await renderScreen();
+
+    expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search lists')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search and sort')).not.toBeOnTheScreen();
+
+    await createList('Groceries');
+
+    expect(screen.getByLabelText('Search and sort')).toBeOnTheScreen();
+    expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+  });
+
+  it('shows results at once over a partial stream, and says it is loading the rest', async () => {
+    servePartial(pending);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+
+    expect(drawn()).toEqual(['Groceries', 'Big grocery run']);
+    expect(screen.getByText('Searching 4 of 9 lists · loading the rest…')).toBeOnTheScreen();
+    expect(continuations()).toBe(1);
+  });
+
+  it('says Sorting for a sort with no query', async () => {
+    servePartial(pending);
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Sort by name'));
+
+    expect(screen.getByText('Sorting 4 of 9 lists · loading the rest…')).toBeOnTheScreen();
+  });
+
+  it('names no total it does not know to be larger', async () => {
+    servePartial(pending);
+    serveCounts(4, 4);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+
+    expect(screen.getByText('Searching 4 loaded lists · loading the rest…')).toBeOnTheScreen();
+  });
+
+  it('loads nothing more and shows no line at rest', async () => {
+    servePartial(pending);
+    await renderScreen();
+
+    expect(continuations()).toBe(0);
+    expect(screen.queryByText(/loading the rest/)).not.toBeOnTheScreen();
+  });
+
+  it('clears the line once every list is in', async () => {
+    servePartial(theRest);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+
+    expect(await screen.findByLabelText('Grove Street party')).toBeOnTheScreen();
+    expect(drawn()).toEqual(['Groceries', 'Big grocery run', 'Grove Street party']);
+    expect(screen.queryByText(/lists/)).not.toBeOnTheScreen();
+  });
+
+  /** One failed page is one request: offline, anything more would be a request loop. */
+  it('says what was searched when a page fails, and asks again on Try again', async () => {
+    servePartial(failed);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+
+    expect(await screen.findByText('Searched 4 of 9 lists. The rest need a connection.')).toBeOnTheScreen();
+    expect(continuations()).toBe(1);
+
+    servePartial(theRest);
+    await fireEvent.press(screen.getByLabelText('Try again'));
+
+    expect(await screen.findByLabelText('Grove Street party')).toBeOnTheScreen();
+    expect(continuations()).toBe(2);
+    expect(screen.queryByText(/need a connection/)).not.toBeOnTheScreen();
+  });
+
+  /** Typing is not evidence the network is back, so it restarts nothing. */
+  it('does not ask again as the query changes', async () => {
+    servePartial(failed);
+    await renderScreen();
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+    await screen.findByText(/need a connection/);
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'groc');
+
+    expect(screen.getByText('Searched 4 of 9 lists. The rest need a connection.')).toBeOnTheScreen();
+    expect(continuations()).toBe(1);
+  });
+
+  /** A read that succeeds is how the app learns it is back online. */
+  it('starts again by itself when a read succeeds', async () => {
+    let resubscribe = () => {};
+    jest.mocked(subscribeToChanges).mockImplementation((_userId, _onChange, onResubscribe) => {
+      resubscribe = onResubscribe;
+      return () => {};
+    });
+    servePartial(failed);
+    await renderScreen();
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+    await screen.findByText(/need a connection/);
+
+    servePartial(theRest);
+    await act(async () => resubscribe());
+
+    expect(await screen.findByLabelText('Grove Street party', {}, { timeout: 3000 })).toBeOnTheScreen();
+    expect(screen.queryByText(/need a connection/)).not.toBeOnTheScreen();
+  });
+
+  it('says No matches only once every list was searched', async () => {
+    serveLists(FOUR);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'zzz');
+
+    expect(screen.getByText('No matches for "zzz"')).toBeOnTheScreen();
+    expect(screen.getByText('Check the spelling, or try fewer letters.')).toBeOnTheScreen();
+  });
+
+  it('says how many were searched when some are still to load', async () => {
+    servePartial(failed);
+    await renderScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'zzz');
+
+    expect(await screen.findByText('No matches in the 4 loaded lists')).toBeOnTheScreen();
+    expect(screen.getByText('Check the spelling, or try fewer letters.')).toBeOnTheScreen();
+    expect(screen.getByText('Searched 4 of 9 lists. The rest need a connection.')).toBeOnTheScreen();
+  });
+
+  /** The bin is never searched or re-sorted, and the way back finds things as they were left. */
+  it('hides search, sort and the line in the bin, and keeps the query and mode for the way back', async () => {
+    servePartial(failed);
+    jest.mocked(fetchLists).mockImplementation(async (stream, after) => {
+      if (stream === 'bin') return { lists: [named(6, 'Zoo trip')].map((list) => ({ ...list, deletedAt: BINNED_AT })), next: null, error: null };
+      if (after === null) return { lists: FOUR, next: cursorAt(4), error: null };
+      return failed();
+    });
+    await renderScreen();
+    await fireEvent.changeText(screen.getByLabelText('Search lists'), 'gro');
+    await screen.findByText(/need a connection/);
+
+    await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+    expect(screen.getByText('Deleted lists, newest first.')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search lists')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Sort by name')).not.toBeOnTheScreen();
+    expect(screen.queryByText(/need a connection/)).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('New list')).not.toBeOnTheScreen();
+    expect(drawn()).toEqual(['Zoo trip']);
+
+    await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+    expect(screen.getByLabelText('Search lists')).toHaveDisplayValue('gro');
+    expect(drawn()).toEqual(['Groceries', 'Big grocery run']);
+
+    await fireEvent.press(screen.getByLabelText('New list'));
+    await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+    await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+    expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
+    expect(drawn()).toEqual(['Groceries', 'Big grocery run']);
   });
 });

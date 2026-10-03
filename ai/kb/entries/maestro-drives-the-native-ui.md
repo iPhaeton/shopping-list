@@ -4,15 +4,14 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator, keyboard]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md]
-last_verified: 2026-09-30
-verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Back$' .maestro/flows/set-theme.yaml && ! grep -rqE '^- tapOn: "?(My Lists|Navigate up)"?$' .maestro/flows
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md]
+last_verified: 2026-10-03
+verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Back$' .maestro/flows/set-theme.yaml && ! grep -rqE '^- tapOn: "?(My Lists|Navigate up)"?$' .maestro/flows && ! grep -rq '^- hideKeyboard' .maestro/flows && grep -q '^- pressKey: Enter$' .maestro/flows/tour-search-and-sort.yaml
 related: [phone-is-the-product, list-headers-are-pinned-and-opaque, native-build-toolchain, dev-client-draws-over-the-app, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone, screens-take-navigation-props]
 ---
 
-**Maestro 2.10.0** is how an agent reaches a screen and state on the iOS simulator or Android
-emulator: sign in, navigate, flip the theme, screenshot. It is the only UI driver installed; there
-is no idb or Detox ([native-build-toolchain](native-build-toolchain.md)).
+**Maestro 2.10.0** drives the iOS simulator and Android emulator — sign in, navigate, flip the theme,
+screenshot. It is the only UI driver installed; no idb or Detox ([native-build-toolchain](native-build-toolchain.md)).
 
 **Run it by full path, with Java 17+:**
 
@@ -46,13 +45,12 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   pill. **`killall DeviceHub`** brings it back, and the device stays booted. Clearing
   `HardwareKeyboardLastSeen` did not help; `osascript` cannot send Cmd+Shift+K (no permission).
 - **iOS 27's one-time "Speed up your typing by sliding your finger…" tip** eats the next tap; dismiss
-  it with `tapOn: Continue`. `DidShowContinuousPathIntroduction -bool YES` in `com.apple.Preferences`
-  is unproven as a fix.
+  it with `tapOn: Continue`.
 
 **Traps in writing flows:**
 
-- **Going back, and the screen underneath.** Since task 20 step 5 every screen draws its own `Back`
-  and `back` is Android-only, so `tapOn: Back`; no `Groceries`/`My Lists`/"Navigate up" back label
+- **Going back, and the screen underneath.** Every screen draws its own `Back` and `back` is
+  Android-only, so `tapOn: Back`; no `Groceries`/`My Lists`/"Navigate up" back label
   exists, and the `verify:` keeps them out. But a screen below stays in the hierarchy at its real
   coordinates: **on Sharing, List detail's `Back` is still there underneath**, so the tour taps by
   point (`"10%,9%"`, inside Back at y ≈ 75–111 pt on the 18 Pro). Sharing's header is pinned since
@@ -60,8 +58,9 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   renaming either breaks them as it breaks the RNTL suites
   ([queries-go-through-a11y-labels](queries-go-through-a11y-labels.md)).
 - **A tap on something the keyboard covers lands on the keyboard** (`tapOn: Send code` typed a
-  "t"). `hideKeyboard` on iOS is a swipe on the content, and one opened the row at the screen's
-  centre: the tour leaves the keyboard up and empties a field with `eraseText`.
+  "t"). Never `hideKeyboard`: on iOS it is a swipe on the content, and one opened the row at the
+  screen's centre (the `verify:` keeps it out). **`pressKey: Enter`** closes the keyboard from a
+  search field or an empty Add bar; elsewhere leave it up, and empty a field with `eraseText`.
 - **Maestro cannot perform the iOS edge-swipe back.** A `swipe` from x 0–1%, fast or slow, popped
   nothing and landed on the content, once checking off a row. Test the swipe by hand.
 - **Tap a row only once the list is still and the row is in the open.** A tap during scroll momentum
@@ -77,9 +76,8 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   `mxample.com`, which the server refused as an invalid address. Check `uptime` first; rerun.
 - **A shot right after a push can catch it mid-slide** — rounded corners, black edges:
   `extendedWaitUntil` returns before the transition ends. `waitForAnimationToEnd` first.
-- `takeScreenshot` takes a bare name only; PNGs land in `<--test-output-dir>/takeScreenshot/`.
-- `xcrun simctl status_bar <udid> override --time 9:41 …` matches the mockups' clock until reboot
-  (the 18 Pro's 24-hour locale shows `09:41`).
+- `takeScreenshot` takes a bare name; PNGs land in `<dir>/takeScreenshot/`. `xcrun simctl status_bar
+  <udid> override --time 9:41 …` sets the mockups' clock until reboot (24-hour locale: `09:41`).
 
 **Reaching a time of day** (Auto's sunset and sunrise) takes no code — move the zone, not the clock:
 
@@ -108,7 +106,9 @@ If sign-in fails with "Error sending magic link email", the app is on cloud:
 
 - `flows/`: `open-app` (cold-starts the dev client into Metro by deep link), `sign-in` (`EMAIL`;
   `scripts/mailpit-code.js` reads the code from Mailpit), `ensure-signed-in`, `sign-out`,
-  `set-theme` (`THEME` = `Day`/`Night`/`Auto`), and the two screenshot tours (`THEME` = `day`/`night`).
+  `set-theme` (`THEME` = `Day`/`Night`/`Auto`), the two screenshot tours, and `tour-search-and-sort`
+  (`THEME` = `day`/`night`). **The sort preference persists on the device**, so a flow that sets a
+  sort must set it back before it ends, or it leaks into every later run and shot.
 - `shoot-all.sh <out> <owner-email> <fresh-prefix>` — both tours in both themes, each set
   explicitly, so Auto's default never reaches them. Set name only appears for a never-seen address,
   so each run needs a fresh prefix. Not for a task's shots, which cover only the changed screens

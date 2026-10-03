@@ -4,13 +4,13 @@ title: Deleting stamps `deleted_at` and leaves the row — the bin's first page 
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
-last_verified: 2026-10-02
-verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'binLists(lists)' src/screens/ListsScreen.tsx && grep -q 'binItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'binned > 0 || showDeleted' src/screens/ListsScreen.tsx && grep -q 'inBin > 0 || showDeleted' src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
+last_verified: 2026-10-03
+verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'binLists(lists)' src/screens/ListsScreen.tsx && grep -q 'binItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'binned > 0 || showDeleted' src/screens/ListsScreen.tsx && grep -q 'inBin > 0 || showDeleted' src/screens/ListDetailScreen.tsx && grep -q 'loaded && !showDeleted && arranged && list.nextLive !== null' src/screens/ListDetailScreen.tsx && grep -q "const shownQuery = binned ? '' : query;" src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
 related: [keyset-paging-in-the-order-shown, writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack, limit-checks-pass-an-applied-resend]
 ---
 
-Step 9 added deletion, and **it deletes nothing**. `lists` and `items` each grew a `deleted_at
+**Deleting deletes nothing.** `lists` and `items` each grew a `deleted_at
 timestamptz`; a delete stamps it, a restore nulls it, and the row keeps its place, its id, its
 `list_members` rows and its history. The only statement in the schema that actually removes list data
 is `purge_deleted`, which runs nightly as `postgres` and collects tombstones older than 30 days
@@ -49,12 +49,16 @@ nothing; neither returns an outcome, because a delete cannot itself land on a de
 task 23 step 2 a restore can also be refused at a limit, since nothing in the bin counts toward one
 ([limit-checks-pass-an-applied-resend](limit-checks-pass-an-applied-resend.md)).
 
-**"Show deleted" switches a screen to its bin, and nothing else** — since task 24 step 2, the user's
-call; before, it mixed binned rows in among the live ones. Bin mode shows binned rows only, newest
-deletion first, paged by `(deleted_at, id)` descending
-([keyset-paging-in-the-order-shown](keyset-paging-in-the-order-shown.md)), with no Create / Add bar.
-The bin is never searched, sorted another way, or loaded in full
-([scope-boundaries](scope-boundaries.md)).
+**"Show deleted" switches a screen to its bin, and nothing else** — the user's call; it once mixed
+binned rows in among the live ones. Bin mode shows binned rows only, newest deletion first, paged by
+`(deleted_at, id)` descending ([keyset-paging-in-the-order-shown](keyset-paging-in-the-order-shown.md)).
+Its sentence takes the Create / Add bar's slot, over the sort buttons' 44 pt of sky when entered from
+search — a reader's too, whose read-only line stays below it. The bin is never searched, sorted
+another way, or loaded in full ([scope-boundaries](scope-boundaries.md)): `ListDetailScreen`'s
+`needsCompleting` is false there, so `loadAllItems` is aborted or never starts, and never holds the
+list's paging guard against the bin's own scroll paging. **A binned list is not the bin view**: its
+query is forced to `''`, but its stored item sort applies, and a non-default one over a partial list
+does complete it, with the coverage line under the notice card.
 
 **Its first page arrives before anyone asks, and the client is what hides it.** Opening a list runs
 `loadListItems` ([src/state/usePaging.ts](../../../src/state/usePaging.ts)), which fetches page 1 of
@@ -71,10 +75,8 @@ visible to every member. So the switch is instant and works offline. The consequ
 > `ListDetailScreen`'s "Nothing on this list" empty state and its sort. A list row shows only its
 > name, a product trade-off ([scope-boundaries](scope-boundaries.md)), so `countDone` has no caller.
 
-All four return a fresh array, so a screen handing one to a `FlatList` memoises it.
 `ShowDeletedToggle` renders while the bin has rows **or while it is checked**. An empty bin hides it
 as noise, but restoring the bin's last row must leave the only way back, above `The bin is empty`.
-Its label is the constant `Show deleted`, and no row carries a `Deleted` tag.
 
 **The purge is part of the feature, not a follow-up.** A shopping list is the worst case for soft
 delete — items are added and cleared weekly, and every dead row ships on a read path a whole migration
@@ -106,15 +108,13 @@ independent, which is correct and confusing enough to have earned a line of copy
 screen. Each bin's first page is fetched even while hidden — **bounded**, not minimised, and kept on
 purpose in task 24 step 2: the switch reads it to decide whether to render, and it keeps the bin
 readable offline. Deferring it to the first tick would need another "is the bin empty" signal first.
-Filtering it in a policy is never the answer.
 **The purge has never run on cloud, and neither migration has been pushed there** —
 `create extension pg_cron` is the one statement that may be refused
 ([supabase-local-stack](supabase-local-stack.md)). Nothing has yet read `cron.job_run_details` after a
 real 03:30 run; that failure mode is silent and slow, so check it once after deploying and again a
 week later.
 
-The `verify:` command asserts the parts a refactor would quietly undo: both screens still filter
-through the live and bin helpers and keep a checked switch, `fetchLists` still carries no item
-embed, `loadListItems` still fetches both streams when a list is opened, `my_memberships()` is still
-defined once and free of any tombstone test, the purge still uses `<=` on both tables, and the
-schedule is still in its own file.
+The `verify:` asserts what a refactor would quietly undo: both screens' live and bin helpers and
+checked switch, completion kept out of bin mode, no search on a binned list, no item embed in
+`fetchLists`, both streams on open, a tombstone-free `my_memberships()` defined once, `<=` in the
+purge, and the schedule in its own file.

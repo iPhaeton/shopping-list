@@ -4,17 +4,15 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, d58a9cf, 962533c, a7416fd, 3ccf224]
-last_verified: 2026-10-02
-verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js && grep -q 'bandAt(colors, index)' src/components/ItemRow.tsx && grep -q "from '../../../src/theme.ts'" ai/ux/source/tokens.mjs
-related: [maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props]
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, d58a9cf, 962533c, a7416fd, 3ccf224]
+last_verified: 2026-10-03
+verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && ! grep -qE 'accessibilityValue([^A-Za-z]|$)' node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js && grep -q 'bandAt(colors, index)' src/components/ItemRow.tsx && grep -q "from '../../../src/theme.ts'" ai/ux/source/tokens.mjs
+related: [maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props, search-fold-fallbacks-ship]
 ---
 
-**Since task 20 step 1: the product is the phone app** — iOS and Android, portrait. Before that the
-browser was the de facto target, and older entries still read that way; verifying in the browser
-([supabase-local-stack](supabase-local-stack.md)) still holds for flows, not for looks. The priority
-is the user's: task 20's step-1 description sets it for every later step, and its log asks that it
-be treated as standing.
+**Since task 20 step 1: the product is the phone app** — iOS and Android, portrait — by the user's
+standing priority. Older entries may still read as if the browser were the target; verifying in the
+browser ([supabase-local-stack](supabase-local-stack.md)) still holds for flows, not for looks.
 
 | | role |
 |---|---|
@@ -32,7 +30,8 @@ shadows, safe areas, overscroll, and anything native-only — `Appearance.setCol
 The **iPhone 17e**, whose screen is exactly the mockups' 1170×2532 @3x (390×844 pt), **is gone from
 this Mac** (by 2026-09-30). Task 20 step 6 was checked on the **iPhone 18 Pro** only, by the user's
 instruction: 1206×2622 @3x (402×874 pt), so a screenshot no longer overlays a mockup pixel for
-pixel — compare by measure. It is the simulator prepared for Maestro. The large phone, the
+pixel — compare by measure: it sits **~15.3 pt lower throughout**, and with that offset taken out
+relative geometry matches to ≤ 0.4 pt. It is the simulator prepared for Maestro. The large phone, the
 **iPhone 18 Pro Max**, has never been run — task 20 step 5 skipped it by the user's decision.
 Screenshots saved under `ai/tasks/*/screenshots/` come from the simulator, not the browser.
 **Shoot only the screens a step changed** — the user's standing rule since task 20 step 6, not
@@ -48,11 +47,12 @@ splash emblem under Android 12+'s circular mask, hardware back from Account and 
 Sharing — its pinned header, its `KeyboardAvoidingView` (no `behavior` on Android), and taps on the
 suggestion rows below the header's edge, which iOS reaches only through Fabric's overflow-aware hit
 test. The installed dev client predates both native modules ([native-build-toolchain](native-build-toolchain.md)).
+**Task 24's search and sort screens are unverified on Android too**: the `Pixel_10` emulator booted,
+the 2026-09-27 dev client brought up no JS target, and the user stopped the check ("No Android").
 
 **The design is the mockups in `ai/ux/primary/`** — each screen, some in several states, day and
 moonlit, compared by measure against the simulator. Where a description's prose about looks and
-its images differ, the images win; its constraints and done-when still govern (task 20 step 5's 18
-arrived in `962533c`, after its description said no image covered those screens).
+its images differ, the images win; its constraints and done-when still govern.
 
 **The four oldest Lists and List detail mockups are stale — do not build to them.**
 [lists-screen-quiet-horizon](../../../ai/ux/primary/lists-screen-quiet-horizon.png) and
@@ -101,19 +101,20 @@ edge from those shots.** The rim's brightness is `stopOpacity={0.2}` → `0` in 
   thing that writes browser history, when `linking` is passed. So no screen has ever pushed a
   browser history entry. The user declined a web-only `linking` config in task 20 step 4. On web,
   the drawn `Back` is the way back, as the native header's back button was before.
+- **No accessibility value on web.** react-native-web 0.21 drops `accessibilityValue` (no
+  `aria-valuetext` in the DOM) — the same family as the missing checked state. The sort buttons' and
+  the magnifier's values (`SortButtons`, `IconButton`'s `value`) exist on native and in RNTL only.
+  The `verify:` fails the day RNW maps the prop.
 - The page is blank white before the theme gate opens, even at Night.
 - The browser's own blue focus ring.
 
 **What to do:** check looks on the simulator, flows on web, and both before calling a step done.
 When the two disagree, the phone wins and web gets a fallback.
 
-**Checking the phone design on web catches its own bugs, not just fallback needs.** Task 20 step 3's
-full-bleed `Sky`/`Band` background behind `ListsScreen`'s `FlatList` surfaced two rendering bugs only
-visible on web — a tap-eating layering bug
-([absolute-decoration-needs-pointer-events-on-its-wrapper](absolute-decoration-needs-pointer-events-on-its-wrapper.md))
-and a seam below a short list
-([flatlist-footer-absent-when-list-is-empty](flatlist-footer-absent-when-list-is-empty.md)). Both
-would have shipped invisibly past RNTL and were only found by driving the actual browser DOM. Step 5
-found the same family again: react-native-web's text input is not positioned, so a `Card`'s absolute
-blur layer painted over — and blurred — the field inside it (hence `TextField`'s
+**Checking the phone design on web catches its own bugs, not just fallback needs** — ones RNTL
+cannot see, found only by driving the browser DOM: a tap-eating layering bug
+([absolute-decoration-needs-pointer-events-on-its-wrapper](absolute-decoration-needs-pointer-events-on-its-wrapper.md)),
+a seam below a short list
+([flatlist-footer-absent-when-list-is-empty](flatlist-footer-absent-when-list-is-empty.md)), and an
+unpositioned RNW text input that a `Card`'s absolute blur layer painted over (hence `TextField`'s
 `position: 'relative'`, a no-op on native).

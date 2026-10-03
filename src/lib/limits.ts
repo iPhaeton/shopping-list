@@ -22,7 +22,7 @@ export const LIMIT_CODES = {
 } as const;
 
 /** `1000` → `1,000`, without leaning on `Intl` being there in every JS engine the app runs in. */
-function grouped(n: number): string {
+export function grouped(n: number): string {
   return String(n).replace(/\B(?=(\d{3})+$)/g, ',');
 }
 

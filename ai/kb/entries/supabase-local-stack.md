@@ -4,8 +4,8 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, a572bd3]
-last_verified: 2026-10-02
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, a572bd3]
+last_verified: 2026-10-03
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && grep -q 'is already defined and IS NOT overwritten' node_modules/@expo/env/build/index.js && grep -qF "mode !== 'test' && \`.env.local\`, \`.env.\${mode}\`, \`.env\`" node_modules/@expo/env/build/index.js
 related: [trigram-index-needs-three-characters, cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
@@ -36,12 +36,10 @@ has the block, the From constraint and what is still unproven about delivery.
 
 **The cloud schema is kept current with `npx supabase db push`, lags whenever a step adds a
 migration, and reads back from the CLI.** `npx supabase migration list --linked` and `npx supabase
-db dump --linked [-s <schema>]` need only the stored login (they open a database connection, and
-`db dump` reports objects the role does not own, so a `realtime.messages` policy shows in
-`-s realtime`). Ask them rather than assuming — remote state is a dated observation, not an
-invariant, so `verify:` deliberately asserts none of it. Step 9's purge schedule is its own migration
-because `create extension pg_cron` is confirmed only on this Docker stack and may be refused on
-cloud ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)); **an unapplied migration
+db dump --linked [-s <schema>]` need only the stored login (`db dump` shows objects the role does
+not own, so a `realtime.messages` policy shows in `-s realtime`). Ask them rather than assuming —
+`verify:` deliberately asserts none of it. `pg_cron` is confirmed only on this Docker stack, so the
+purge schedule is its own migration ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)); **an unapplied migration
 wedges every later `db push`** — the CLI retries from the earliest unapplied file — and `npx supabase
 migration repair --status applied <timestamp>` is the way out. No client has used the cloud
 realtime socket yet ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
@@ -67,12 +65,11 @@ Three things bite here:
   (`platform=web` for the browser).
 - The dev server must be **restarted** after editing `.env` — sometimes with `--clear` — because the
   values are inlined at build time.
-- **Which value wins is measured, not read off the code, and it has flipped once.** Today (SDK 57,
-  ios and web bundles, 2026-09-28) it is **shell > `.env.local` > `.env`**: `@expo/env` never
-  overwrites a key already set, so a shell value is missing from the `env: export` line. On
-  2026-09-09 (SDK 54) the file beat the shell, through the dev-only `expo/virtual/env` spreading the
-  `.env*` files over `process.env`; that code is still there, but its `require.context` now comes out
-  empty, for an unidentified reason, and no static check can see that. Read the bundle first.
+- **Which value wins is measured, not read off the code, and it has flipped once** (under SDK 54
+  the file beat the shell). Today (SDK 57, ios and web bundles, 2026-09-28) it is **shell >
+  `.env.local` > `.env`**: `@expo/env` never overwrites a key already set. The dev-only
+  `expo/virtual/env` that once reversed it is still there, inert for an unidentified reason, and no
+  static check can see that. Read the bundle first.
 
 **A new migration: `npx supabase migration up --local`** applies only what is pending and keeps
 every row, the load-test users below included. **An edited migration or `supabase/config.toml`**
@@ -91,16 +88,19 @@ authenticated role's 8 s `statement_timeout` (HTTP 500, `57014`). Their names al
 seeded ones: "Jor" answers `Aaliyah Jordan 107351`… before `seed.mjs`'s Jordan. Count them before a
 sharing test; the script's own cleanup line or a `db reset` removes them.
 
-**`db reset` wipes the `auth` schema too, and the browser does not know that.** A tab still holding
-a session from before the reset fails its next token refresh with a 400 on `/auth/v1/token`. Nothing
-is broken — clear the site's local storage, or sign in again.
+**Other local data, as of 2026-10-03 — check before relying on it.** Every real list of
+`maya@example.com` (Groceries, Hardware store, …) is binned at one identical stamp, and her live
+lists are load-test `Seed list 43xx`, so **screenshots use `maya3@example.com`, which holds the
+mockups' set**. For paging and the 2,000-row completion cap: `t23lists` has 403 live lists, `Seed
+list 5` 1,000 extra items, and `Seed list 6` 2,100 (`Bulk 1…2100`), past the cap.
 
-**To simulate being offline, abort requests to port 54321 — not `setOffline`.**
-`page.context().setOffline(true)` also blocks the Metro bundle, so the app never boots and a restart
-cannot be tested. Routing only `**/127.0.0.1:54321/**` to `route.abort()` is faithful: the app
-starts normally and the database is unreachable, the scenario
-[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) exists for. Stopping the containers
-works too, but is slower and takes Mailpit with it.
+**`db reset` wipes the `auth` schema too**: a tab holding an older session fails its next refresh
+with a 400 on `/auth/v1/token`. Nothing is broken — clear the site's storage, or sign in again.
+
+**To simulate being offline, abort requests to port 54321 — not `setOffline`**, which also blocks
+the Metro bundle, so the app never boots. Routing `**/127.0.0.1:54321/**` to `route.abort()` leaves
+the app running with the database unreachable — the scenario
+[writes-retry-from-an-outbox](writes-retry-from-an-outbox.md) exists for.
 
 **To test row-level security without a browser, switch role inside a psql transaction.**
 `set local role authenticated; set local request.jwt.claims = '{"sub":"<user-uuid>","role":"authenticated"}';`

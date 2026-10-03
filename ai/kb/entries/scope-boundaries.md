@@ -1,17 +1,17 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and paged lists, required unique names, leaving a list, Day/Night/Auto themes, and list and item limits in; invites out
+title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and paged lists, required unique names, leaving a list, Day/Night/Auto themes, list and item limits, and search and sort of live rows in; invites out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/description-step-5.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/23-list-limits/description-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/description-step-2.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, b78d16f]
-last_verified: 2026-10-02
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/description-step-5.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/23-list-limits/description-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/description-step-2.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, b78d16f]
+last_verified: 2026-10-03
 related: [suggestions-are-proposals, keyset-paging-in-the-order-shown, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters, phone-is-the-product, theme-reaches-native-surfaces, theme-tokens-only, auto-theme-follows-the-time-zone, limit-checks-pass-an-applied-resend]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
 step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of task 24 step 2:
+([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of task 24 step 3:
 
 | | |
 |---|---|
@@ -28,7 +28,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | step 10 | renaming an item, by an owner or writer — an inline editor on the row, sent through a `rename_item` RPC like every other item write |
 | step 11 | a list's items paged, fetched only once the list is opened — a first page of live rows and of the bin together, the rest read on scroll by keyset |
 | step 12 | the app is called **ShoppingLoop** wherever a person sees it — visible name only; `slug`, `scheme`, `package.json` and `project_id` stay `shopping-list` ([shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md)) |
-| step 13 phases 1-2 | Google added as a second sign-in method: `[auth.external.google]` enabled and proven server-side (phase 1), then a native-only "Continue with Google" button (`Platform.OS !== 'web'`) and `SessionContext.signInWithGoogle` added client-side, delegating to `src/lib/googleSignIn.ts` (phase 2); still no production push and no completed real-account sign-in on either device ([google-native-signin-library-gaps](google-native-signin-library-gaps.md)) |
+| step 13 phases 1-2 | Google as a second sign-in method: enabled server-side, then a native-only "Continue with Google" button; no production push and no completed real-account sign-in on either device ([google-native-signin-library-gaps](google-native-signin-library-gaps.md)) |
 | step 14 | an Account screen: plain "Sign out" moved off the `Lists` header behind it, alongside a separately confirmed "Sign out of all devices" (`supabase.auth.signOut({ scope: 'global' })`) |
 | step 17 | every account gets a required, unique (case-insensitive), editable display name — a blocking `SetNameScreen` gate between sign-in and the rest of the app, an `Account` screen edit, and the sharing roster showing names instead of emails |
 | step 18 | inviting is by name, not email: a live, debounced autocomplete (`search_users_by_name`, trigram-indexed, self-excluded, capped at 5) replaces the free-typed address field, and `share_list` now takes an id the search already resolved instead of resolving an email server-side |
@@ -37,22 +37,21 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | task 23 step 1 | the lists themselves paged the way items are — 100 a page, live and bin streams, page 1 of both on every fetch, the rest on scroll |
 | task 23 step 2 | three limits the database enforces: 100 lists you **own**, 1,000 lists you are on, 1,000 items in a list, none counting the bin; at either list limit the Lists screen swaps its Create bar for a sentence saying so |
 | task 24 step 2 | "Show deleted" switches either screen to its bin alone — newest deletion first and paged that way, no Create / Add bar, `The bin is empty` once emptied; the switch reads `Show deleted` with no count, and no row carries a `Deleted` tag. **The bin is never searched, sorted another way, or loaded in full** |
+| task 24 step 3 | search and sort of **live** rows. Search is the resting state of Lists and List detail. Sort is toggle buttons in fixed priority, `todo` → `az` → `date`, and `date` is never off; item sort is per list, the Lists sort global, both per device (`sort-preference` v1, above `SessionProvider` so it survives sign-out, non-default keys only, never pruned). A non-empty query or a non-default sort over a live stream with a non-null cursor completes that stream in the background, up to 2,000 rows held (`COMPLETION_CAP`), then says so (`Searched the first 2,000 items.`). A binned list shows no query; its stored item sort applies |
 
 **Still deliberately out: inviting someone with no account (`list_invites`), showing an owner how
 widely a list is shared without opening it, passwords, and conflict resolution beyond last-write-wins.**
 
 **Two of those are database limits, not backlog laziness.** A stranger needs a `list_invites` table
-claimed at sign-up — since step 18 `share_list` takes only a tapped `search_users_by_name` result. And
-a list cannot say "shared with 2 people": the `list_members` select policy shows you your own row, so
-any count the client computed would read `1` for everybody.
+claimed at sign-up, since `share_list` takes only a resolved user id. And the `list_members` select
+policy shows you your own row, so a client-computed "shared with N" would read `1` for everybody.
 
 Equally deliberate, and in the same family: a sole owner deleting their account leaves an **ownerless
 list nobody can see or clean up** — the alternative was cascading onto lists other people are in
 ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)).
 
-**"The user can create a list" means *many* named lists, not one standing list** — settled against a
-genuinely ambiguous step-1 description, which is why there are two list screens (`Lists` →
-`ListDetail`). Treat it as settled: do not "simplify" the product back to one list.
+**"The user can create a list" means *many* named lists**, settled against an ambiguous step-1
+description — hence two list screens (`Lists` → `ListDetail`). Do not "simplify" back to one list.
 
 ## What a landed step did *not* land
 
@@ -93,10 +92,9 @@ Each of these is easy to assume and wrong:
   per account. **Auto reads no location** ([auto-theme-follows-the-time-zone](auto-theme-follows-the-time-zone.md));
   some native surfaces follow the device ([theme-reaches-native-surfaces](theme-reaches-native-surfaces.md)).
   No iPhone 18 Pro Max pass, and step 5 unseen on Android ([phone-is-the-product](phone-is-the-product.md)).
-- **task 23 step 1, paged lists** — no migration or index; the sharing roster is still unpaged.
-  Accepted by parity with items, and reachable only past 100 lists in a stream: a list created here,
-  once acknowledged, drops below the loaded range until a scroll reaches it; a list newly shared
-  with you arrives on the nudge only if it sorts inside the loaded range, otherwise with its page.
+- **task 23 step 1, paged lists** — no migration or index; the sharing roster is unpaged. Past 100
+  lists in a stream, an acknowledged new list drops below the loaded range until a scroll reaches it,
+  and a newly shared list arrives on the nudge only if it sorts inside that range.
 - **task 23 step 2, limits** — **no locks: overshoot is accepted**, the user's call. Count-then-write
   races under READ COMMITTED, so writes at a limit at the same instant can both pass; do not add
   `for update`, advisory locks, counter columns or serializable isolation. No backfill: an account
@@ -109,10 +107,12 @@ Each of these is easy to assume and wrong:
 - **task 24 step 2, the bin view** — no index for the lists bin, so every page of it costs the whole
   account; denormalising the stamp onto `list_members` is the escalation, unbuilt until measured slow
   ([keyset-paging-in-the-order-shown](keyset-paging-in-the-order-shown.md)).
+- **task 24 step 3, search and sort** — no server change: both run on the client over the rows held,
+  and nothing past the 2,000-row cap is searched or sorted. Bin mode gets no search, no sort, no
+  coverage line and no header button. A sort is never synced to the account.
 
-**Cloud is ten migration files behind local, not pushed at all** — every `supabase/migrations/*.sql`
-dated after `20260909000000`, from deletion to the item bin's index — and no client has ever
-connected to the cloud realtime socket. A pushed migration is schema-level proof, never
+**Cloud is ten migration files behind local** — every `supabase/migrations/*.sql` dated after
+`20260909000000` — and no client has ever connected to the cloud realtime socket. A pushed migration is schema-level proof, never
 behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
 
 **What to do:** do not add any of the out-of-scope items speculatively, and do not treat their

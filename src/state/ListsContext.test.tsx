@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { useRef, useState } from 'react';
 import { Pressable, Text } from 'react-native';
 
 import { writeCachedLists } from '../lib/listCache';
@@ -24,6 +25,7 @@ import { loadOutbox, saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
 import { inDeletionOrder, inJoinOrder, NO_LIST_COUNTS, NO_LIST_CURSORS } from './listsReducer';
 import type { BinCursor, Cursor, List, Stream } from './types';
+import { COMPLETION_CAP } from './usePaging';
 
 /**
  * `src/lib/listsApi.ts` is mocked at the module boundary, the same seam the auth suites use for
@@ -209,7 +211,17 @@ function Probe() {
     loadMore,
     loadListItems,
     loadMoreLists,
+    loadAllItems,
+    loadAllLists,
+    readEpoch,
   } = useLists();
+  // The last completion's outcome, and the way to stop the one running.
+  const [completion, setCompletion] = useState('none');
+  const stop = useRef(new AbortController());
+  const completeWith = (run: (signal: AbortSignal) => Promise<string>) => {
+    stop.current = new AbortController();
+    void run(stop.current.signal).then(setCompletion);
+  };
 
   return (
     <>
@@ -220,6 +232,8 @@ function Probe() {
       <Text>{`lastNudge: ${lastNudge ? (lastNudge.listId ?? 'all') : 'none'}`}</Text>
       <Text>{`list cursors: ${listCursors.live?.id ?? 'end'}, ${listCursors.bin?.id ?? 'end'}`}</Text>
       <Text>{`list counts: ${listCounts.owned} owned, ${listCounts.total} in total`}</Text>
+      <Text>{`read epoch: ${readEpoch}`}</Text>
+      <Text>{`completion: ${completion}`}</Text>
       {lists.map((list) => (
         <Text key={list.id}>
           {`${list.id} ${list.name}${list.deletedAt === null ? '' : ' [binned]'}${
@@ -256,6 +270,9 @@ function Probe() {
       <Button label="enter list" onPress={() => void loadListItems(lists[0]?.id ?? 'l1')} />
       <Button label="load more lists" onPress={() => void loadMoreLists('live')} />
       <Button label="load more lists bin" onPress={() => void loadMoreLists('bin')} />
+      <Button label="load all items" onPress={() => completeWith((signal) => loadAllItems('l1', signal))} />
+      <Button label="load all lists" onPress={() => completeWith(loadAllLists)} />
+      <Button label="stop loading all" onPress={() => stop.current.abort()} />
     </>
   );
 }
@@ -1943,4 +1960,250 @@ it('leaves one banner and drops the item when the database says the list is full
   await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
   expect(api.setItemDone).not.toHaveBeenCalled();
   expect(screen.queryByText(/One too many/)).not.toBeOnTheScreen();
+});
+
+/**
+ * A search or a non-default sort is right only over a whole stream, so a screen completes it in the
+ * background: page after page from state's cursor until it ends, and never a burst of requests.
+ */
+describe('completing a stream', () => {
+  const AFTER_EGGS = { createdAt: T(3), id: 'i3' };
+  type Page = { items: List['items'] | null; next: Cursor | null; error: string | null };
+
+  /** The live continuations asked for, in order — page 1 reads and the bin left out. */
+  function liveContinuations() {
+    return api.fetchItems.mock.calls.filter(([, stream, after]) => stream === 'live' && after !== null).map(([, , after]) => after);
+  }
+
+  /** A list holding `n` live rows, with more to come. */
+  function holding(n: number): List {
+    const items = Array.from({ length: n }, (_, i) => ({ ...fetched(`i${i}`, `Row ${i}`, 1), id: `i${i}` }));
+    return { ...GROCERIES, items, nextLive: { createdAt: T(1), id: `i${n - 1}` }, nextBin: null };
+  }
+
+  describe("a list's rows", () => {
+    it('reads every remaining page from the cursor, one at a time, until it ends', async () => {
+      serveLists([PAGED]);
+      api.fetchItems
+        .mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: AFTER_EGGS, error: null })
+        .mockResolvedValueOnce({ items: [fetched('i4', 'Ham', 4)], next: null, error: null });
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load all items'));
+
+      expect(await screen.findByText('completion: complete')).toBeOnTheScreen();
+      expect(liveContinuations()).toEqual([AFTER_BREAD, AFTER_EGGS]);
+      expect(screen.getByText(/^l1 Groceries \[more binned\]: Milk, Bread, .*Eggs, Ham$/)).toBeOnTheScreen();
+    });
+
+    /** Offline every request fails at once: asking again would be a request loop. */
+    it('stops after one request when the page fails', async () => {
+      serveLists([PAGED]);
+      api.fetchItems.mockResolvedValue({ items: null, next: null, error: 'Failed to fetch' });
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load all items'));
+
+      expect(await screen.findByText('completion: failed')).toBeOnTheScreen();
+      expect(api.fetchItems).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('error: none')).toBeOnTheScreen();
+    });
+
+    it('stops at the cap without a request when it already holds that many', async () => {
+      serveLists([holding(COMPLETION_CAP)]);
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load all items'));
+
+      expect(await screen.findByText('completion: capped')).toBeOnTheScreen();
+      expect(api.fetchItems).not.toHaveBeenCalled();
+    });
+
+    it('stops at the cap once a page brings it there', async () => {
+      serveLists([holding(COMPLETION_CAP - 400)]);
+      api.fetchItems.mockResolvedValueOnce({
+        items: Array.from({ length: 400 }, (_, i) => fetched(`p${i}`, `Page row ${i}`, 2)),
+        next: { createdAt: T(2), id: 'p399' },
+        error: null,
+      });
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load all items'));
+
+      expect(await screen.findByText('completion: capped')).toBeOnTheScreen();
+      expect(api.fetchItems).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * The gap this is built against: a `hydrate` replaces state as deep as it was when *it* started.
+     * A loop carrying its own cursor would fold the page it asked for on top, past a page the replace
+     * dropped, and call the stream complete with rows missing. It reads the cursor from state instead,
+     * and a page that no longer continues it is thrown away.
+     */
+    it('drops a page a re-read moved the cursor past, and carries on from state', async () => {
+      jest.useFakeTimers();
+      serveLists([PAGED]);
+      let settle = (_page: Page) => {};
+      api.fetchItems.mockImplementation(async (_listId, stream, after) => {
+        if (stream === 'bin') {
+          return { items: [fetched('b1', 'Old jam', 11, T(21)), fetched('b2', 'Jam', 12, T(20))], next: AFTER_JAM, error: null };
+        }
+        if (after === null) {
+          // Somebody binned Bread since: page 1 now reaches Eggs.
+          return { items: [fetched('i1', 'Milk', 1), fetched('i3', 'Eggs', 3)], next: AFTER_EGGS, error: null };
+        }
+        if (after.id === AFTER_BREAD.id) return new Promise<Page>((resolve) => (settle = resolve));
+        return { items: [fetched('i4', 'Ham', 4)], next: null, error: null };
+      });
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load all items'));
+      expect(liveContinuations()).toEqual([AFTER_BREAD]);
+
+      // The re-read: the list arrives bare, so its rows are read again from page 1.
+      serveLists([{ ...PAGED, itemsLoaded: false, items: [], nextLive: null, nextBin: null }]);
+      await act(async () => nudge());
+      await act(async () => {
+        jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+      });
+      await waitFor(() => expect(screen.getByText(/^l1 Groceries \[more\] \[more binned\]: Milk, Eggs, /)).toBeOnTheScreen());
+
+      // The page asked for before the re-read lands now, continuing a cursor state no longer ends at.
+      await act(async () =>
+        settle({ items: [fetched('i3', 'Eggs', 3), fetched('i9', 'Stale', 9)], next: { createdAt: T(9), id: 'i9' }, error: null })
+      );
+
+      expect(await screen.findByText('completion: complete')).toBeOnTheScreen();
+      expect(liveContinuations()).toEqual([AFTER_BREAD, AFTER_EGGS]);
+      expect(screen.getByText(/Milk, Eggs, Old jam \[binned\], Jam \[binned\], Ham$/)).toBeOnTheScreen();
+      expect(screen.queryByText(/Stale/)).not.toBeOnTheScreen();
+    });
+
+    /** A scroll's page is in flight: the loop waits for it rather than asking twice. */
+    it('waits for a page already in flight, and does not fail because it did', async () => {
+      serveLists([PAGED]);
+      let settle = (_page: Page) => {};
+      api.fetchItems.mockReturnValueOnce(new Promise<Page>((resolve) => (settle = resolve)));
+      api.fetchItems.mockResolvedValueOnce({ items: [fetched('i3', 'Eggs', 3)], next: null, error: null });
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load more'));
+      await fireEvent.press(screen.getByLabelText('load all items'));
+      expect(api.fetchItems).toHaveBeenCalledTimes(1);
+
+      // The scroll's page fails; the loop asks for its own, from the same cursor.
+      await act(async () => settle({ items: null, next: null, error: 'Failed to fetch' }));
+
+      expect(await screen.findByText('completion: complete')).toBeOnTheScreen();
+      expect(liveContinuations()).toEqual([AFTER_BREAD, AFTER_BREAD]);
+    });
+
+    it('stops between pages once told to, still folding the page it asked for', async () => {
+      serveLists([PAGED]);
+      let settle = (_page: Page) => {};
+      api.fetchItems.mockReturnValueOnce(new Promise<Page>((resolve) => (settle = resolve)));
+      await renderProbe();
+
+      await fireEvent.press(screen.getByLabelText('load all items'));
+      await fireEvent.press(screen.getByLabelText('stop loading all'));
+      await act(async () => settle({ items: [fetched('i3', 'Eggs', 3)], next: AFTER_EGGS, error: null }));
+
+      expect(await screen.findByText('completion: stopped')).toBeOnTheScreen();
+      expect(screen.getByText(/Eggs$/)).toBeOnTheScreen();
+      expect(api.fetchItems).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('the lists', () => {
+    it('reads every remaining page of lists, one at a time, until it ends', async () => {
+      servePagedLists([1, 2, 3, 4, 5].map((n) => member(n)), 2);
+      await renderProbe();
+      api.fetchLists.mockClear();
+
+      await fireEvent.press(screen.getByLabelText('load all lists'));
+
+      expect(await screen.findByText('completion: complete')).toBeOnTheScreen();
+      expect(api.fetchLists.mock.calls).toEqual([
+        ['live', cursorAt(2)],
+        ['live', cursorAt(4)],
+      ]);
+      expect(screen.getByText(row(5))).toBeOnTheScreen();
+      expect(screen.getByText('list cursors: end, end')).toBeOnTheScreen();
+    });
+
+    it('stops after one request when a page of lists fails', async () => {
+      servePagedLists([1, 2, 3, 4, 5].map((n) => member(n)), 2);
+      await renderProbe();
+      api.fetchLists.mockClear();
+      api.fetchLists.mockResolvedValue({ lists: null, next: null, error: 'Failed to fetch' });
+
+      await fireEvent.press(screen.getByLabelText('load all lists'));
+
+      expect(await screen.findByText('completion: failed')).toBeOnTheScreen();
+      expect(api.fetchLists).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops at the cap without a request when it already holds that many', async () => {
+      const many = Array.from({ length: COMPLETION_CAP }, (_, i) => member(i + 1));
+      serveLists(many, { live: cursorAt(COMPLETION_CAP) });
+      await renderProbe();
+      api.fetchLists.mockClear();
+
+      await fireEvent.press(screen.getByLabelText('load all lists'));
+
+      expect(await screen.findByText('completion: capped')).toBeOnTheScreen();
+      expect(api.fetchLists).not.toHaveBeenCalled();
+    });
+  });
+});
+
+/**
+ * There is no connectivity library, so the app learns it is back online only from a read that
+ * succeeds. `readEpoch` counts them, and a screen restarts a failed completion when it moves.
+ */
+describe('the read counter', () => {
+  it('moves on a full re-read that succeeds, and not on one that fails', async () => {
+    jest.useFakeTimers();
+    serveLists([GROCERIES]);
+    await renderProbe();
+    expect(screen.getByText('read epoch: 1')).toBeOnTheScreen();
+
+    failLists('Failed to fetch');
+    await act(async () => resubscribe());
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+    await waitFor(() => expect(hydrations()).toBe(2));
+    expect(screen.getByText('read epoch: 1')).toBeOnTheScreen();
+
+    serveLists([GROCERIES]);
+    await act(async () => resubscribe());
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(screen.getByText('read epoch: 2')).toBeOnTheScreen());
+  });
+
+  it('moves on a re-read of a named list only when that read succeeds', async () => {
+    jest.useFakeTimers();
+    serveLists([GROCERIES]);
+    await renderProbe();
+    api.fetchList.mockResolvedValue({ list: null, error: 'Failed to fetch' });
+
+    await act(async () => nudge('l1'));
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+    await waitFor(() => expect(api.fetchList).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('read epoch: 1')).toBeOnTheScreen();
+
+    api.fetchList.mockResolvedValue({ list: GROCERIES, error: null });
+    await act(async () => nudge('l1'));
+    await act(async () => {
+      jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+    });
+
+    await waitFor(() => expect(screen.getByText('read epoch: 2')).toBeOnTheScreen());
+  });
 });

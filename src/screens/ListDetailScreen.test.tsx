@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Pressable, Text } from 'react-native';
 
 import {
   addItem as addItemRequest,
@@ -12,9 +13,11 @@ import {
   setItemDeleted,
   setListDeleted,
 } from '../lib/listsApi';
+import { subscribeToChanges } from '../lib/listsChannel';
 import type { ListDetailScreenProps } from '../navigation/types';
-import type { List, Role } from '../state/types';
+import type { Item, List, Role } from '../state/types';
 import { ListsProvider, useLists } from '../state/ListsContext';
+import { SortProvider } from '../state/SortContext';
 import { ListDetailScreen } from './ListDetailScreen';
 
 /**
@@ -38,6 +41,17 @@ jest.mock('../lib/listsApi', () => ({
 
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
 jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
+
+/** What `App.tsx` mounts above the screens: the remembered sorts, then the signed-in lists. */
+function Providers({ children }: { children: ReactNode }) {
+  return (
+    <SortProvider>
+      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+        {children}
+      </ListsProvider>
+    </SortProvider>
+  );
+}
 
 /**
  * What the database holds, as `fetchLists` answers it: one stream at a time, the lists with no
@@ -81,16 +95,18 @@ function Harness({ listName }: { listName: string }) {
  */
 async function renderScreen(listName = 'Groceries') {
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <Harness listName={listName} />
-    </ListsProvider>
+    </Providers>
   );
 
   // Nothing renders until the fetch has settled and the harness has created its list.
   await screen.findByLabelText('Add an item');
 }
 
+/** Through the Add bar, switching to it first when search holds the slot. */
 async function addItem(title: string) {
+  if (!screen.queryByLabelText('Add an item')) await fireEvent.press(screen.getByLabelText('New item'));
   await fireEvent.changeText(screen.getByLabelText('Add an item'), title);
   await fireEvent.press(screen.getByLabelText('Add'));
 }
@@ -124,9 +140,9 @@ async function renderAs(role: Role) {
   serveLists([{ ...SHARED, role }]);
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('l1')} />
-    </ListsProvider>
+    </Providers>
   );
 
   // Every role renders the item; only the controls around it differ.
@@ -171,9 +187,9 @@ it('goes back from its own back button', async () => {
 
 it('offers a way back from a list that is not found', async () => {
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('does-not-exist')} />
-    </ListsProvider>
+    </Providers>
   );
 
   await fireEvent.press(screen.getByLabelText('Back'));
@@ -249,9 +265,9 @@ it('keeps an item added offline and says it is waiting to sync', async () => {
 
 it('falls back to a not-found state for an unknown list', async () => {
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('does-not-exist')} />
-    </ListsProvider>
+    </Providers>
   );
 
   expect(await screen.findByText('List not found')).toBeOnTheScreen();
@@ -273,9 +289,9 @@ it('reads a list it does not hold before saying it is not found', async () => {
   );
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('l7')} />
-    </ListsProvider>
+    </Providers>
   );
 
   expect(await screen.findByLabelText('Loading list')).toBeOnTheScreen();
@@ -339,9 +355,9 @@ describe('loading a list on entry', () => {
       .mockImplementationOnce(async () => ({ items: [], next: null, error: null }));
 
     await render(
-      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <Providers>
         <ListDetailScreen {...detailProps('l1')} />
-      </ListsProvider>
+      </Providers>
     );
 
     expect(await screen.findByLabelText('Loading list items')).toBeOnTheScreen();
@@ -364,9 +380,9 @@ describe('loading a list on entry', () => {
     serveLists([{ ...BARE, itemsLoaded: true }]);
 
     await render(
-      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <Providers>
         <ListDetailScreen {...detailProps('l1')} />
-      </ListsProvider>
+      </Providers>
     );
 
     await screen.findByText('Nothing on this list');
@@ -404,9 +420,9 @@ describe('a reader', () => {
     serveLists([{ ...SHARED, role: 'reader', deletedAt: null, items: [], nextLive: null, nextBin: null }]);
 
     await render(
-      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <Providers>
         <ListDetailScreen {...detailProps('l1')} />
-      </ListsProvider>
+      </Providers>
     );
 
     // The title is unchanged; only the hint knows about roles.
@@ -440,8 +456,12 @@ describe('a reader', () => {
 });
 
 describe('a writer', () => {
-  it('gets the Add bar and no read-only note', async () => {
+  /** Search holds the slot at rest; the header's Plus swaps in the Add bar. */
+  it('gets the Add bar behind New item, and no read-only note', async () => {
     await renderAs('writer');
+
+    expect(screen.getByLabelText('Search items')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByLabelText('New item'));
 
     expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
     expect(
@@ -541,7 +561,7 @@ describe('an owner', () => {
     await fireEvent.changeText(screen.getByLabelText('List name'), 'Weekly shop');
     await fireEvent.press(screen.getByLabelText('Save'));
 
-    expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Search items')).toBeOnTheScreen();
     expect(screen.queryByLabelText('List name')).not.toBeOnTheScreen();
     expect(renameList).toHaveBeenCalledWith('l1', 'Weekly shop');
   });
@@ -596,9 +616,9 @@ async function renderWithBin(role: Role = 'owner') {
     ]);
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('l1')} />
-    </ListsProvider>
+    </Providers>
   );
 
   await screen.findByLabelText('Milk');
@@ -627,7 +647,7 @@ it('switches the list to its bin and back, with no second request', async () => 
   expect(screen.getByLabelText('Bread')).toBeOnTheScreen();
   expect(screen.queryByLabelText('Milk')).not.toBeOnTheScreen();
   expect(screen.getByText('Deleted items, newest first.')).toBeOnTheScreen();
-  expect(screen.queryByLabelText('Add an item')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Search items')).not.toBeOnTheScreen();
   // Every row here is deleted, so no row says so.
   expect(screen.queryByText('Deleted')).not.toBeOnTheScreen();
   expect(fetchLists).not.toHaveBeenCalled();
@@ -637,7 +657,7 @@ it('switches the list to its bin and back, with no second request', async () => 
 
   expect(screen.getByLabelText('Milk')).toBeOnTheScreen();
   expect(screen.queryByLabelText('Bread')).not.toBeOnTheScreen();
-  expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Search items')).toBeOnTheScreen();
 });
 
 it('does not offer the switch when nothing has been deleted', async () => {
@@ -678,14 +698,18 @@ it('sends an item to the bin and brings it back', async () => {
   expect(setItemDeleted).toHaveBeenCalledWith('i2', false);
 });
 
-/** The read-only notice is not a write control, so a reader keeps it in the bin too. */
-it('keeps a reader’s read-only notice in the bin', async () => {
+/**
+ * A reader's slot holds the search, and the bin is never searched, so the bin sentence takes its
+ * place as it does for an editor. The read-only sentence is not a control: it stays, under it.
+ */
+it('keeps a reader’s read-only sentence in the bin, under the bin sentence', async () => {
   await renderWithBin('reader');
 
   await fireEvent.press(screen.getByLabelText('Show deleted'));
 
+  expect(screen.getByText('Deleted items, newest first.')).toBeOnTheScreen();
   expect(screen.getByText('Read only — you can see this list but not change it.')).toBeOnTheScreen();
-  expect(screen.queryByText('Deleted items, newest first.')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Search items')).not.toBeOnTheScreen();
   expect(screen.getByLabelText('Bread')).toBeOnTheScreen();
 });
 
@@ -726,9 +750,9 @@ it('says the list is empty when every live item has been deleted', async () => {
     ]);
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('l1')} />
-    </ListsProvider>
+    </Providers>
   );
 
   expect(await screen.findByText('Nothing on this list')).toBeOnTheScreen();
@@ -739,9 +763,9 @@ describe('a list opened from the bin', () => {
     serveLists([{ ...SHARED, role, deletedAt: BINNED_AT }]);
 
     await render(
-      <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+      <Providers>
         <ListDetailScreen {...detailProps('l1')} />
-      </ListsProvider>
+      </Providers>
     );
 
     await screen.findByLabelText('Milk');
@@ -821,9 +845,9 @@ async function renderPaged() {
     ]);
 
   await render(
-    <ListsProvider userId="u1" onSessionRevoked={() => {}}>
+    <Providers>
       <ListDetailScreen {...detailProps('l1')} />
-    </ListsProvider>
+    </Providers>
   );
 
   await screen.findByLabelText('Milk');
@@ -944,4 +968,381 @@ it('asks for nothing at the end of a list that fits in a page', async () => {
 
   expect(fetchItems).not.toHaveBeenCalled();
   expect(screen.queryByLabelText('Loading more items')).not.toBeOnTheScreen();
+});
+
+// --- Search and sort ----------------------------------------------------------------------------
+
+/**
+ * Search is the resting state here too, with three sort keys in a fixed priority — to do, then A–Z,
+ * then date — and each list keeps its own sort. A search or a non-default sort completes the live
+ * rows in the background, and the line under the slot says how far it got. Copy asserted verbatim.
+ */
+describe('search and sort', () => {
+  const at = (n: number) => `2026-09-01T00:00:${String(n).padStart(2, '0')}+00:00`;
+  const item = (id: string, title: string, n: number, done = false): Item => ({
+    id,
+    title,
+    doneAt: done ? '2026-09-02T00:00:00+00:00' : null,
+    deletedAt: null,
+    createdAt: at(n),
+  });
+  /** Five live rows in the order they were added; two of them done. */
+  const ITEMS = [
+    item('i1', 'Mince', 1),
+    item('i2', 'Bread', 2, true),
+    item('i3', 'Mint', 3),
+    item('i4', 'Oat milk', 4, true),
+    item('i5', 'Jasmine rice', 5),
+  ];
+  const AFTER_RICE = { createdAt: at(5), id: 'i5' };
+  const GROCERIES: List = { ...SHARED, role: 'owner', items: ITEMS };
+
+  type Page = { items: Item[] | null; next: null; error: string | null };
+  const pending = () => new Promise<Page>(() => {});
+  const failed = async (): Promise<Page> => ({ items: null, next: null, error: 'Failed to fetch' });
+  const theRest = async (): Promise<Page> => ({ items: [item('i6', 'Miso paste', 6)], next: null, error: null });
+
+  /** GROCERIES as page 1 of more, whose next page answers with `rest`. */
+  function servePartial(rest: () => Promise<Page>, list: Partial<List> = {}) {
+    serveLists([{ ...GROCERIES, nextLive: AFTER_RICE, ...list }]);
+    jest.mocked(fetchItems).mockImplementation(rest);
+  }
+
+  async function open(list: List = GROCERIES) {
+    if (list !== GROCERIES) serveLists([list]);
+    await render(
+      <Providers>
+        <ListDetailScreen {...detailProps(list.id)} />
+      </Providers>
+    );
+    await screen.findByLabelText(/^Search items$|^Add an item$/);
+  }
+
+  async function openPartial(rest: () => Promise<Page>, list: Partial<List> = {}) {
+    servePartial(rest, list);
+    await render(
+      <Providers>
+        <ListDetailScreen {...detailProps('l1')} />
+      </Providers>
+    );
+    await screen.findByLabelText('Search items');
+  }
+
+  const search = (query: string) => fireEvent.changeText(screen.getByLabelText('Search items'), query);
+  const continuations = () =>
+    jest.mocked(fetchItems).mock.calls.filter(([, stream, after]) => stream === 'live' && after !== null).length;
+
+  beforeEach(() => {
+    serveLists([GROCERIES]);
+    jest.mocked(fetchItems).mockReset();
+    jest.mocked(fetchItems).mockResolvedValue({ items: [], next: null, error: null });
+  });
+
+  it('opens in search, with To Do, A–Z and Date, oldest first', async () => {
+    await open();
+
+    expect(screen.getByLabelText('Search items')).toBeOnTheScreen();
+    expect(screen.getByLabelText('New item')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Sort by to do')).toHaveAccessibilityValue({ text: 'Off' });
+    expect(screen.getByLabelText('Sort by name')).toHaveAccessibilityValue({ text: 'Off' });
+    expect(screen.getByLabelText('Sort by date added')).toHaveAccessibilityValue({ text: 'Oldest first' });
+    expect(screen.getByText('To Do First')).toBeOnTheScreen();
+    expect(itemLabels()).toEqual(['Mince', 'Bread', 'Mint', 'Oat milk', 'Jasmine rice']);
+  });
+
+  it('cycles To Do off, first, last and off again', async () => {
+    await open();
+    const byTodo = () => screen.getByLabelText('Sort by to do');
+
+    await fireEvent.press(byTodo());
+    expect(byTodo()).toHaveAccessibilityValue({ text: 'To do first' });
+    expect(itemLabels()).toEqual(['Mince', 'Mint', 'Jasmine rice', 'Bread', 'Oat milk']);
+
+    await fireEvent.press(byTodo());
+    expect(byTodo()).toHaveAccessibilityValue({ text: 'To do last' });
+    expect(screen.getByText('To Do Last')).toBeOnTheScreen();
+    expect(itemLabels()).toEqual(['Bread', 'Oat milk', 'Mince', 'Mint', 'Jasmine rice']);
+
+    await fireEvent.press(byTodo());
+    expect(byTodo()).toHaveAccessibilityValue({ text: 'Off' });
+    expect(itemLabels()).toEqual(['Mince', 'Bread', 'Mint', 'Oat milk', 'Jasmine rice']);
+  });
+
+  it('decides by to do first, then A to Z, then date', async () => {
+    await open();
+
+    await fireEvent.press(screen.getByLabelText('Sort by to do'));
+    await fireEvent.press(screen.getByLabelText('Sort by name'));
+    await fireEvent.press(screen.getByLabelText('Sort by date added'));
+
+    expect(itemLabels()).toEqual(['Jasmine rice', 'Mince', 'Mint', 'Bread', 'Oat milk']);
+    expect(screen.getByLabelText('Sort by date added')).toHaveAccessibilityValue({ text: 'Newest first' });
+  });
+
+  it('searches the rows whatever the case', async () => {
+    await open();
+
+    await search('MI');
+
+    expect(itemLabels()).toEqual(['Mince', 'Mint', 'Oat milk', 'Jasmine rice']);
+  });
+
+  /** Each list keeps its own: the user's answer to the suggestion's decision 3. */
+  it('keeps an item sort to the list it was set on', async () => {
+    serveLists([GROCERIES, { ...GROCERIES, id: 'l2', name: 'Hardware' }]);
+    function TwoLists() {
+      const [listId, setListId] = useState('l1');
+      return (
+        <>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open Hardware" onPress={() => setListId('l2')}>
+            <Text>Open Hardware</Text>
+          </Pressable>
+          <ListDetailScreen key={listId} {...detailProps(listId)} />
+        </>
+      );
+    }
+    await render(
+      <Providers>
+        <TwoLists />
+      </Providers>
+    );
+    await screen.findByLabelText('Search items');
+
+    await fireEvent.press(screen.getByLabelText('Sort by name'));
+    expect(itemLabels()).toEqual(['Bread', 'Jasmine rice', 'Mince', 'Mint', 'Oat milk']);
+
+    await fireEvent.press(screen.getByLabelText('Open Hardware'));
+    await screen.findByText('Hardware');
+
+    expect(screen.getByLabelText('Sort by name')).toHaveAccessibilityValue({ text: 'Off' });
+    expect(itemLabels()).toEqual(['Mince', 'Bread', 'Mint', 'Oat milk', 'Jasmine rice']);
+    // Remembered on the device for the list it was set on, and for nothing else.
+    expect(JSON.parse((await AsyncStorage.getItem('sort-preference')) ?? 'null')).toEqual({
+      v: 1,
+      items: { l1: { az: 'asc' } },
+    });
+  });
+
+  it('opens a list again in the sort it was left in', async () => {
+    await open();
+    await fireEvent.press(screen.getByLabelText('Sort by to do'));
+    await screen.unmount();
+
+    await open();
+
+    expect(screen.getByLabelText('Sort by to do')).toHaveAccessibilityValue({ text: 'To do first' });
+    expect(itemLabels()).toEqual(['Mince', 'Mint', 'Jasmine rice', 'Bread', 'Oat milk']);
+  });
+
+  it('keeps the query and the sort in create mode, and the rows stay filtered', async () => {
+    await open();
+    await search('mi');
+    await fireEvent.press(screen.getByLabelText('Sort by name'));
+
+    await fireEvent.press(screen.getByLabelText('New item'));
+
+    expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search items')).not.toBeOnTheScreen();
+    expect(itemLabels()).toEqual(['Jasmine rice', 'Mince', 'Mint', 'Oat milk']);
+
+    // An item that does not match drops out of view as it lands: the user's call.
+    await fireEvent.changeText(screen.getByLabelText('Add an item'), 'Bread rolls');
+    await fireEvent.press(screen.getByLabelText('Add'));
+    expect(screen.queryByLabelText('Bread rolls')).not.toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText('Search and sort'));
+    expect(screen.getByLabelText('Search items')).toHaveDisplayValue('mi');
+  });
+
+  it('spells out on the magnifier what applies, and says nothing at rest', async () => {
+    await open();
+    await fireEvent.press(screen.getByLabelText('New item'));
+    expect(screen.getByLabelText('Search and sort')).not.toHaveAccessibilityValue({ text: /./ });
+
+    await fireEvent.press(screen.getByLabelText('Search and sort'));
+    await search('mi');
+    await fireEvent.press(screen.getByLabelText('Sort by to do'));
+    await fireEvent.press(screen.getByLabelText('Sort by name'));
+    await fireEvent.press(screen.getByLabelText('New item'));
+
+    expect(screen.getByLabelText('Search and sort')).toHaveAccessibilityValue({
+      text: 'Searching mi, to do first, then A to Z, oldest first',
+    });
+  });
+
+  it('opens an empty list in create mode, and brings the magnifier with the first item', async () => {
+    await open({ ...GROCERIES, items: [] });
+
+    expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search and sort')).not.toBeOnTheScreen();
+
+    await addItem('Milk');
+
+    expect(screen.getByLabelText('Search and sort')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Add an item')).toBeOnTheScreen();
+  });
+
+  it('shows no header button before the rows are in', async () => {
+    serveLists([{ ...GROCERIES, itemsLoaded: false, items: [] }]);
+    jest.mocked(fetchItems).mockImplementation(pending);
+    await render(
+      <Providers>
+        <ListDetailScreen {...detailProps('l1')} />
+      </Providers>
+    );
+
+    expect(await screen.findByLabelText('Loading list items')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('New item')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search items')).not.toBeOnTheScreen();
+  });
+
+  it('gives a reader search but no header button, with the read-only line under the coverage line', async () => {
+    await openPartial(failed, { role: 'reader' });
+
+    expect(screen.queryByLabelText('New item')).not.toBeOnTheScreen();
+    await search('mi');
+    await screen.findByText('Searched the 5 loaded items. The rest need a connection.');
+
+    // In the order they are drawn: the coverage line first.
+    expect(
+      screen.getAllByText(/^(Searched the 5 loaded items|Read only)/).map((line) => line.props.children)
+    ).toEqual([
+      'Searched the 5 loaded items. The rest need a connection.',
+      'Read only — you can see this list but not change it.',
+    ]);
+  });
+
+  /** A tombstone, like the bin: no search, no sort buttons, no header button, its sort kept. */
+  it('gives a binned list no search, and keeps its sort', async () => {
+    await AsyncStorage.setItem('sort-preference', JSON.stringify({ v: 1, items: { l1: { az: 'desc' } } }));
+    serveLists([{ ...GROCERIES, deletedAt: '2026-09-10T09:00:00.000Z' }]);
+    await render(
+      <Providers>
+        <ListDetailScreen {...detailProps('l1')} />
+      </Providers>
+    );
+    await screen.findByLabelText('Restore Groceries');
+
+    expect(screen.queryByLabelText('Search items')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Sort by name')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('New item')).not.toBeOnTheScreen();
+    expect(itemLabels()).toEqual(['Oat milk', 'Mint', 'Mince', 'Jasmine rice', 'Bread']);
+  });
+
+  it('shows results at once over a partial list, and says it is loading the rest', async () => {
+    await openPartial(pending);
+
+    await search('mi');
+
+    expect(itemLabels()).toEqual(['Mince', 'Mint', 'Oat milk', 'Jasmine rice']);
+    expect(screen.getByText('Searching 5 loaded items · loading the rest…')).toBeOnTheScreen();
+    expect(continuations()).toBe(1);
+  });
+
+  it('says Sorting for a sort with no query', async () => {
+    await openPartial(pending);
+
+    await fireEvent.press(screen.getByLabelText('Sort by to do'));
+
+    expect(screen.getByText('Sorting 5 loaded items · loading the rest…')).toBeOnTheScreen();
+  });
+
+  /** In either mode: the sort still applies where its buttons do not show. */
+  it('keeps the line in create mode', async () => {
+    await openPartial(pending);
+    await search('mi');
+
+    await fireEvent.press(screen.getByLabelText('New item'));
+
+    expect(screen.getByText('Searching 5 loaded items · loading the rest…')).toBeOnTheScreen();
+  });
+
+  it('says what was searched when a page fails, and asks again on Try again', async () => {
+    await openPartial(failed);
+
+    await search('mi');
+
+    expect(await screen.findByText('Searched the 5 loaded items. The rest need a connection.')).toBeOnTheScreen();
+    expect(continuations()).toBe(1);
+
+    jest.mocked(fetchItems).mockImplementation(theRest);
+    await fireEvent.press(screen.getByLabelText('Try again'));
+
+    expect(await screen.findByLabelText('Miso paste')).toBeOnTheScreen();
+    expect(continuations()).toBe(2);
+    expect(screen.queryByText(/need a connection/)).not.toBeOnTheScreen();
+  });
+
+  it('starts again by itself when a read succeeds', async () => {
+    let resubscribe = () => {};
+    jest.mocked(subscribeToChanges).mockImplementation((_userId, _onChange, onResubscribe) => {
+      resubscribe = onResubscribe;
+      return () => {};
+    });
+    await openPartial(failed);
+    await search('mi');
+    await screen.findByText(/need a connection/);
+
+    jest.mocked(fetchItems).mockImplementation(theRest);
+    await act(async () => resubscribe());
+
+    expect(await screen.findByLabelText('Miso paste', {}, { timeout: 3000 })).toBeOnTheScreen();
+    expect(screen.queryByText(/need a connection/)).not.toBeOnTheScreen();
+  });
+
+  it('stops at 2,000 rows and says so, without asking', async () => {
+    const many = Array.from({ length: 2000 }, (_, i) => item(`r${i}`, `Row ${i}`, 1));
+    await openPartial(pending, { items: many, nextLive: { createdAt: at(1), id: 'r1999' } });
+
+    await search('row 1');
+
+    expect(await screen.findByText('Searched the first 2,000 items.')).toBeOnTheScreen();
+    expect(continuations()).toBe(0);
+  });
+
+  it('says No matches only once every row was searched', async () => {
+    await open();
+
+    await search('zzz');
+
+    expect(screen.getByText('No matches for "zzz"')).toBeOnTheScreen();
+    expect(screen.getByText('Check the spelling, or try fewer letters.')).toBeOnTheScreen();
+  });
+
+  it('says how many were searched when some are still to load', async () => {
+    await openPartial(failed);
+
+    await search('zzz');
+
+    expect(await screen.findByText('No matches in the 5 loaded items')).toBeOnTheScreen();
+    expect(screen.getByText('Searched the 5 loaded items. The rest need a connection.')).toBeOnTheScreen();
+  });
+
+  it('hides search, sort and the line in the bin, and keeps the query and mode for the way back', async () => {
+    serveLists([
+      { ...GROCERIES, nextLive: AFTER_RICE, items: [...ITEMS, { ...item('b1', 'Rye', 9), deletedAt: '2026-09-10T09:00:00.000Z' }] },
+    ]);
+    jest.mocked(fetchItems).mockImplementation(failed);
+    await render(
+      <Providers>
+        <ListDetailScreen {...detailProps('l1')} />
+      </Providers>
+    );
+    await search('mi');
+    await screen.findByText(/need a connection/);
+
+    await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+    expect(screen.getByText('Deleted items, newest first.')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Search items')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Sort by to do')).not.toBeOnTheScreen();
+    expect(screen.queryByText(/need a connection/)).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('New item')).not.toBeOnTheScreen();
+    expect(itemLabels()).toEqual(['Rye']);
+
+    await fireEvent.press(screen.getByRole('switch', { name: 'Show deleted' }));
+
+    expect(screen.getByLabelText('Search items')).toHaveDisplayValue('mi');
+    expect(itemLabels()).toEqual(['Mince', 'Mint', 'Oat milk', 'Jasmine rice']);
+  });
 });

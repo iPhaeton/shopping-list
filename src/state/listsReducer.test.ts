@@ -802,6 +802,70 @@ describe('items/pageLoaded', () => {
       })
     ).toBe(before);
   });
+
+  /**
+   * A page read from a cursor state no longer ends at — a `hydrate` replaced state while it was in
+   * the air — would leave a gap with a cursor past it. It lands only where it continues.
+   */
+  describe('read from a cursor', () => {
+    const PAGE_1 = listsReducer(stateWithItems(), {
+      type: 'items/pageLoaded',
+      listId: 'l1',
+      items: [fetched('i1', 'Milk', T1), fetched('i2', 'Bread', T2)],
+      stream: { name: 'live', next: CURSOR },
+    });
+
+    it('lands when it continues where state ends', () => {
+      const state = listsReducer(PAGE_1, {
+        type: 'items/pageLoaded',
+        listId: 'l1',
+        items: [fetched('i3', 'Eggs', T3)],
+        stream: { name: 'live', next: null },
+        after: { ...CURSOR },
+      });
+
+      expect(state.lists[0].items.map((item) => item.id)).toEqual(['i1', 'i2', 'i3']);
+      expect(state.lists[0].nextLive).toBeNull();
+    });
+
+    it('is ignored whole when state ends somewhere else', () => {
+      const state = listsReducer(PAGE_1, {
+        type: 'items/pageLoaded',
+        listId: 'l1',
+        items: [fetched('i4', 'Jam', T3)],
+        stream: { name: 'live', next: { createdAt: T3, id: 'i4' } },
+        after: { createdAt: T3, id: 'i3' },
+      });
+
+      expect(state).toBe(PAGE_1);
+    });
+
+    it('is ignored when state has no cursor left for it to continue', () => {
+      const ended = { ...PAGE_1, lists: [{ ...PAGE_1.lists[0], nextLive: null }] };
+
+      expect(
+        listsReducer(ended, {
+          type: 'items/pageLoaded',
+          listId: 'l1',
+          items: [fetched('i3', 'Eggs', T3)],
+          stream: { name: 'live', next: null },
+          after: CURSOR,
+        })
+      ).toBe(ended);
+    });
+
+    it('checks the cursor of the page\'s own stream', () => {
+      const state = listsReducer(PAGE_1, {
+        type: 'items/pageLoaded',
+        listId: 'l1',
+        items: [fetched('b1', 'Rye', T1, DELETED_AT)],
+        stream: { name: 'bin', next: null },
+        after: CURSOR,
+      });
+
+      expect(state).toBe(PAGE_1);
+    });
+  });
 });
 
 /**
@@ -1043,6 +1107,23 @@ describe('lists/pageLoaded', () => {
 
     expect(state.lists.map((list) => list.id)).toEqual(['l9']);
     expect(state.listCursors).toEqual({ live: LIST_CURSOR, bin: BIN_LIST_CURSOR });
+  });
+
+  /** `items/pageLoaded`'s rule one level up: a page lands only where it continues state's cursor. */
+  it('lands a page read from the cursor state ends at, and ignores one that is not', () => {
+    const before = listsReducer(initialState, {
+      type: 'lists/pageLoaded',
+      lists: [joinedList('l1', T1), joinedList('l2', T2)],
+      stream: { name: 'live', next: LIST_CURSOR },
+    });
+    const page = { type: 'lists/pageLoaded' as const, lists: [joinedList('l3', T3)], stream: { name: 'live' as const, next: null } };
+
+    const continued = listsReducer(before, { ...page, after: { ...LIST_CURSOR } });
+    expect(continued.lists.map((list) => list.id)).toEqual(['l1', 'l2', 'l3']);
+    expect(continued.listCursors.live).toBeNull();
+
+    expect(listsReducer(before, { ...page, after: { createdAt: T1, id: 'l1' } })).toBe(before);
+    expect(listsReducer(before, { ...page, after: null })).toBe(before);
   });
 });
 

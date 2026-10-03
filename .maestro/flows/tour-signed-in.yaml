@@ -9,8 +9,9 @@ appId: com.shoppingloop.app
 - takeScreenshot: lists-${THEME}
 
 - tapOn: Groceries
+# Search holds the slot at rest (task 24 step 3), so the field marks the rows as loaded.
 - extendedWaitUntil:
-    visible: Add an item
+    visible: Search items
     timeout: 10000
 - tapOn: Show deleted
 - takeScreenshot: list-detail-bin-shown-${THEME}

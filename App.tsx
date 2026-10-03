@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ListsProvider } from './src/state/ListsContext';
 import { SessionProvider, useSession } from './src/state/SessionContext';
+import { SortProvider } from './src/state/SortContext';
 import { ThemeProvider, useTheme } from './src/state/ThemeContext';
 
 /**
@@ -13,7 +14,8 @@ import { ThemeProvider, useTheme } from './src/state/ThemeContext';
  * (`src/navigation/splash.ts`), called from `RootNavigator`, which renders only once `ThemeProvider`'s
  * gate has read the preference and the fonts, so what it uncovers is already in the right theme. The
  * launch screen itself follows the device's appearance until JS sets the app's own; what this rules
- * out is anything in between, like the root view in last session's colour.
+ * out is anything in between, like the root view in last session's colour. `SortProvider` gates the
+ * same way, on the remembered sorts, so no list is ever drawn in an order it then leaves.
  */
 void SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({ fade: true, duration: 250 });
@@ -22,12 +24,14 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <SessionProvider>
-          <ListsForSignedInUser>
-            <ThemedStatusBar />
-            <RootNavigator />
-          </ListsForSignedInUser>
-        </SessionProvider>
+        <SortProvider>
+          <SessionProvider>
+            <ListsForSignedInUser>
+              <ThemedStatusBar />
+              <RootNavigator />
+            </ListsForSignedInUser>
+          </SessionProvider>
+        </SortProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

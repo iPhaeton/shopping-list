@@ -13,6 +13,7 @@ import { radius } from '../theme';
  */
 export function IconButton({
   label,
+  value,
   fill,
   outline,
   disabled = false,
@@ -20,6 +21,8 @@ export function IconButton({
   children,
 }: {
   label: string;
+  /** Read after the label as its `accessibilityValue` — what the magnifier's dot stands for. */
+  value?: string;
   fill?: string;
   /** A 1pt ring in this color — the back button's outlined look, matching `PillButton`. */
   outline?: string;
@@ -34,6 +37,7 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityValue={value === undefined ? undefined : { text: value }}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
