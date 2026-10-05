@@ -4,8 +4,8 @@ title: A component gets its own test suite only once it owns real logic — ever
 type: convention
 status: current
 tags: [testing, components, architecture]
-sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, src/components/UserAutocomplete.tsx, src/components/UserAutocomplete.test.tsx, ai/tasks/24-search-and-sort/implementation-log-step-3.md]
-last_verified: 2026-10-03
+sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, src/components/UserAutocomplete.tsx, src/components/UserAutocomplete.test.tsx, ai/tasks/24-search-and-sort/implementation-log-step-3.md, src/components/useScrollReveal.ts]
+last_verified: 2026-10-05
 verify: test "$(ls src/components/*.test.tsx 2>/dev/null | wc -l | tr -d ' ')" = 1 && test -f src/components/UserAutocomplete.test.tsx && grep -q 'setTimeout' src/components/UserAutocomplete.tsx && grep -q 'useFakeTimers' src/components/UserAutocomplete.test.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels, supabase-client-module-boundary]
 indexed: false
@@ -29,7 +29,8 @@ components any step has added — the logic worth testing there (contrast, band 
 `src/state/bands.test.ts`. Step 5's contrast rules went the same way, into `src/theme.test.ts`.
 The one step-5 piece with state of its own, the `useKeyboardReveal` hook (keyboard events plus a
 scroll offset), has no suite either: it was checked only on the iPhone 17e simulator, with the
-keyboard up on every form.
+keyboard up on every form. Task 25's `useScrollReveal` (a scroll offset and frame height, no
+timer or fetch) is covered through `AccountScreen` the same way.
 
 **The line is "does this component own async logic of its own," not "is it new" or "is it complex
 to render."** `RolePicker` has real branching (three roles, a `labelFor` prop, disabled state) but
