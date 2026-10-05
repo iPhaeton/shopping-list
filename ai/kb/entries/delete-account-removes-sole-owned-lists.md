@@ -2,14 +2,19 @@
 id: delete-account-removes-sole-owned-lists
 title: Deleting an account is one guarded definer RPC that hard-deletes every list the caller solely owns, then the `auth.users` row — in that order, never tombstoned, never locked
 type: decision
-status: current
+status: superseded
+superseded_by: delete-account-locks-then-removes-sole-owned-lists
 tags: [supabase, postgres, auth, deletion, account]
 sources: [ai/tasks/25-account-deletion/description-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2.md, supabase/migrations/20261005000000_delete_account.sql]
 last_verified: 2026-10-05
 verify: f=$(grep -lE '^create (or replace )?function public\.delete_account\(' supabase/migrations/*.sql | tail -1) && test -n "$f" && grep -A4 -E '^create (or replace )?function public\.delete_account\(\)' "$f" | grep -q 'security definer' && test "$(grep -E '^ *delete from (public\.lists|auth\.users)' "$f" | sed -E 's/^ *delete from ([a-z_.]+).*/\1/' | tr '\n' ' ')" = "public.lists auth.users " && grep -q "m.user_id <> (select auth.uid()) and m.role = 'owner'" "$f" && ! grep -v '^ *--' "$f" | grep -qiE 'advisory|for update|deleted_at' && grep -rq '^revoke execute on function public.delete_account() from public, anon;' supabase/migrations && grep -rq '^grant execute on function public.delete_account() to authenticated;' supabase/migrations && ! grep -rqiE '^create index.*\(created_by' supabase/migrations && grep -A1 'add constraint lists_created_by_fkey' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'on delete set null'
 indexed: false
-related: [session-still-valid-guards-writes, deletion-is-a-tombstone, list-data-scoped-by-rls, session-revoked-write-redirects, supabase-default-grants-defeat-revokes, supabase-local-stack]
+related: [session-still-valid-guards-writes, deletion-is-a-tombstone, list-data-scoped-by-rls, session-revoked-write-redirects, supabase-default-grants-defeat-revokes, supabase-local-stack, delete-account-locks-then-removes-sole-owned-lists]
 ---
+
+> **Superseded** by [delete-account-locks-then-removes-sole-owned-lists](delete-account-locks-then-removes-sole-owned-lists.md):
+> `delete_account` now locks every list the caller is on before it deletes anything, so "never
+> locked" and the accepted race below are no longer true.
 
 **`public.delete_account()`** ([the migration](../../../supabase/migrations/20261005000000_delete_account.sql))
 is `security definer`, guarded by `session_still_valid()`

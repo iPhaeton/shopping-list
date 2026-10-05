@@ -36,10 +36,8 @@
 -- owner can restore a list, so a binned one here could never come back, and it would hold the
 -- departed user's data for 30 more days.
 --
--- **No locks, and one race is accepted.** A co-owner leaving at the same instant the other deletes
--- their account can strand a list ownerless under READ COMMITTED, because each transaction sees the
--- other owner as the one who remains. Do not add `for update` or advisory locks without asking the
--- user.
+-- **Concurrent owner changes are serialized elsewhere.** 20261005100000_list_owner_locks.sql
+-- redefines this function to lock every list the caller is on first, closing the co-owner race.
 --
 -- No heir is promoted, so the list-limit trigger never fires here. Nothing is returned either: the
 -- app's warning is one general sentence, not a per-list preview.

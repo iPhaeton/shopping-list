@@ -4,9 +4,9 @@ title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, de
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/description-step-5.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/23-list-limits/description-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/description-step-2.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, b78d16f]
-last_verified: 2026-10-03
-related: [suggestions-are-proposals, keyset-paging-in-the-order-shown, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters, phone-is-the-product, theme-reaches-native-surfaces, theme-tokens-only, auto-theme-follows-the-time-zone, limit-checks-pass-an-applied-resend]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/description-step-5.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/23-list-limits/description-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/description-step-2.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, b78d16f]
+last_verified: 2026-10-05
+related: [suggestions-are-proposals, keyset-paging-in-the-order-shown, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters, phone-is-the-product, theme-reaches-native-surfaces, theme-tokens-only, auto-theme-follows-the-time-zone, limit-checks-pass-an-applied-resend, ownership-changes-lock-the-list-row-first, delete-account-locks-then-removes-sole-owned-lists]
 ---
 
 Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
@@ -46,9 +46,9 @@ widely a list is shared without opening it, passwords, and conflict resolution b
 claimed at sign-up, since `share_list` takes only a resolved user id. And the `list_members` select
 policy shows you your own row, so a client-computed "shared with N" would read `1` for everybody.
 
-Equally deliberate, and in the same family: a sole owner deleting their account leaves an **ownerless
-list nobody can see or clean up** — the alternative was cascading onto lists other people are in
-([list-data-scoped-by-rls](list-data-scoped-by-rls.md)).
+Deleting an account through `delete_account` hard-deletes every list it solely owns, shared or not;
+a list with another owner stays ([delete-account-locks-then-removes-sole-owned-lists](delete-account-locks-then-removes-sole-owned-lists.md)).
+Only an `auth.users` delete that bypasses it (dashboard, admin API) can still leave an ownerless list.
 
 **"The user can create a list" means *many* named lists**, settled against an ambiguous step-1
 description — hence two list screens (`Lists` → `ListDetail`). Do not "simplify" back to one list.
@@ -61,8 +61,7 @@ Each of these is easy to assume and wrong:
   connectivity library, no conflict resolution beyond last-write-wins, no "wait for sync" on signing
   out with writes pending ([writes-retry-from-an-outbox](writes-retry-from-an-outbox.md)). Reading
   offline *did* land ([list-cache-holds-acknowledged-rows](list-cache-holds-acknowledged-rows.md)).
-- **step 5, cloud** — no user-facing feature and no schema change; flows are still verified on web
-  against local ([supabase-local-stack](supabase-local-stack.md)), looks on the phone.
+- **step 5, cloud** — no user-facing feature and no schema change ([supabase-local-stack](supabase-local-stack.md)).
 - **step 6, SMTP** — deliverability is unproven, and no physical-device sign-in has ever completed
   against production ([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)).
 - **step 8, realtime** — no echo suppression (`x-client-id`) and no "just updated" `SyncBanner`; both
@@ -95,9 +94,11 @@ Each of these is easy to assume and wrong:
 - **task 23 step 1, paged lists** — no migration or index; the sharing roster is unpaged. Past 100
   lists in a stream, an acknowledged new list drops below the loaded range until a scroll reaches it,
   and a newly shared list arrives on the nudge only if it sorts inside that range.
-- **task 23 step 2, limits** — **no locks: overshoot is accepted**, the user's call. Count-then-write
-  races under READ COMMITTED, so writes at a limit at the same instant can both pass; do not add
-  `for update`, advisory locks, counter columns or serializable isolation. No backfill: an account
+- **task 23 step 2, limits** — **no locks: overshoot is accepted**, the user's call; task 25's
+  ownership locks ([ownership-changes-lock-the-list-row-first](ownership-changes-lock-the-list-row-first.md))
+  do not lift it. Count-then-write races under READ COMMITTED, so writes at a limit at the same
+  instant can both pass; do not add `for update`, advisory locks, counter columns or serializable
+  isolation. No backfill: an account
   already past a limit keeps everything and cannot add more. Ownership, not creation, is the cap, so
   handing a list over frees a slot. No item count or warning anywhere, and neither Restore nor the
   role picker is pre-checked — the refusal speaks
@@ -115,6 +116,5 @@ Each of these is easy to assume and wrong:
 `20260909000000` — and no client has ever connected to the cloud realtime socket. A pushed migration is schema-level proof, never
 behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
 
-**What to do:** do not add any of the out-of-scope items speculatively, and do not treat their
-absence as a gap worth flagging in a review. When a new task description lands, re-read this entry
-and update it — that is the moment it goes stale. No `verify:` — scope is a judgment fact.
+**What to do:** never add an out-of-scope item speculatively or flag its absence in a review. When a
+new task description lands, re-read and update this entry. No `verify:` — scope is a judgment fact.
