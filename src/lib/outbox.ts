@@ -38,6 +38,18 @@ export function saveOutbox(userId: string, ops: WriteAction[]): Promise<void> {
 }
 
 /**
+ * Deleting the account is the one path that discards the outbox, the `:broken` blob included: those
+ * writes are owed to an account that no longer exists, and there is nowhere left to recover them
+ * into. Signing out keeps both — its writes flush at the next sign-in.
+ */
+export function clearOutbox(userId: string): Promise<void> {
+  return inOrder(async () => {
+    await AsyncStorage.removeItem(keyFor(userId));
+    await AsyncStorage.removeItem(`${keyFor(userId)}:broken`);
+  });
+}
+
+/**
  * Appends — except for a write that supersedes one already waiting, which replaces it where it
  * stands. Those writes carry absolute values, so only the newest one is worth sending: ticking a
  * checkbox five times on a train is one request, and so is renaming a list five times. Inserts are

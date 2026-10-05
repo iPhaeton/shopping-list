@@ -2,7 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { deviceTimeZone } from '../lib/deviceTimeZone';
-import { fetchProfile, setName as setNameApi } from '../lib/profileApi';
+import {
+  deleteAccount as deleteAccountApi,
+  fetchProfile,
+  setName as setNameApi,
+} from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { AccountScreenProps } from '../navigation/types';
 import { SessionProvider } from '../state/SessionContext';
@@ -32,7 +36,11 @@ jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
 /** `SessionProvider` also resolves the account's name on every sign-in now; unmocked, the real
  * module reaches for the real Supabase client. A non-null default keeps `state.status` at
  * `signedIn` throughout — this screen renders nothing while it is `nameRequired`. */
-jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.fn() }));
+jest.mock('../lib/profileApi', () => ({
+  fetchProfile: jest.fn(),
+  setName: jest.fn(),
+  deleteAccount: jest.fn(),
+}));
 
 /** Auto reads the zone to find a sunset; pinned so the appearance tests never see the real one. */
 jest.mock('../lib/deviceTimeZone', () => ({ deviceTimeZone: jest.fn() }));
@@ -56,6 +64,7 @@ beforeEach(() => {
   auth.signOut.mockResolvedValue({ error: null });
   jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
   jest.mocked(setNameApi).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(deleteAccountApi).mockResolvedValue({ error: null, verdict: 'ok' });
 });
 
 async function renderScreen() {
@@ -125,6 +134,147 @@ it('shows a refusal and re-enables the plain sign out button', async () => {
 
   expect(await screen.findByText('Network request failed')).toBeOnTheScreen();
   expect(screen.getByLabelText('Sign out')).not.toBeDisabled();
+});
+
+describe('deleting the account', () => {
+  /** Task 25 step 1's copy, verbatim. */
+  const WARNING =
+    "Deleting your account can't be undone. Lists you're the only owner of will be deleted, " +
+    'including for anyone you shared them with. Lists that have another owner will stay with ' +
+    'their members.';
+
+  async function openConfirm() {
+    await fireEvent.press(screen.getByLabelText('Delete account'));
+    await screen.findByLabelText('Confirm delete account');
+  }
+
+  it('opens a confirm with the warning, in place of the control', async () => {
+    await renderScreen();
+
+    expect(screen.queryByText(WARNING)).toBeNull();
+    await openConfirm();
+
+    expect(screen.getByText(WARNING)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Cancel deleting account')).toHaveTextContent('Cancel');
+    expect(screen.getByLabelText('Confirm delete account')).toHaveTextContent(
+      'Yes, delete my account'
+    );
+    expect(screen.queryByLabelText('Delete account')).toBeNull();
+    expect(deleteAccountApi).not.toHaveBeenCalled();
+  });
+
+  it('cancels without deleting', async () => {
+    await renderScreen();
+    await openConfirm();
+
+    await fireEvent.press(screen.getByLabelText('Cancel deleting account'));
+
+    expect(screen.queryByText(WARNING)).toBeNull();
+    expect(screen.getByLabelText('Delete account')).toBeOnTheScreen();
+    expect(deleteAccountApi).not.toHaveBeenCalled();
+  });
+
+  it('deletes once confirmed, then signs this device out', async () => {
+    await renderScreen();
+    await openConfirm();
+
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
+    expect(deleteAccountApi).toHaveBeenCalledTimes(1);
+  });
+
+  it('says it is deleting, and cannot be cancelled, while the request runs', async () => {
+    jest.mocked(deleteAccountApi).mockReturnValue(new Promise(() => {}));
+
+    await renderScreen();
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+
+    expect(screen.getByLabelText('Confirm delete account')).toHaveTextContent('Deleting…');
+    expect(screen.getByLabelText('Confirm delete account')).toBeDisabled();
+    expect(screen.getByLabelText('Cancel deleting account')).toBeDisabled();
+    // Nothing else may end the session under it.
+    expect(screen.getByLabelText('Sign out')).toBeDisabled();
+    expect(screen.getByLabelText('Sign out of all devices')).toBeDisabled();
+  });
+
+  it('says it needs a connection when offline, and closes the confirm', async () => {
+    jest
+      .mocked(deleteAccountApi)
+      .mockResolvedValue({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
+
+    await renderScreen();
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+
+    expect(
+      await screen.findByText('You need a connection to delete your account.')
+    ).toBeOnTheScreen();
+    expect(screen.queryByText(WARNING)).toBeNull();
+    expect(screen.getByLabelText('Delete account')).not.toBeDisabled();
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it("shows any other refusal in the database's own words", async () => {
+    jest.mocked(deleteAccountApi).mockResolvedValue({
+      error: 'a list must keep at least one owner',
+      verdict: 'permanent',
+      sessionRevoked: false,
+    });
+
+    await renderScreen();
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+
+    expect(await screen.findByText('a list must keep at least one owner')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Delete account')).not.toBeDisabled();
+  });
+
+  it('clears its banner when confirmed again', async () => {
+    jest
+      .mocked(deleteAccountApi)
+      .mockResolvedValueOnce({ error: 'TypeError: Failed to fetch', verdict: 'retryable' })
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    await renderScreen();
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+    await screen.findByText('You need a connection to delete your account.');
+
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+
+    expect(screen.queryByText('You need a connection to delete your account.')).toBeNull();
+  });
+
+  it('hands off to sign-out when refused for a revoked session', async () => {
+    jest.mocked(deleteAccountApi).mockResolvedValue({
+      error: 'this device has been signed out',
+      verdict: 'permanent',
+      sessionRevoked: true,
+    });
+
+    await renderScreen();
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Confirm delete account'));
+
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
+    expect(screen.queryByText('this device has been signed out')).toBeNull();
+  });
+
+  /** Task 25 step 1: the two confirms are never open together. */
+  it('closes the sign-out confirm when it opens, and the reverse', async () => {
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Sign out of all devices'));
+    await openConfirm();
+    expect(screen.queryByLabelText('Confirm sign out of all devices')).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Sign out of all devices'));
+    expect(await screen.findByLabelText('Confirm sign out of all devices')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Confirm delete account')).toBeNull();
+  });
 });
 
 describe('the account row', () => {

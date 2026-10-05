@@ -14,8 +14,20 @@ import { clearCachedLists } from '../lib/listCache';
 import type { Result as ApiResult } from '../lib/listsApi';
 import { clearCachedName, readCachedName, writeCachedName } from '../lib/nameCache';
 import { signInWithGoogle as runGoogleSignIn } from '../lib/googleSignIn';
-import { fetchProfile, setName as setNameRpc } from '../lib/profileApi';
+import { clearOutbox } from '../lib/outbox';
+import {
+  deleteAccount as deleteAccountRpc,
+  fetchProfile,
+  setName as setNameRpc,
+} from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
+
+/**
+ * Why this device reached `signedOut`, when it was not the user's own plain sign-out: `'revoked'` — a
+ * write refused because the session was revoked elsewhere; `'deleted'` — this account was just
+ * deleted from here. `SignInScreen` says which.
+ */
+export type SignOutReason = 'revoked' | 'deleted';
 
 /**
  * A discriminated union rather than a `session | null` boolean, so a further state is one new case
@@ -24,7 +36,7 @@ import { supabase } from '../lib/supabase';
  */
 export type AuthState =
   | { status: 'loading' }
-  | { status: 'signedOut'; reason?: 'revoked' }
+  | { status: 'signedOut'; reason?: SignOutReason }
   /**
    * `name: null` here always means "not yet known", never "confirmed empty" — a confirmed-empty
    * account is `nameRequired` instead. A returning user (a session restored at cold start) starts
@@ -59,6 +71,14 @@ type SessionContextValue = {
   signOut: (reason?: 'revoked') => Promise<Result>;
   /** `scope: 'global'` — revokes every device the account is signed in on. */
   signOutEverywhere: () => Promise<Result>;
+  /**
+   * Deletes the account, and every list it is the only owner of, through the `delete_account` RPC.
+   * Returns `listsApi`'s richer `Result`, as `setName` does, so `AccountScreen` can tell a revoked
+   * session and an offline failure apart. A failure changes nothing on this device. A success clears
+   * the account's list cache, name cache and outbox — the one path that discards the outbox — and
+   * always ends `signedOut` with `reason: 'deleted'`.
+   */
+  deleteAccount: () => Promise<ApiResult>;
   signInWithGoogle: () => Promise<Result>;
   /**
    * Sets the signed-in account's name — from `SetNameScreen` (the gate) or from `AccountScreen` (an
@@ -80,6 +100,11 @@ type SessionContextValue = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+/** Everything this device keeps for one account. Deletion only: signing out keeps the outbox. */
+function forgetAccount(userId: string) {
+  return Promise.all([clearCachedLists(userId), clearCachedName(userId), clearOutbox(userId)]);
+}
 
 /**
  * Guards a late-resolving fetch or cache read against clobbering state that no longer belongs to it
@@ -112,9 +137,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const mountedRef = useRef(true);
 
   // `onAuthStateChange`'s listener only ever sees the resulting session, never why it changed — so a
-  // reason set just before `signOut('revoked')` calls `supabase.auth.signOut` is bridged across to the
-  // listener here, then cleared, rather than threaded through the SDK's own event.
-  const signOutReason = useRef<'revoked' | undefined>(undefined);
+  // reason set just before `signOut('revoked')` or `deleteAccount` calls `supabase.auth.signOut` is
+  // bridged across to the listener here, then cleared, rather than threaded through the SDK's own
+  // event.
+  const signOutReason = useRef<SignOutReason | undefined>(undefined);
+
+  // The account `deleteAccount` just deleted, until the signed-in tree has unmounted and its keys
+  // have been cleared a second time — see the effect below.
+  const deletedUserId = useRef<string | null>(null);
 
   // Set once `getSession()` has resolved for the first time. `onAuthStateChange` fires the literal
   // event `'SIGNED_IN'` both for an interactive sign-in and, occasionally, for an ordinary cold-start
@@ -148,8 +178,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void resolveRestoredSignIn(session);
   }
 
-  function enterSignedOut(reason?: 'revoked') {
-    setState({ status: 'signedOut', reason });
+  /**
+   * A `deleted` state is kept against any later sign-out event: one from a queued write refused for
+   * the session the deletion took with it (`signOut('revoked')`), or from a token refresh that fails
+   * afterwards. Either would replace the notice with the wrong one, or with none. Only a sign-in
+   * leaves it.
+   */
+  function enterSignedOut(reason?: SignOutReason) {
+    setState((prev) =>
+      prev.status === 'signedOut' && prev.reason === 'deleted' ? prev : { status: 'signedOut', reason }
+    );
   }
 
   function applyFetchedName(session: Session, name: string | null) {
@@ -315,6 +353,44 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
   const signOutEverywhere = useCallback(() => performSignOut('global'), [performSignOut]);
 
+  const deleteAccount = useCallback(async (): Promise<ApiResult> => {
+    if (state.status !== 'signedIn' && state.status !== 'nameRequired') {
+      return { error: 'Not signed in.', verdict: 'permanent' };
+    }
+    const userId = state.session.user.id;
+
+    const result = await deleteAccountRpc();
+    if (result.error) return result;
+
+    // The account is gone, so nothing kept for it can ever be used again: not the cached rows, not
+    // the name, and not the outbox — its writes are owed to an account that no longer exists.
+    deletedUserId.current = userId;
+    await forgetAccount(userId);
+
+    // The server session went with the account, so a local sign-out is all that is left. auth-js
+    // ignores `/logout`'s 401/403/404, but it can still return an error *without* removing the
+    // stored session: `_signOut` returns early when loading the session fails, which an expired
+    // access token whose refresh fails on the network does. Staying signed in to an account that no
+    // longer exists is never right, so the state is set here whatever came back — the next refresh
+    // gets 400 and auth-js removes what is left.
+    signOutReason.current = 'deleted';
+    await supabase.auth.signOut({ scope: 'local' });
+    enterSignedOut('deleted');
+    return result;
+  }, [state]);
+
+  // The second clear. `ListsProvider` can write the outbox and the list cache back after the first:
+  // a flush step in flight when the RPC answered persists its queue, and a hydration or the cache
+  // effect writes the rows — until it unmounts, in the render after this state arrives. Passive
+  // unmount cleanups run before new passive effects, so by the time this runs its `live` flag is
+  // false, and every write it ever started is already ahead of this clear in `inOrder`'s chain.
+  useEffect(() => {
+    if (state.status !== 'signedOut' || state.reason !== 'deleted' || !deletedUserId.current) return;
+    const userId = deletedUserId.current;
+    deletedUserId.current = null;
+    void forgetAccount(userId);
+  }, [state]);
+
   // Delegates outright: `../lib/googleSignIn` is the one importer of the native module, same
   // module-boundary shape as `supabase.ts`. Success flows through `onAuthStateChange` above like
   // every other sign-in.
@@ -348,11 +424,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       verifyCode,
       signOut,
       signOutEverywhere,
+      deleteAccount,
       signInWithGoogle,
       setName,
       retryName,
     }),
-    [state, requestCode, verifyCode, signOut, signOutEverywhere, signInWithGoogle, setName, retryName]
+    [
+      state,
+      requestCode,
+      verifyCode,
+      signOut,
+      signOutEverywhere,
+      deleteAccount,
+      signInWithGoogle,
+      setName,
+      retryName,
+    ]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

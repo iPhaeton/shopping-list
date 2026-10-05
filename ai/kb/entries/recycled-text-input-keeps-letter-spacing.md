@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [ios, styling, text-input, fabric]
 sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md]
-last_verified: 2026-09-30
+last_verified: 2026-10-05
 verify: for f in $(grep -rl '<TextInput' src --include='*.tsx' | grep -v '\.test\.'); do grep -q 'letterSpacing: 0' "$f" || exit 1; done; grep -qE 'letterSpacing: [1-9]' src/screens/SignInScreen.tsx
 related: [theme-tokens-only, phone-is-the-product]
 indexed: false

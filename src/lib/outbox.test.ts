@@ -1,7 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { WriteAction } from '../state/types';
-import { dropDependents, enqueue, loadOutbox, queueFirst, saveOutbox } from './outbox';
+import {
+  clearOutbox,
+  dropDependents,
+  enqueue,
+  loadOutbox,
+  queueFirst,
+  saveOutbox,
+} from './outbox';
 
 /**
  * The real AsyncStorage mock rather than a fake of this module's own storage: what is worth
@@ -196,6 +203,41 @@ it('quarantines an outbox written by a future version', async () => {
 
   expect(await loadOutbox(USER)).toEqual([]);
   expect(await AsyncStorage.getItem(`outbox:${USER}:broken`)).toBe(stored);
+});
+
+// --- Deleting the account ---------------------------------------------------------------------
+
+/** The one path that discards unsent writes: the account they were owed to is gone. */
+it('clears the outbox and the quarantined blob, and nobody else\'s', async () => {
+  await saveOutbox(USER, [CREATE_GROCERIES]);
+  await AsyncStorage.setItem(`outbox:${USER}:broken`, '{ this is not json');
+  await saveOutbox('u2', [ADD_MILK]);
+
+  await clearOutbox(USER);
+
+  expect(await AsyncStorage.getItem(`outbox:${USER}`)).toBeNull();
+  expect(await AsyncStorage.getItem(`outbox:${USER}:broken`)).toBeNull();
+  expect(await loadOutbox('u2')).toEqual([ADD_MILK]);
+});
+
+/**
+ * A flush step persists its queue whenever its request comes back, so a save can still be pending
+ * when the account is deleted. The clear must land after it, or the queue is written back. The
+ * delay makes the save finish last unless both share `inOrder`'s chain.
+ */
+it('clears after a save that is still pending', async () => {
+  const setItem = AsyncStorage.setItem;
+  jest.spyOn(AsyncStorage, 'setItem').mockImplementationOnce(async (key, value) => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return setItem(key, value);
+  });
+
+  const saving = saveOutbox(USER, [CREATE_GROCERIES]);
+  await clearOutbox(USER);
+  await saving;
+  jest.restoreAllMocks();
+
+  expect(await AsyncStorage.getItem(`outbox:${USER}`)).toBeNull();
 });
 
 // --- The bin ------------------------------------------------------------------------------------

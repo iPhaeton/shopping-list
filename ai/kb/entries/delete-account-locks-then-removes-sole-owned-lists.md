@@ -4,13 +4,13 @@ title: Deleting an account is one guarded definer RPC that locks every list the 
 type: decision
 status: current
 tags: [supabase, postgres, auth, deletion, account, concurrency]
-sources: [ai/tasks/25-account-deletion/description-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, supabase/migrations/20261005000000_delete_account.sql, supabase/migrations/20261005100000_list_owner_locks.sql]
+sources: [ai/tasks/25-account-deletion/description-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, supabase/migrations/20261005000000_delete_account.sql, supabase/migrations/20261005100000_list_owner_locks.sql]
 last_verified: 2026-10-05
 verify: f=$(grep -lE '^create (or replace )?function public\.delete_account\(' supabase/migrations/*.sql | tail -1) && test -n "$f" && b=$(sed -n -E '/^create (or replace )?function public\.delete_account\(\)/,/^\$\$;/p' "$f" | grep -v '^ *--') && echo "$b" | grep -q 'security definer' && test "$(echo "$b" | grep -E '^ *delete from (public\.lists|auth\.users)' | sed -E 's/^ *delete from ([a-z_.]+).*/\1/' | tr '\n' ' ')" = "public.lists auth.users " && echo "$b" | grep -q "m.user_id <> (select auth.uid()) and m.role = 'owner'" && echo "$b" | tr '\n' ' ' | grep -qE 'perform 1 from public\.lists l +where l\.id in \(select m\.list_id from public\.list_members m where m\.user_id = \(select auth\.uid\(\)\)\) +order by l\.id +for no key update; +delete from public\.lists' && ! echo "$b" | grep -qiE 'advisory|for update|deleted_at' && grep -rq '^revoke execute on function public.delete_account() from public, anon;' supabase/migrations && grep -rq '^grant execute on function public.delete_account() to authenticated;' supabase/migrations && ! grep -rqiE '^create index.*\(created_by' supabase/migrations && grep -A1 'add constraint lists_created_by_fkey' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'on delete set null'
 ' ' ')" = "public.lists auth.users " && echo "$b" | grep -q "m.user_id <> (select auth.uid()) and m.role = 'owner'" && echo "$b" | tr '
 ' ' ' | grep -qE 'perform 1 from public\.lists l +where l\.id in \(select m\.list_id from public\.list_members m where m\.user_id = \(select auth\.uid\(\)\)\) +order by l\.id +for no key update; +delete from public\.lists' && ! echo "$b" | grep -qiE 'advisory|for update|deleted_at' && grep -rq '^revoke execute on function public.delete_account() from public, anon;' supabase/migrations && grep -rq '^grant execute on function public.delete_account() to authenticated;' supabase/migrations && ! grep -rqiE '^create index.*\(created_by' supabase/migrations && grep -A1 'add constraint lists_created_by_fkey' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'on delete set null'
 indexed: false
-related: [session-still-valid-guards-writes, deletion-is-a-tombstone, list-data-scoped-by-rls, session-revoked-write-redirects, supabase-default-grants-defeat-revokes, supabase-local-stack, ownership-changes-lock-the-list-row-first, delete-account-removes-sole-owned-lists]
+related: [session-still-valid-guards-writes, deletion-is-a-tombstone, list-data-scoped-by-rls, session-revoked-write-redirects, supabase-default-grants-defeat-revokes, supabase-local-stack, ownership-changes-lock-the-list-row-first, delete-account-removes-sole-owned-lists, account-deletion-forces-signed-out-and-clears-twice]
 ---
 
 **`public.delete_account()`** — first created in
@@ -33,7 +33,8 @@ its current definition in
 The app calls it while the user watches and never queues it in the outbox. Through REST: 204 with no
 body on success, 403 `42501` for a revoked session (`resultFor` maps it to `sessionRevoked`), 401 for
 `anon`. It returns nothing and promotes no heir. Signing up again with the same email is a new user id,
-nameless, in no list.
+nameless, in no list. What the device does after a success — forced sign-out, two clears — is
+[account-deletion-forces-signed-out-and-clears-twice](account-deletion-forces-signed-out-and-clears-twice.md).
 
 **The order of the deletes is load-bearing.** The user first would cascade their memberships away; the
 list delete would then find nothing they own, and every solely-owned list would be left ownerless —

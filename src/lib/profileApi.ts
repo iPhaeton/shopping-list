@@ -27,3 +27,14 @@ export async function setName(name: string): Promise<Result> {
   const { error, status } = await supabase.rpc('set_name', { p_name: name.trim() });
   return resultFor(error, status);
 }
+
+/**
+ * Deletes every list the caller is the only owner of, then the account itself, in one transaction
+ * (`20261005000000_delete_account.sql`). Answered synchronously and never queued: there would be no
+ * account left to replay a queued delete into, and the caller is still on the Account screen that
+ * asked. So, like `setName`, it keeps the database's own words.
+ */
+export async function deleteAccount(): Promise<Result> {
+  const { error, status } = await supabase.rpc('delete_account');
+  return resultFor(error, status);
+}

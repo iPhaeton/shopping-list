@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ScrollView, Text, View, type LayoutChangeEvent } from 'react-native';
 
 import { Backdrop } from '../components/Backdrop';
 import { Card } from '../components/Card';
@@ -10,6 +10,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedPicker, type SegmentedOption } from '../components/SegmentedPicker';
 import { ScreenSky } from '../components/Sky';
 import { TextField } from '../components/TextField';
+import { useScrollReveal } from '../components/useScrollReveal';
 import type { ThemePreference } from '../lib/themePreference';
 import type { AccountScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
@@ -26,18 +27,34 @@ const appearanceLabel = (preference: ThemePreference) =>
   APPEARANCES.find((option) => option.value === preference)?.title ?? preference;
 
 /**
- * `navigation` only goes back: like `SignInScreen`, a successful sign-out flips the session state and
- * `RootNavigator` swaps stacks, which unmounts this screen rather than navigating away from it.
+ * `navigation` only goes back: like `SignInScreen`, a successful sign-out — or a deleted account —
+ * flips the session state and `RootNavigator` swaps stacks, which unmounts this screen rather than
+ * navigating away from it.
+ *
+ * The two confirms, "Sign out of all devices" and "Delete account", are never open together: opening
+ * either closes the other (task 25 step 1). While one of the account-ending requests runs, the others
+ * are disabled, so neither a confirm nor its pending text can be closed under a request in flight.
  */
 export function AccountScreen({ navigation }: AccountScreenProps) {
   const styles = useStyles();
   const { preference, nextChange, setPreference } = useTheme();
-  const { state, signOut, signOutEverywhere, setName } = useSession();
+  const { state, signOut, signOutEverywhere, deleteAccount, setName } = useSession();
+  const scroll = useScrollReveal();
 
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [pendingEverywhere, setPendingEverywhere] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  // In the delete card, not the page-level `error` the sign-outs share: a banner at the top would push
+  // the card down and out of view (task 25 step 1).
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Where the cards start in the scroll content, and whether the delete card's next layout is the
+  // confirm opening — the one moment it is scrolled into view.
+  const cardsTop = useRef(0);
+  const revealDelete = useRef(false);
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -96,6 +113,43 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
     }
   }
 
+  function openConfirmEverywhere() {
+    setConfirmingDelete(false);
+    setConfirming(true);
+  }
+
+  function openConfirmDelete() {
+    setConfirming(false);
+    setConfirmingDelete(true);
+    revealDelete.current = true;
+  }
+
+  // The warning runs to five lines, so on a small phone the open card ends below the fold.
+  function onDeleteCardLayout({ nativeEvent: { layout } }: LayoutChangeEvent) {
+    if (!revealDelete.current) return;
+    revealDelete.current = false;
+    scroll.reveal(cardsTop.current + layout.y + layout.height);
+  }
+
+  async function pressConfirmDelete() {
+    setPendingDelete(true);
+    setDeleteError(null);
+
+    const { error: failure, verdict, sessionRevoked } = await deleteAccount();
+
+    // On success the navigator swaps stacks and this screen unmounts, as on sign-out.
+    if (!failure) return;
+
+    if (sessionRevoked) {
+      void signOut('revoked');
+      return;
+    }
+
+    setDeleteError(verdict === 'retryable' ? 'You need a connection to delete your account.' : failure);
+    setPendingDelete(false);
+    setConfirmingDelete(false);
+  }
+
   async function pressConfirmEverywhere() {
     setPendingEverywhere(true);
     setError(null);
@@ -112,6 +166,10 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
   return (
     <Backdrop art={<ScreenSky />}>
       <ScrollView
+        ref={scroll.ref}
+        onLayout={scroll.onLayout}
+        onScroll={scroll.onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets>
@@ -119,7 +177,11 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
 
         {error ? <ErrorBanner message={error} /> : null}
 
-        <View style={styles.cards}>
+        <View
+          style={styles.cards}
+          onLayout={({ nativeEvent: { layout } }) => {
+            cardsTop.current = layout.y;
+          }}>
           <Card style={styles.card}>
             <Text style={styles.label}>Email</Text>
             <Text style={styles.value}>{state.session.user.email}</Text>
@@ -193,11 +255,11 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
             </View>
           </Card>
 
-          <Card style={[styles.card, styles.signOutCard]}>
+          <Card style={[styles.card, styles.pillCard]}>
             <PillButton
               label="Sign out"
               size="lg"
-              disabled={pending}
+              disabled={pending || pendingDelete}
               onPress={() => void pressSignOut()}
             />
 
@@ -206,7 +268,8 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
                 label="Sign out of all devices"
                 size="lg"
                 tone="danger"
-                onPress={() => setConfirming(true)}
+                disabled={pendingDelete}
+                onPress={openConfirmEverywhere}
               />
             ) : (
               <View>
@@ -228,6 +291,47 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
                     size="md"
                     disabled={pendingEverywhere}
                     onPress={() => void pressConfirmEverywhere()}
+                    style={styles.rest}
+                  />
+                </View>
+              </View>
+            )}
+          </Card>
+
+          <Card style={[styles.card, styles.pillCard]} onLayout={onDeleteCardLayout}>
+            {deleteError ? <ErrorBanner message={deleteError} style={styles.cardError} /> : null}
+
+            {!confirmingDelete ? (
+              <PillButton
+                label="Delete account"
+                size="lg"
+                tone="danger"
+                disabled={pending || pendingEverywhere}
+                onPress={openConfirmDelete}
+              />
+            ) : (
+              <View>
+                <Text style={styles.confirmText}>
+                  Deleting your account can't be undone. Lists you're the only owner of will be
+                  deleted, including for anyone you shared them with. Lists that have another owner
+                  will stay with their members.
+                </Text>
+                <View style={styles.actions}>
+                  <PillButton
+                    label="Cancel deleting account"
+                    visibleLabel="Cancel"
+                    size="md"
+                    disabled={pendingDelete}
+                    onPress={() => setConfirmingDelete(false)}
+                    style={styles.snug}
+                  />
+                  <PillButton
+                    label="Confirm delete account"
+                    visibleLabel={pendingDelete ? 'Deleting…' : 'Yes, delete my account'}
+                    variant="danger"
+                    size="md"
+                    disabled={pendingDelete}
+                    onPress={() => void pressConfirmDelete()}
                     style={styles.rest}
                   />
                 </View>
@@ -321,10 +425,16 @@ const useStyles = themedStyles((colors) => ({
   picker: {
     marginTop: 13,
   },
-  signOutCard: {
+  // The sign-out card and the delete card: lg pills, a confirm opening in place of the danger one.
+  pillCard: {
     paddingTop: 18,
     paddingBottom: 20,
     gap: 12,
+  },
+  // The delete card's failure, above its pill; the card's `gap` spaces it.
+  cardError: {
+    marginHorizontal: 0,
+    marginTop: 0,
   },
   confirmText: {
     fontFamily: fonts.sans,

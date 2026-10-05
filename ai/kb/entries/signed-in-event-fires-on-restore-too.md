@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, auth]
 sources: [ai/tasks/17-user-names/implementation-log-step-1.md, src/state/SessionContext.tsx, node_modules/@supabase/auth-js/dist/module/GoTrueClient.js]
-last_verified: 2026-09-21
+last_verified: 2026-10-05
 verify: grep -q "hasResolvedOnce.current ? 'live' : 'restored'" src/state/SessionContext.tsx && grep -q "_recoverAndRefresh" src/state/SessionContext.tsx && grep -q "_notifyAllSubscribers('SIGNED_IN', currentSession)" node_modules/@supabase/auth-js/dist/module/GoTrueClient.js
 related: [session-still-valid-guards-writes, supabase-client-module-boundary, restored-session-state-waits-for-evidence]
 indexed: false

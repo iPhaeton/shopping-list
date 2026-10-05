@@ -7,7 +7,7 @@ import { GoogleIcon } from '../components/icons';
 import { PillButton } from '../components/PillButton';
 import { TextField } from '../components/TextField';
 import type { SignInScreenProps } from '../navigation/types';
-import { useSession } from '../state/SessionContext';
+import { useSession, type SignOutReason } from '../state/SessionContext';
 import { themedStyles } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
 
@@ -15,6 +15,12 @@ import { fonts, radius, spacing } from '../theme';
 const RESEND_COOLDOWN_SECONDS = 60;
 
 const CODE_LENGTH = 6;
+
+/** Why this device is here, when it did not choose to be. One line, never two. */
+const NOTICES: Record<SignOutReason, string> = {
+  revoked: 'You were signed out on another device.',
+  deleted: 'Your account was deleted.',
+};
 
 /**
  * Two phases in one screen: email, then the code that lands in the inbox. There is no separate
@@ -26,7 +32,7 @@ const CODE_LENGTH = 6;
 export function SignInScreen(_props: SignInScreenProps) {
   const styles = useStyles();
   const { requestCode, verifyCode, signInWithGoogle, state } = useSession();
-  const revoked = state.status === 'signedOut' && state.reason === 'revoked';
+  const notice = state.status === 'signedOut' && state.reason ? NOTICES[state.reason] : null;
 
   const [phase, setPhase] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -103,9 +109,9 @@ export function SignInScreen(_props: SignInScreenProps) {
 
   return (
     <AuthFrame>
-      {revoked && (
+      {notice && (
         <View style={styles.notice}>
-          <Text style={styles.noticeText}>You were signed out on another device.</Text>
+          <Text style={styles.noticeText}>{notice}</Text>
         </View>
       )}
 

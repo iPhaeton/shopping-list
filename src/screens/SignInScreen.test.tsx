@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform, Pressable, Text } from 'react-native';
 
 import { signInWithGoogle } from '../lib/googleSignIn';
+import { deleteAccount as deleteAccountApi, fetchProfile } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { SignInScreenProps } from '../navigation/types';
 import { SessionProvider, useSession } from '../state/SessionContext';
@@ -29,6 +30,9 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+
+/** Only the deleted-notice test signs in, which resolves a name; deleting goes through the RPC. */
+jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), deleteAccount: jest.fn() }));
 
 const auth = supabase.auth as unknown as {
   getSession: jest.Mock;
@@ -62,6 +66,8 @@ beforeEach(() => {
   auth.signInWithOtp.mockResolvedValue({ error: null });
   auth.verifyOtp.mockResolvedValue({ error: null });
   jest.mocked(signInWithGoogle).mockResolvedValue({ error: null });
+  jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
+  jest.mocked(deleteAccountApi).mockResolvedValue({ error: null, verdict: 'ok' });
 });
 
 afterEach(() => {
@@ -100,6 +106,23 @@ function ForceRevokedSignOut() {
       accessibilityLabel="force revoked sign-out"
       onPress={() => void signOut('revoked')}>
       <Text>force</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Stands in for `AccountScreen`'s delete confirm, the one caller of `deleteAccount`. Shown only once
+ * the restored session is signed in, as Account is.
+ */
+function ForceDelete() {
+  const { state, deleteAccount } = useSession();
+  if (state.status !== 'signedIn') return null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="force delete"
+      onPress={() => void deleteAccount()}>
+      <Text>delete</Text>
     </Pressable>
   );
 }
@@ -249,6 +272,25 @@ it('shows why when reached after a write refused for a revoked session', async (
   await act(async () => emitAuthChange(null));
 
   expect(await screen.findByText('You were signed out on another device.')).toBeOnTheScreen();
+  expect(screen.queryByText('Your account was deleted.')).not.toBeOnTheScreen();
+});
+
+/** A deleted account says so — instead of the revoked line, never beside it. */
+it('says the account was deleted, when reached by deleting it', async () => {
+  auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
+  const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+
+  await render(
+    <SessionProvider>
+      <ForceDelete />
+      <SignInScreen {...({ navigation } as unknown as SignInScreenProps)} />
+    </SessionProvider>
+  );
+  await fireEvent.press(await screen.findByLabelText('force delete'));
+  await act(async () => emitAuthChange(null));
+
+  expect(await screen.findByText('Your account was deleted.')).toBeOnTheScreen();
+  expect(screen.queryByText('You were signed out on another device.')).not.toBeOnTheScreen();
 });
 
 /** An ordinary visit to the sign-in screen — nothing was ever revoked — shows no such line. */
@@ -256,4 +298,5 @@ it('shows no reason on an ordinary visit', async () => {
   await renderScreen();
 
   expect(screen.queryByText(/signed out on another device/)).not.toBeOnTheScreen();
+  expect(screen.queryByText(/account was deleted/)).not.toBeOnTheScreen();
 });

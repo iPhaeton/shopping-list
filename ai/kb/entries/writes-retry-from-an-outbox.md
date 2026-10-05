@@ -4,10 +4,10 @@ title: Every write is queued on disk and retried until the database acknowledges
 type: decision
 status: current
 tags: [state, persistence, offline, supabase, architecture]
-sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/lib/membersApi.ts, src/state/types.ts]
-last_verified: 2026-10-03
+sources: [ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/16-sync-banner-flicker/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, src/state/ListsContext.tsx, src/state/useListWrites.ts, src/state/useOutbox.ts, src/state/sendWrite.ts, src/lib/outbox.ts, src/lib/listsApi.ts, src/lib/membersApi.ts, src/state/types.ts]
+last_verified: 2026-10-05
 verify: test "$(grep -rl 'useReducer(' src --include='*.ts' --include='*.tsx')" = src/state/ListsContext.tsx && test "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'dispatch(op);')" = "$(cat src/state/ListsContext.tsx src/state/useListWrites.ts | grep -c 'void enqueueOp(op);')" && grep -q "verdict === 'retryable'" src/state/useOutbox.ts && grep -q "verdict === 'permanent'" src/state/useOutbox.ts && grep -q "code === 'P0002'" src/lib/listsApi.ts && grep -q "if (isLimitCode(code)) return 'permanent';" src/lib/listsApi.ts && ! grep -qE 'attempt[A-Za-z._]* *>=? *[0-9A-Z_]' src/state/useOutbox.ts && ! grep -rqiE 'expo-network|netinfo' src package.json && ! grep -qiE "removed'" src/state/types.ts && ! grep -q 'state.lists.filter' src/state/listsReducer.ts && test "$(awk '/^export type Action =/,/^export type WriteAction/' src/state/types.ts | grep -c "type: '")" = 11 && test "$(awk '/^export type WriteAction/,/>;/' src/state/types.ts | grep -oE "type: '[a-zA-Z/]+'" | sort | tr '\n' ' ')" = "type: 'items/firstPageLoaded' type: 'items/pageLoaded' type: 'lists/loaded' type: 'lists/pageLoaded' " && test "$(grep -n 'if (sessionRevoked)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)"
-related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects, sync-banner-mount-is-unconditional, limit-checks-pass-an-applied-resend]
+related: [list-cache-holds-acknowledged-rows, optimistic-list-writes, first-fetch-replaces-list-state, server-stamps-done-at, refused-writes-return-zero-rows, ids-minted-outside-reducer, update-list-identity-preserving, supabase-client-module-boundary, realtime-is-a-nudge-to-a-per-user-inbox, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, scope-boundaries, expo-crypto-undefined-under-jest, session-revoked-write-redirects, sync-banner-mount-is-unconditional, limit-checks-pass-an-applied-resend, account-deletion-forces-signed-out-and-clears-twice]
 ---
 
 Every reducer-owned write dispatches first — the row is on screen before any request — and is then
@@ -61,7 +61,7 @@ has the asymmetry with the cache's version). `queueFirst`, the one exception to 
 restore in front of the write it unblocks ([writes-can-land-on-a-tombstone](writes-can-land-on-a-tombstone.md)).
 
 **Membership writes deliberately do *not* go through any of this.** `shareList`, `setMemberRole`,
-`removeMember` and — since step 19 — `leaveList` are called straight from `SharingScreen`, which holds
+`removeMember` and `leaveList` are called straight from `SharingScreen`, which holds
 its roster in `useState` ([membersApi.ts](../../../src/lib/membersApi.ts)): the reducer models no
 members, `replay` has nothing to preserve, and the roster is an uncached, online-only RPC. The
 boundary is "a write the reducer describes", not "any request".
@@ -83,18 +83,19 @@ a **prop** — outbox and cache keys are per account. Do not reach for `useSessi
 
 - Do not add a connectivity library (`expo-network` says "the OS has Wi-Fi", not "the request will
   succeed" — only a failed request doesn't lie), cap attempts, or add a compensating action per write.
-- Do not clear the outbox on sign-out. `signOut` clears the cached rows only; unsent writes flush at
-  that account's next sign-in. The residue is deliberate: keeping the promise means keeping the data.
+- Do not clear the outbox on sign-out: `signOut` clears the cached rows only, and unsent writes flush
+  at that account's next sign-in — keeping the promise means keeping the data. **Deleting the account
+  is the one exception**: `clearOutbox` removes `outbox:<id>`, then `outbox:<id>:broken`, in one
+  `inOrder` job ([account-deletion-forces-signed-out-and-clears-twice](account-deletion-forces-signed-out-and-clears-twice.md)).
 - New AsyncStorage writes go through `inOrder` in [storageQueue](../../../src/lib/storageQueue.ts):
   the outbox is serialised whole on every change, and two racing writes tear it — a lost row.
 - `SyncBanner` (muted, `pending > 0`) means *not saved yet*; the red `ErrorBanner` is reserved for
-  a `permanent` verdict. Crying wolf every time a lift loses signal is what the split prevents. It
-  also debounces its own paint since step 16 — [sync-banner-mount-is-unconditional](sync-banner-mount-is-unconditional.md).
+  a `permanent` verdict, so a lift losing signal is no alarm; it debounces its own paint
+  ([sync-banner-mount-is-unconditional](sync-banner-mount-is-unconditional.md)).
 - **Do not drop a queued write because a fetch says you may no longer make it.** A `role` in a fetch
   is a snapshot that can be seconds old and move either way; the database is the authority and answers
   with a status the outbox already classifies. Being removed from a list is the same shape: `replay`
-  drops those ops from the *view*, not the queue, and they still flush and earn one honest refusal —
-  realtime made this common and changed nothing else here
+  drops those ops from the *view*, not the queue, and they still flush and earn one honest refusal
   ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
 
 **Any new write path must fail loudly or not at all.** Since sharing, a refusal is a normal thing

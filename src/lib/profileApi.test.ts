@@ -1,4 +1,4 @@
-import { fetchProfile, setName } from './profileApi';
+import { deleteAccount, fetchProfile, setName } from './profileApi';
 import { supabase } from './supabase';
 
 /** `src/lib/supabase.ts` is mocked at the module boundary, the same seam `listsApi.test.ts` and
@@ -106,5 +106,46 @@ describe('setName', () => {
     });
 
     expect(await setName('Alice')).toMatchObject({ sessionRevoked: true });
+  });
+});
+
+describe('deleteAccount', () => {
+  it('calls delete_account with no arguments', async () => {
+    const rpc = respondToRpcWith({ data: null, error: null, status: 204 });
+
+    expect(await deleteAccount()).toEqual({ error: null, verdict: 'ok' });
+    expect(rpc.mock.calls).toEqual([['delete_account']]);
+  });
+
+  it('flags a refusal for a revoked session', async () => {
+    respondToRpcWith({
+      data: null,
+      error: { message: 'this device has been signed out', code: '42501' },
+      status: 403,
+    });
+
+    expect(await deleteAccount()).toEqual({
+      error: 'this device has been signed out',
+      verdict: 'permanent',
+      sessionRevoked: true,
+    });
+  });
+
+  it('reports a failed fetch as retryable, so the screen can say it needs a connection', async () => {
+    respondToRpcWith({ data: null, error: { message: 'TypeError: Failed to fetch' }, status: 0 });
+
+    expect(await deleteAccount()).toMatchObject({ verdict: 'retryable', sessionRevoked: false });
+  });
+
+  it("keeps the database's own words for any other refusal", async () => {
+    respondToRpcWith({
+      data: null,
+      error: { message: 'canceling statement due to statement timeout', code: '57014' },
+      status: 500,
+    });
+
+    expect(await deleteAccount()).toMatchObject({
+      error: 'canceling statement due to statement timeout',
+    });
   });
 });

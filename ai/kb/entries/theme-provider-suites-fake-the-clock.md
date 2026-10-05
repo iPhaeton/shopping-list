@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [testing, jest, theme, time]
 sources: [ai/tasks/20-ux/implementation-log-step-2.md]
-last_verified: 2026-09-29
+last_verified: 2026-10-05
 verify: for f in $(grep -rl '<ThemeProvider' src --include='*.test.tsx'); do grep -qE "jest.mock\('[./]+/lib/deviceTimeZone'" "$f" && grep -q 'useFakeTimers({ now:' "$f" || exit 1; done; grep -A7 'createContext<ThemeContextValue>' src/state/ThemeContext.tsx | grep -q "preference: 'day'" && grep -A7 'createContext<ThemeContextValue>' src/state/ThemeContext.tsx | grep -q 'nextChange: null'
 related: [auto-theme-follows-the-time-zone, theme-tokens-only, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 indexed: false

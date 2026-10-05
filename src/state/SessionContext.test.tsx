@@ -1,9 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 
 import { signInWithGoogle } from '../lib/googleSignIn';
-import { fetchProfile, setName as setNameApi } from '../lib/profileApi';
+import { writeCachedLists } from '../lib/listCache';
+import { saveOutbox } from '../lib/outbox';
+import {
+  deleteAccount as deleteAccountApi,
+  fetchProfile,
+  setName as setNameApi,
+} from '../lib/profileApi';
 import { writeCachedName } from '../lib/nameCache';
 import { supabase } from '../lib/supabase';
 import { SessionProvider, useSession } from './SessionContext';
@@ -36,7 +42,11 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
-jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.fn() }));
+jest.mock('../lib/profileApi', () => ({
+  fetchProfile: jest.fn(),
+  setName: jest.fn(),
+  deleteAccount: jest.fn(),
+}));
 
 const auth = supabase.auth as unknown as {
   getSession: jest.Mock;
@@ -65,10 +75,12 @@ beforeEach(async () => {
   auth.signOut.mockResolvedValue({ error: null });
   jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
   jest.mocked(setNameApi).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(deleteAccountApi).mockResolvedValue({ error: null, verdict: 'ok' });
 });
 
 function Probe() {
-  const { state, signOut, signOutEverywhere, signInWithGoogle, setName, retryName } = useSession();
+  const { state, signOut, signOutEverywhere, deleteAccount, signInWithGoogle, setName, retryName } =
+    useSession();
   const reason = state.status === 'signedOut' && state.reason ? `, reason: ${state.reason}` : '';
   const nameInfo =
     state.status === 'signedIn'
@@ -104,6 +116,14 @@ function Probe() {
           void signOutEverywhere();
         }}>
         <Text>Sign out everywhere</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Delete account"
+        onPress={() => {
+          void deleteAccount();
+        }}>
+        <Text>Delete account</Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -343,5 +363,129 @@ describe('the name gate', () => {
     await fireEvent.press(screen.getByLabelText('Retry name'));
 
     expect(await screen.findByText('name: Alice')).toBeOnTheScreen();
+  });
+});
+
+describe('deleting the account', () => {
+  const ADD_MILK = { type: 'item/added', listId: 'l1', id: 'i1', title: 'Milk' } as const;
+
+  /** What this device keeps for u1, which a deletion must leave none of. */
+  const U1_KEYS = ['lists:u1', 'name:u1', 'outbox:u1', 'outbox:u1:broken'];
+
+  /** What it must leave alone: another account's unsent writes, and the per-device preferences. */
+  const KEPT_KEYS = ['outbox:u2', 'theme-preference', 'sort-preference'];
+
+  beforeEach(async () => {
+    await writeCachedLists('u1', [], { live: null, bin: null }, { owned: 0, total: 0 });
+    await writeCachedName('u1', 'Alice');
+    await saveOutbox('u1', [ADD_MILK]);
+    await AsyncStorage.setItem('outbox:u1:broken', '{ this is not json');
+    await saveOutbox('u2', [ADD_MILK]);
+    await AsyncStorage.setItem('theme-preference', JSON.stringify({ v: 1, preference: 'night' }));
+    await AsyncStorage.setItem('sort-preference', '{}');
+
+    auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
+    // What auth-js does on a local sign-out: the listener hears SIGNED_OUT before `signOut` resolves.
+    auth.signOut.mockImplementation(async () => {
+      emitAuthChange(null, 'SIGNED_OUT');
+      return { error: null };
+    });
+  });
+
+  async function keys() {
+    return [...(await AsyncStorage.getAllKeys())].sort();
+  }
+
+  it('signs this device out with reason deleted, leaving nothing of the account on it', async () => {
+    // Cleared before the sign-out, not only after: an app killed in between keeps nothing either.
+    let keysAtSignOut: string[] = [];
+    auth.signOut.mockImplementation(async () => {
+      keysAtSignOut = await keys();
+      emitAuthChange(null, 'SIGNED_OUT');
+      return { error: null };
+    });
+
+    await renderProbe();
+    await screen.findByText('status: signedIn');
+
+    await fireEvent.press(screen.getByLabelText('Delete account'));
+
+    expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
+    expect(deleteAccountApi).toHaveBeenCalledTimes(1);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(keysAtSignOut).toEqual([...KEPT_KEYS].sort());
+    await waitFor(async () => expect(await keys()).toEqual([...KEPT_KEYS].sort()));
+  });
+
+  /**
+   * `ListsProvider` keeps writing until it unmounts, in the render after the sign-out arrives: a
+   * flush step whose request comes back persists its queue, and a hydration caches its rows. Here
+   * both land after the first clear, while auth-js is still signing out. The second clear, once the
+   * signed-in tree is gone, is what removes them.
+   */
+  it('leaves nothing even when a flush in flight saves after the first clear', async () => {
+    auth.signOut.mockImplementation(async () => {
+      await saveOutbox('u1', [ADD_MILK]);
+      await writeCachedLists('u1', [], { live: null, bin: null }, { owned: 0, total: 0 });
+      emitAuthChange(null, 'SIGNED_OUT');
+      return { error: null };
+    });
+
+    await renderProbe();
+    await screen.findByText('status: signedIn');
+
+    await fireEvent.press(screen.getByLabelText('Delete account'));
+
+    expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
+    await waitFor(async () => expect(await keys()).toEqual([...KEPT_KEYS].sort()));
+  });
+
+  it('changes nothing on the device when the RPC fails', async () => {
+    jest
+      .mocked(deleteAccountApi)
+      .mockResolvedValue({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
+
+    await renderProbe();
+    await screen.findByText('status: signedIn');
+
+    await fireEvent.press(screen.getByLabelText('Delete account'));
+
+    await waitFor(() => expect(deleteAccountApi).toHaveBeenCalled());
+    expect(screen.getByText('status: signedIn')).toBeOnTheScreen();
+    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(await keys()).toEqual([...U1_KEYS, ...KEPT_KEYS].sort());
+  });
+
+  /**
+   * auth-js can return an error from a local sign-out without removing the session, and without
+   * telling the listener. The account is gone either way, so staying signed in is never right.
+   */
+  it('still ends signed out when the local sign-out returns an error', async () => {
+    auth.signOut.mockResolvedValue({ error: { message: 'Failed to fetch' } });
+
+    await renderProbe();
+    await screen.findByText('status: signedIn');
+
+    await fireEvent.press(screen.getByLabelText('Delete account'));
+
+    expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
+    await waitFor(async () => expect(await keys()).toEqual([...KEPT_KEYS].sort()));
+  });
+
+  /**
+   * A queued write refused for the session the deletion took with it signs out as `revoked`, and a
+   * token refresh failing later signs out with no reason. Neither may replace the deleted notice.
+   */
+  it('keeps reason deleted through a later sign-out event', async () => {
+    await renderProbe();
+    await screen.findByText('status: signedIn');
+
+    await fireEvent.press(screen.getByLabelText('Delete account'));
+    await screen.findByText('status: signedOut, reason: deleted');
+
+    await fireEvent.press(screen.getByLabelText('Sign out (revoked)'));
+    await act(async () => emitAuthChange(null, 'SIGNED_OUT'));
+
+    expect(screen.getByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
   });
 });
