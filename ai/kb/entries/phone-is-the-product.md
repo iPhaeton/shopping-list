@@ -4,15 +4,15 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, d58a9cf, 962533c, a7416fd, 3ccf224]
-last_verified: 2026-10-03
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/25-account-deletion/implementation-log-step-1.md, d58a9cf, 962533c, a7416fd, 3ccf224]
+last_verified: 2026-10-05
 verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && ! grep -qE 'accessibilityValue([^A-Za-z]|$)' node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js && grep -q 'bandAt(colors, index)' src/components/ItemRow.tsx && grep -q "from '../../../src/theme.ts'" ai/ux/source/tokens.mjs
 related: [maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props, search-fold-fallbacks-ship]
 ---
 
 **Since task 20 step 1: the product is the phone app** — iOS and Android, portrait — by the user's
-standing priority. Older entries may still read as if the browser were the target; verifying in the
-browser ([supabase-local-stack](supabase-local-stack.md)) still holds for flows, not for looks.
+standing priority. Verifying in the browser ([supabase-local-stack](supabase-local-stack.md)) holds
+for flows, not for looks.
 
 | | role |
 |---|---|
@@ -26,18 +26,18 @@ shadows, safe areas, overscroll, and anything native-only — `Appearance.setCol
 `expo-system-ui` are skipped on web in
 [ThemeContext.tsx](../../../src/state/ThemeContext.tsx) because react-native-web has neither.
 
-**Where visual sign-off happens.** The iOS simulator, then the **`Pixel_10`** Android emulator.
-The **iPhone 17e**, whose screen is exactly the mockups' 1170×2532 @3x (390×844 pt), **is gone from
-this Mac** (by 2026-09-30). Task 20 step 6 was checked on the **iPhone 18 Pro** only, by the user's
-instruction: 1206×2622 @3x (402×874 pt), so a screenshot no longer overlays a mockup pixel for
-pixel — compare by measure: it sits **~15.3 pt lower throughout**, and with that offset taken out
-relative geometry matches to ≤ 0.4 pt. It is the simulator prepared for Maestro. The large phone, the
-**iPhone 18 Pro Max**, has never been run — task 20 step 5 skipped it by the user's decision.
-Screenshots saved under `ai/tasks/*/screenshots/` come from the simulator, not the browser.
-**Shoot only the screens a step changed** — the user's standing rule since task 20 step 6, not
-`shoot-all.sh`'s full tours. How to reach each screen: [maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
+**Where visual sign-off happens: the iOS simulator only.** No step since task 20 step 5 has been
+checked on the `Pixel_10` emulator, and task 25 rules it out for every step ("only on iPhone").
+The **iPhone 17e**, exactly the mockups' 1170×2532 @3x (390×844 pt), **is gone from this Mac**.
+The prepared simulator, Maestro's too, is the **iPhone 18 Pro**: 1206×2622 @3x (402×874 pt), so a
+screenshot no longer overlays a mockup pixel for pixel — compare by measure: it sits **~15.3 pt
+lower throughout**, and with that offset taken out relative geometry matches to ≤ 0.4 pt. The
+**iPhone 18 Pro Max** has never been run, by the user's decision. Screenshots under
+`ai/tasks/*/screenshots/` come from the simulator, not the browser. **Shoot only the screens a step
+changed** — the user's standing rule, not `shoot-all.sh`'s full tours. How to reach each screen:
+[maestro-drives-the-native-ui](maestro-drives-the-native-ui.md).
 
-**Android is two steps behind.** Task 20 step 5's screens — Sign in, Set name, Account, Sharing, the
+**Android is behind.** Task 20 step 5's screens — Sign in, Set name, Account, Sharing, the
 launch screen — have not been seen on `Pixel_10`: the build that would have added `expo-blur` and
 the splash filled the disk, and the user said to skip it. Step 6 skipped Android by instruction too.
 So these are **unverified on Android**: the `BlurTargetView` blur and its scroll cost on Account
@@ -47,35 +47,37 @@ splash emblem under Android 12+'s circular mask, hardware back from Account and 
 Sharing — its pinned header, its `KeyboardAvoidingView` (no `behavior` on Android), and taps on the
 suggestion rows below the header's edge, which iOS reaches only through Fabric's overflow-aware hit
 test. The installed dev client predates both native modules ([native-build-toolchain](native-build-toolchain.md)).
-**Task 24's search and sort screens are unverified on Android too**: the `Pixel_10` emulator booted,
-the 2026-09-27 dev client brought up no JS target, and the user stopped the check ("No Android").
+**Task 24's search and sort screens are unverified on Android too** — the user stopped the check.
 
 **The design is the mockups in `ai/ux/primary/`** — each screen, some in several states, day and
 moonlit, compared by measure against the simulator. Where a description's prose about looks and
 its images differ, the images win; its constraints and done-when still govern.
 
-**The four oldest Lists and List detail mockups are stale — do not build to them.**
-[lists-screen-quiet-horizon](../../../ai/ux/primary/lists-screen-quiet-horizon.png) and
-[list-detail-screen-quiet-horizon](../../../ai/ux/primary/list-detail-screen-quiet-horizon.png)
-(and their `-moonlit` pairs) stay untouched as records, but since task 24 step 1 they are wrong
-three ways:
+**Eight mockups are stale records — keep them untouched, never build to what they get wrong:**
 
-- They show **create mode without its header button**, not the resting state. The resting design
-  is search mode: `lists-screen-search-resting*` and `list-detail-screen-search-resting*`.
-- Their toggles carry a count (`Show 2 deleted`, `Show 1 deleted`). The designed label is
-  `Show deleted`, always, with no number.
-- List detail's items sit on one pale ground with hairlines. The app has drawn one band per item
-  row (`ItemRow` → `bandAt`) since `a7416fd`, and every newer List detail mockup does too.
+- [lists-screen-quiet-horizon](../../../ai/ux/primary/lists-screen-quiet-horizon.png) and
+  [list-detail-screen-quiet-horizon](../../../ai/ux/primary/list-detail-screen-quiet-horizon.png)
+  (and `-moonlit`), since task 24 step 1. They show **create mode without its header button**; the
+  resting design is search mode, `lists-screen-search-resting*` and
+  `list-detail-screen-search-resting*`. Their toggles carry a count (`Show 2 deleted`); the label
+  is `Show deleted`, always. List detail's items sit on one pale ground with hairlines; the app
+  has drawn one band per item row (`ItemRow` → `bandAt`) since `a7416fd`.
+- `account-screen-quiet-horizon*` and `account-screen-editing-*`, since task 25 step 1: no 4th
+  card, `Delete account`. **Account is `account-screen-delete*` now**; `-editing-` still draws the
+  name editor, which is otherwise unchanged.
 
-Task 24 step 1 added nine stems for search, sort and the bin: `lists-screen-{search,
-search-resting,bin,bin-empty}` and `list-detail-screen-{search,search-resting,search-sorted,bin,
-bin-empty}`. Its log records each one's state, copy, a11y labels, and the geometry to measure by.
+Task 24 step 1 added nine stems for search, sort and the bin (`lists-screen-{search,
+search-resting,bin,bin-empty}`, `list-detail-screen-{search,search-resting,search-sorted,bin,
+bin-empty}`); task 25 step 1 four for deleting an account (`account-screen-delete{,-confirm,
+-offline}`, `sign-in-screen-deleted`). Each log records its stems' state, copy, a11y labels, and
+the geometry to measure by.
 
 **Mockups are rendered, never hand-drawn.** The harness in `ai/ux/source/`
 ([README](../../../ai/ux/source/README.md)) imports `src/theme.ts` and `bandAt` directly, so the
 palettes are the real ones, and it is calibrated against simulator shots. Change a mockup by
 editing its scene and re-rendering, never by editing a PNG, and never overwrite one the user has
-not asked to change. It renders the set's 390×844 pt @3x, not the 18 Pro's size.
+not asked to change. It renders the set's 390×844 pt @3x, not the 18 Pro's size, and draws only
+Lists, List detail, Account and Sign in; another screen has to be ported into it first.
 
 **Task screenshots are records of their day, like the logs, not the current design.** The user
 can hand-tune a look after the shots are taken, in the same commit. **The band rim on Lists is the
@@ -97,10 +99,8 @@ edge from those shots.** The rim's brightness is `stopOpacity={0.2}` → `0` in 
   `aria-checked`. Playwright cannot assert checked state; RNTL and native can. The `verify:` pins
   this, so it fails the day RNW starts mapping the prop.
 - **The browser's back and forward buttons do nothing inside the app.** `NavigationContainer`
-  (in `RootNavigator`) gets no `linking` prop. React Navigation only enables `useLinking`, the only
-  thing that writes browser history, when `linking` is passed. So no screen has ever pushed a
-  browser history entry. The user declined a web-only `linking` config in task 20 step 4. On web,
-  the drawn `Back` is the way back, as the native header's back button was before.
+  (in `RootNavigator`) gets no `linking` prop, and React Navigation writes browser history only
+  when it does. The user declined a web-only `linking` config; the drawn `Back` is the way back.
 - **No accessibility value on web.** react-native-web 0.21 drops `accessibilityValue` (no
   `aria-valuetext` in the DOM) — the same family as the missing checked state. The sort buttons' and
   the magnifier's values (`SortButtons`, `IconButton`'s `value`) exist on native and in RNTL only.
