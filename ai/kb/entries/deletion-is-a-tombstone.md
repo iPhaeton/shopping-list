@@ -1,20 +1,23 @@
 ---
 id: deletion-is-a-tombstone
-title: Deleting stamps `deleted_at` and leaves the row — the bin's first page ships with the fetch that opens the list, and a nightly purge is what actually removes anything
+title: Deleting stamps `deleted_at` and leaves the row — the bin's first page ships with the fetch that opens the list, and only the nightly purge and account deletion remove anything
 type: decision
 status: current
 tags: [supabase, postgres, persistence, state, deletion, ui]
-sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
-last_verified: 2026-10-03
+sources: [ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/suggestions/deletion.md, supabase/migrations/20260910000000_deletion.sql, supabase/migrations/20260910000001_purge_schedule.sql, ai/tasks/25-account-deletion/implementation-log-step-2.md, src/state/listsReducer.ts, src/lib/listsApi.ts, src/state/usePaging.ts]
+last_verified: 2026-10-05
 verify: grep -q 'return liveItems(list).filter' src/state/listsReducer.ts && grep -q 'liveLists(lists)' src/screens/ListsScreen.tsx && grep -q 'liveItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'binLists(lists)' src/screens/ListsScreen.tsx && grep -q 'binItems(list)' src/screens/ListDetailScreen.tsx && grep -q 'binned > 0 || showDeleted' src/screens/ListsScreen.tsx && grep -q 'inBin > 0 || showDeleted' src/screens/ListDetailScreen.tsx && grep -q 'loaded && !showDeleted && arranged && list.nextLive !== null' src/screens/ListDetailScreen.tsx && grep -q "const shownQuery = binned ? '' : query;" src/screens/ListDetailScreen.tsx && ! grep -qE 'bin:items|live:items' src/lib/listsApi.ts && grep -q "fetchItems(listId, 'live', null)" src/state/usePaging.ts && grep -q "fetchItems(listId, 'bin', null)" src/state/usePaging.ts && test "$(grep -rl 'function public.my_memberships' supabase/migrations)" = supabase/migrations/20260907000000_list_sharing.sql && ! grep -A8 'function public.my_memberships' supabase/migrations/20260907000000_list_sharing.sql | grep -q deleted_at && test "$(grep -c 'deleted_at <= cutoff' supabase/migrations/20260910000000_deletion.sql)" = 2 && ! grep -q 'cron.schedule' supabase/migrations/20260910000000_deletion.sql && grep -q "cron.schedule('purge-deleted'" supabase/migrations/20260910000001_purge_schedule.sql
-related: [keyset-paging-in-the-order-shown, writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack, limit-checks-pass-an-applied-resend]
+related: [keyset-paging-in-the-order-shown, writes-can-land-on-a-tombstone, list-data-scoped-by-rls, read-rooted-at-list-members, list-cache-holds-acknowledged-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, scope-boundaries, supabase-local-stack, limit-checks-pass-an-applied-resend, delete-account-removes-sole-owned-lists]
 ---
 
 **Deleting deletes nothing.** `lists` and `items` each grew a `deleted_at
 timestamptz`; a delete stamps it, a restore nulls it, and the row keeps its place, its id, its
-`list_members` rows and its history. The only statement in the schema that actually removes list data
-is `purge_deleted`, which runs nightly as `postgres` and collects tombstones older than 30 days
-([the migration](../../../supabase/migrations/20260910000000_deletion.sql)).
+`list_members` rows and its history. Two statements actually remove list data: `purge_deleted`,
+run nightly as `postgres` on tombstones older than 30 days
+([the migration](../../../supabase/migrations/20260910000000_deletion.sql)), and `delete_account`,
+which hard-deletes every list a departing account solely owns, binned or not
+([delete-account-removes-sole-owned-lists](delete-account-removes-sole-owned-lists.md)) — never a
+user's delete of a list or item.
 
 The choice was the user's, and four hard problems dissolve with it: a write to a deleted thing matches
 a row that is *visibly* deleted rather than being indistinguishable from a refusal
@@ -99,9 +102,8 @@ went into keeping cheap. Three things about it are easy to break:
 The job is `purge-deleted` at **03:30 GMT** (`cron.timezone` is GMT, measured), running as `postgres`,
 which owns the function — so `purge_deleted` is revoked from `anon` *and* `authenticated` and the
 schedule still works. Re-scheduling the same job *name* upserts, so `db reset` accumulates no
-duplicates. `keep_last_owner` does not abort it: its cascade exemption covers exactly this, measured.
-Purging a list also nudges its members at 03:30
-([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)) — harmless.
+duplicates. `keep_last_owner` does not abort it: its cascade exemption covers exactly this, measured. Purging a
+list also nudges its members at 03:30 — harmless.
 
 **What it does not solve.** Restoring a list does **not** restore its items — the two tombstones are
 independent, which is correct and confusing enough to have earned a line of copy on the binned-list
@@ -114,7 +116,5 @@ readable offline. Deferring it to the first tick would need another "is the bin 
 real 03:30 run; that failure mode is silent and slow, so check it once after deploying and again a
 week later.
 
-The `verify:` asserts what a refactor would quietly undo: both screens' live and bin helpers and
-checked switch, completion kept out of bin mode, no search on a binned list, no item embed in
-`fetchLists`, both streams on open, a tombstone-free `my_memberships()` defined once, `<=` in the
-purge, and the schedule in its own file.
+The `verify:` asserts what a refactor would quietly undo: the live/bin helpers, bin mode's guards,
+both streams on open, a tombstone-free `my_memberships()`, `<=` in the purge, the separate schedule.

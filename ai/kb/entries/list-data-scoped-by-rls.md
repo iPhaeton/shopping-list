@@ -4,10 +4,10 @@ title: Row-level security scopes list data to your membership row — the client
 type: constraint
 status: current
 tags: [supabase, postgres, rls, security, persistence, sharing]
-sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
-last_verified: 2026-10-02
+sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/25-account-deletion/implementation-log-step-2.md, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20260907000000_list_sharing.sql]
+last_verified: 2026-10-05
 verify: test "$(grep -c 'enable row level security' supabase/migrations/20260831000000_lists.sql)" = 2 && grep -q 'alter table public.list_members enable row level security;' supabase/migrations/20260907000000_list_sharing.sql && ! grep -rEA1 'create policy .* on public\.(lists|items)' supabase/migrations | grep -qi 'for delete' && ! grep -rqE "\.eq\('(owner_id|created_by|user_id)'" src && grep -q 'create policy "writers update items"' supabase/migrations/20260907000000_list_sharing.sql && grep -q '^grant update (name) on public.lists to authenticated;' supabase/migrations/20260907000000_list_sharing.sql && test "$(cat supabase/migrations/2026091*.sql | grep -c 'create policy')" = 0
-related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, scope-boundaries, supabase-local-stack, session-still-valid-guards-writes]
+related: [read-rooted-at-list-members, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, writes-retry-from-an-outbox, server-stamps-done-at, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, scope-boundaries, supabase-local-stack, session-still-valid-guards-writes, delete-account-removes-sole-owned-lists]
 ---
 
 **Since step 7 the predicate is membership, not ownership, and this entry used to say the opposite** —
@@ -69,25 +69,26 @@ half is now false and the rest is untouched, which is the fact worth recording.*
 `deleted_at` and leaves the row ([deletion-is-a-tombstone](deletion-is-a-tombstone.md)), so **the
 deletion migration creates no policy at all** — the `verify:` command asserts that literally. Members
 must be able to *see* a tombstone to restore it, so the read policies are exactly as step 7 wrote
-them, and the one hard delete in the schema is `purge_deleted`, which runs as `postgres` and is out of
-reach of `anon` and `authenticated` alike. Two writes moved *off* direct table access in the same step
+them, and no policy deletes from `lists` or `items`: the hard deletes are `purge_deleted`, which
+runs as `postgres` out of reach of `anon` and `authenticated` alike, and the definer RPC
+`delete_account`. Two writes moved *off* direct table access in the same step
 (`add_item`, `rename_list`) for reasons that have nothing to do with authorisation, so the matrix
 above is unchanged — but where `set_item_done` was once the only function on list data repeating a
 policy's predicate in its body, there are now six (`set_item_done`, `set_item_deleted`,
 `set_list_deleted`, `add_item`, `rename_list`, and step 10's `rename_item`, which also creates no
 policy and re-grants no column). Every one of them must move when a policy does.
 
-**Deleting an *account* no longer deletes their lists.** `created_by` is `on delete set null`, so a
-list other people are in survives its creator. Two consequences worth knowing before touching either:
+**Deleting an account deletes the lists it solely owns, and only those.** `created_by` is `on delete
+set null`, so a list with another owner survives its creator; `delete_account` hard-deletes every
+list the caller is the only owner of *before* deleting the user, so none is left ownerless
+([delete-account-removes-sole-owned-lists](delete-account-removes-sole-owned-lists.md), which also
+holds the one accepted race — no locks without asking).
 
 - The `keep_last_owner` trigger (`before update or delete on list_members`, refusing to strand a list
-  with no owner) **must exempt referential cascades**, or deleting an account aborts on a list that
-  account solely owned. Both RI actions fire *after* the parent row is gone, so "the `auth.users` row
-  no longer exists" is what tells a cascade from a member genuinely removing themselves. Any future
-  guard trigger on a cascading FK needs the same escape hatch.
-- A sole owner deleting their account therefore leaves an **ownerless list, invisible to everyone
-  forever**, with no delete policy to clean it up. Deliberate: the alternative was cascading and
-  destroying lists other people are in.
+  with no owner) **must exempt referential cascades**, or both of those deletes abort. Both RI actions
+  fire *after* the parent row is gone, so "the list is already gone" and "the `auth.users` row is
+  already gone" are what tell a cascade from a member genuinely removing themselves. Any future guard
+  trigger on a cascading FK needs the same escape hatch.
 
 **`is_list_member` was still not adopted, and now for a stronger reason than "nothing recurses".**
 The helper in `ai/suggestions/supabase-persistence.md` — and this entry's own former promise that
