@@ -37,8 +37,10 @@ how to close the gap: a function revokes the token, then calls the same RPC with
   - the revoke on iOS deletion stops it from arising there;
   - a recovery at sign-in clears it, whatever caused it. That is the `reset-apple-sign-in` function and
     `signInWithApple()`'s retry, below.
-- **Still out of scope:** "Storing Apple refresh tokens so that any device can revoke" (step 1). The recovery needs
-  no stored token, because the sign-in itself hands over a fresh `authorizationCode`.
+- **Not in this step:** "Storing Apple refresh tokens so that any device can revoke". Step 4 does that, and with it
+  web and Android deletions revoke too. Build this step as written: step 4 builds on its shared module, its functions
+  and its recovery, and replaces only the deletion's second sheet. The recovery needs no stored token, because the
+  sign-in itself hands over a fresh `authorizationCode`.
 
 ## Apple Developer (human)
 
@@ -223,6 +225,7 @@ Add `reauthorizeWithApple(): Promise<{ code: string } | { cancelled: true } | { 
 - **Apple-linked on web or Android** *(decided in writing)*: there is no Apple sheet there, so the
   account is deleted through the RPC with the token left unrevoked. Apple's rule binds the iOS app,
   and the next Sign in with Apple on iOS clears the lock-out this leaves, through the recovery above.
+  Step 4 closes this exception.
 - **Not Apple-linked:** unchanged.
 - **`signInWithApple`** is unchanged: the recovery lives entirely in `appleSignIn.ts`.
 
@@ -310,18 +313,18 @@ Await `render` and `fireEvent` (RNTL 14).
 ## After this step
 
 - **Do not run `/librarian deposit`**, whatever CLAUDE.md's working rules say (step 1's request 5).
-  Step 4 deposits the whole task once.
+  Step 5 deposits the whole task once.
 - Write `implementation-log-step-3.md` as usual. End it with a **KB candidates** section: the table
   below, corrected to what was actually built, plus anything the step taught that the table misses.
-  That section is how this step reaches step 4.
+  That section is how this step reaches step 5.
 - Never edit `ai/kb/`. If `npm run kb:audit` fails on an entry this step made stale, that is
-  expected until step 4: name it in the log. Never change code to make a check pass.
+  expected until step 5: name it in the log. Never change code to make a check pass.
 
-## KB impact (for step 4's deposit)
+## KB impact (for step 5's deposit)
 
 | entry | change |
 |---|---|
-| scope-boundaries | deleting an Apple-linked account on iOS revokes Apple's token first. On web and Android it is not revoked (decided in writing), and the next Apple sign-in on iOS recovers by revoking and asking for consent again. The project's first Edge Functions. Still nothing on cloud |
+| scope-boundaries | deleting an Apple-linked account on iOS revokes Apple's token first. On web and Android it is not revoked (decided in writing), and the next Apple sign-in on iOS recovers by revoking and asking for consent again. The project's first Edge Functions. Still nothing on cloud. Step 4's row replaces the revoke part of this one |
 | delete-account-removes-sole-owned-lists | the function calls `delete_account()` with the caller's token after the revoke, and passes its result back unchanged |
 | supabase-client-module-boundary | the functions import supabase-js outside `src/`. The boundary covers the app only |
 | a new entry | how revocation works: the second sheet, the code exchange, the `sub` check, revoke before delete, the 424 for an unreachable Apple; where the `.p8` lives locally; "no longer listed under Sign in with Apple" as the check |

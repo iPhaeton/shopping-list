@@ -11,8 +11,13 @@ User requests (2026-10-06), verbatim, in order. This whole task comes from them:
 4. "In the Account Screen, show the message for how to login on other devices for the users who hid
    their email."
 5. "Update every step so that librarian doesn't run. Create a separate last step that will run
-   librarian for the whole task." Steps 1–3 never run `/librarian deposit`, whatever CLAUDE.md's
-   working rules say. Step 4 deposits the whole task once.
+   librarian for the whole task." Steps 1–4 never run `/librarian deposit`, whatever CLAUDE.md's
+   working rules say. Step 5 deposits the whole task once. It was step 4 until requests 6 and 7
+   inserted a step before it, so step 1's and step 2's logs call it step 4.
+
+Requests 6 and 7 came after step 2 landed, and are quoted in
+[description-step-4.md](description-step-4.md): store Apple's refresh token, so that a deletion on
+web or Android revokes too.
 
 Request 2 answered a suggestion made in chat. That suggestion is the design below. Points marked
 *(decided in writing)* were picked when this task was written and reported to the user, who may
@@ -42,7 +47,8 @@ overturn them. The rest the suggestion proposed and request 2 accepted.
     code.
 - **Deleting an Apple-linked account revokes Apple's token** (step 3). An Edge Function revokes it,
   then calls the same `delete_account()` with the caller's token, the shape task 25 step 1 settled.
-  The phone gets a fresh `authorizationCode` by showing Apple's sheet again.
+  The phone gets a fresh `authorizationCode` by showing Apple's sheet again. Step 4 replaces that
+  sheet with a refresh token stored at sign-in, so a deletion on any platform revokes.
 - **Local stack only. No `config push`, no function deploy.** *(decided in writing)* Cloud lacks
   task 25's migrations, so `delete_account()` is not there
   ([delete-account-removes-sole-owned-lists](../../kb/entries/delete-account-removes-sole-owned-lists.md)).
@@ -56,9 +62,10 @@ overturn them. The rest the suggestion proposed and request 2 accepted.
 | 1 (this) | mockups of Sign in with the Apple button, and of Account for a hidden email, signed off by the user. No code |
 | 2 | Sign in with Apple: the provider config, `appleSignIn.ts`, the button, the name prefill, Account's hidden-email sentence |
 | 3 | revoking Apple's token when an Apple-linked account is deleted: the project's first Edge Function |
-| 4 | the KB deposit for the whole task (request 5). No code |
+| 4 | storing Apple's refresh token at sign-in, so that deleting on web or Android revokes too (requests 6 and 7) |
+| 5 | the KB deposit for the whole task (request 5). No code |
 
-Step 2 needs step 1. Step 3 needs step 2. Step 4 runs last.
+Step 2 needs step 1. Step 3 needs step 2. Step 4 needs step 3. Step 5 runs last.
 
 **Scope change:** [scope-boundaries](../../kb/entries/scope-boundaries.md) has email-code and Google
 sign-in, not Apple. Steps 2 and 3 bring Apple in, on iOS only.
@@ -71,7 +78,8 @@ sign-in, not Apple. Steps 2 and 3 bring Apple in, on iOS only.
   **It must be done before Apple is enabled on cloud:** Account's hidden-email sentence promises that
   the code arrives, and on cloud that is only true once the domain is registered.
 - Apple's server-to-server notifications (consent revoked or account deleted at Apple).
-- Storing Apple refresh tokens so that any device can revoke.
+- ~~Storing Apple refresh tokens so that any device can revoke.~~ Brought in by requests 6 and 7:
+  step 4.
 
 ## Why first
 
@@ -160,15 +168,15 @@ Record each answer in the log, with the user's sign-off.
 
 ## After this step
 
-- **Do not run `/librarian deposit`**, whatever CLAUDE.md's working rules say (request 5). Step 4
+- **Do not run `/librarian deposit`**, whatever CLAUDE.md's working rules say (request 5). Step 5
   deposits the whole task once.
 - Write `implementation-log-step-1.md` as usual. End it with a **KB candidates** section: the table
   below, corrected to what was actually done, plus anything the step taught that the table misses.
-  That section is how this step reaches step 4.
+  That section is how this step reaches step 5.
 - Never edit `ai/kb/`. If `npm run kb:audit` fails on an entry this step made stale, that is
-  expected until step 4: name it in the log.
+  expected until step 5: name it in the log.
 
-## KB impact (for step 4's deposit)
+## KB impact (for step 5's deposit)
 
 | entry | change |
 |---|---|

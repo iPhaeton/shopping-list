@@ -138,5 +138,5 @@ says, verbatim.
 | entry | change |
 |---|---|
 | otp-email-templates-carry-the-code | the template is a whole document: the brand in the subject, the address the code went to, and the support footer. Its rationale is a Go template comment that is never sent (if confirmed). Whether there is a plain-text part |
-| cloud-auth-mail-goes-through-resend | the first spam evidence: Gmail's reason, and SPF/DKIM/DMARC all `PASS`. What this step changed, and where the next code landed. Task 26's step-2 log carries the evidence too, as a candidate for task 26's step 4, so whichever deposit runs second finds it already there |
+| cloud-auth-mail-goes-through-resend | the first spam evidence: Gmail's reason, and SPF/DKIM/DMARC all `PASS`. What this step changed, and where the next code landed. Task 26's step-2 log carries the evidence too, as a candidate for task 26's step 5 (the deposit; step 2's log calls it step 4), so whichever deposit runs second finds it already there |
 | support-address-and-mail-domains | the sign-in code email is another place `support@` appears |
