@@ -10,6 +10,9 @@ User requests (2026-10-06), verbatim, in order. This whole task comes from them:
    is registered with Apple's Private Email Relay.
 4. "In the Account Screen, show the message for how to login on other devices for the users who hid
    their email."
+5. "Update every step so that librarian doesn't run. Create a separate last step that will run
+   librarian for the whole task." Steps 1–3 never run `/librarian deposit`, whatever CLAUDE.md's
+   working rules say. Step 4 deposits the whole task once.
 
 Request 2 answered a suggestion made in chat. That suggestion is the design below. Points marked
 *(decided in writing)* were picked when this task was written and reported to the user, who may
@@ -53,8 +56,9 @@ overturn them. The rest the suggestion proposed and request 2 accepted.
 | 1 (this) | mockups of Sign in with the Apple button, and of Account for a hidden email, signed off by the user. No code |
 | 2 | Sign in with Apple: the provider config, `appleSignIn.ts`, the button, the name prefill, Account's hidden-email sentence |
 | 3 | revoking Apple's token when an Apple-linked account is deleted: the project's first Edge Function |
+| 4 | the KB deposit for the whole task (request 5). No code |
 
-Step 2 needs step 1. Step 3 needs step 2.
+Step 2 needs step 1. Step 3 needs step 2. Step 4 runs last.
 
 **Scope change:** [scope-boundaries](../../kb/entries/scope-boundaries.md) has email-code and Google
 sign-in, not Apple. Steps 2 and 3 bring Apple in, on iOS only.
@@ -154,7 +158,17 @@ Record each answer in the log, with the user's sign-off.
 - The log records each answer above, the user's acceptance and the final copy table.
 - The user has signed off. Step 2 does not start before that.
 
-## KB impact (for the librarian)
+## After this step
+
+- **Do not run `/librarian deposit`**, whatever CLAUDE.md's working rules say (request 5). Step 4
+  deposits the whole task once.
+- Write `implementation-log-step-1.md` as usual. End it with a **KB candidates** section: the table
+  below, corrected to what was actually done, plus anything the step taught that the table misses.
+  That section is how this step reaches step 4.
+- Never edit `ai/kb/`. If `npm run kb:audit` fails on an entry this step made stale, that is
+  expected until step 4: name it in the log.
+
+## KB impact (for step 4's deposit)
 
 | entry | change |
 |---|---|

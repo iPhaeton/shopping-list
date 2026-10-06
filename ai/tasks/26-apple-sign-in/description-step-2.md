@@ -208,7 +208,17 @@ Await `render` and `fireEvent` (RNTL 14).
    ([phone-is-the-product](../../kb/entries/phone-is-the-product.md)). **iPhone only.**
 5. **Commands:** `npm test`, `npm run typecheck`, `npm run kb:audit`.
 
-## KB impact (for the librarian)
+## After this step
+
+- **Do not run `/librarian deposit`**, whatever CLAUDE.md's working rules say (step 1's request 5).
+  Step 4 deposits the whole task once.
+- Write `implementation-log-step-2.md` as usual. End it with a **KB candidates** section: the table
+  below, corrected to what was actually built, plus anything the step taught that the table misses.
+  That section is how this step reaches step 4.
+- Never edit `ai/kb/`. If `npm run kb:audit` fails on an entry this step made stale, that is
+  expected until step 4: name it in the log. Never change code to make a check pass.
+
+## KB impact (for step 4's deposit)
 
 | entry | change |
 |---|---|
