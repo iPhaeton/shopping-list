@@ -5,9 +5,9 @@ type: environment
 status: current
 tags: [supabase, auth, email, resend, deployment, cloud]
 sources: [ai/tasks/6-custom-smtp/plan-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, supabase/config.toml, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md]
-last_verified: 2026-09-18
+last_verified: 2026-10-06
 verify: grep -q '^admin_email = "no-reply@mail.shopping-loop.com"$' supabase/config.toml && awk '/^\[remotes\.production\.auth\.email\.smtp\]/{f=1;next} /^\[/{f=0} f' supabase/config.toml | grep -q '^enabled = true$' && grep -q '^host = "smtp.resend.com"$' supabase/config.toml && grep -q '^pass = "env(RESEND_API_KEY)"' supabase/config.toml && ! grep -q 'resend\.dev' supabase/config.toml && ! grep -q '^RESEND_API_KEY=' .env.example && grep -qx '.env' .gitignore
-related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, otp-email-templates-carry-the-code, shoppingloop-is-the-visible-name-only, scope-boundaries]
+related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, otp-email-templates-carry-the-code, shoppingloop-is-the-visible-name-only, scope-boundaries, support-address-and-mail-domains]
 indexed: false
 ---
 
@@ -29,7 +29,10 @@ unqualified. What remains is ordinary deliverability, at the end.
 **The From must be on the exact domain verified in Resend.** `mail.shopping-loop.com` is a
 subdomain on purpose — Resend recommends one so the app's sending reputation stays apart from the
 domain's own mail — and a subdomain does not inherit its parent's verification, so the choice *is*
-the address. The free plan allows one verified domain. Any From outside it gets `403` from Resend,
+the address. The Resend account now also holds the root domain, which is for support replies only,
+and `inbox.`, which receives and is unused
+([support-address-and-mail-domains](support-address-and-mail-domains.md)). Neither is a From
+for auth mail. Any From outside `mail.` gets `403` from Resend,
 which GoTrue turns into a sign-in code that never arrives, for every user including the owner.
 
 **DNS resolving is not "verified", and nothing on this machine can read the verified state.** Phase 2
@@ -75,8 +78,9 @@ only the `magic_link` template ([otp-email-templates-carry-the-code](otp-email-t
 (a plus-alias of the owner's Gmail is the cheap way; it creates a throwaway production user);
 delivery to another provider (Outlook, iCloud) and whether it lands in spam — a fresh domain with no
 reputation is exactly where mail goes quietly missing, and delivered-to-spam is indistinguishable
-from never-sent at the app; a DMARC record (`TXT _dmarc.shopping-loop.com`,
-`v=DMARC1; p=none; rua=mailto:<owner>`), still absent as of 2026-09-17; re-scoping the key to the
-domain (optional — the current key sends from any domain in the team). `email_sent = 30`/hour is
-Supabase's floor for custom SMTP and Resend's free plan is 100/day — a burst cap, not an allowance
+from never-sent at the app; re-scoping the key to the domain (optional — the current key sends
+from any domain in the team). A DMARC record now exists: `_dmarc.shopping-loop.com` is
+`v=DMARC1; p=none;` with no `rua`, so no reports come back (checked with `dig`, 2026-10-06).
+`email_sent = 30`/hour is Supabase's floor for custom SMTP. Resend's free plan is 100 a day, and
+support replies sent from Gmail count against the same quota. It is a burst cap, not an allowance
 ([supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)).

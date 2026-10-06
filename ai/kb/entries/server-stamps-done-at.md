@@ -8,6 +8,7 @@ sources: [ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/imple
 last_verified: 2026-10-02
 verify: grep -q "rpc('set_item_done'" src/lib/listsApi.ts && D="$(grep -rl 'function public.set_item_done' supabase/migrations | sort | tail -1)" && grep -q 'done_at = case when p_done then now() else null end' "$D" && grep -A6 'function public.set_item_done' "$D" | grep -q 'returns public.write_outcome' && grep -A50 'function public.set_item_done' "$D" | grep -q "raise exception using errcode = '42501'" && grep -q '^revoke update on public.items from anon, authenticated;' supabase/migrations/20260831000000_lists.sql && ! grep -rqE '^grant update[^;]*on public\.items' supabase/migrations && grep -q "rpc('rename_item'" src/lib/listsApi.ts && ! grep -qE "from\('items'\)[^;]*\.update\(" src/lib/listsApi.ts
 related: [writes-retry-from-an-outbox, list-data-scoped-by-rls, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows, ids-minted-outside-reducer, first-fetch-replaces-list-state, writes-can-land-on-a-tombstone, deletion-is-a-tombstone, session-still-valid-guards-writes, session-revoked-write-redirects]
+indexed: false
 ---
 
 Ticking an item goes through `set_item_done(p_item_id uuid, p_done boolean)`.
@@ -85,11 +86,10 @@ function would be denied by the very revoke that makes this worth doing — so i
 repeats the authorization test in its body. **That predicate is a role test now**
 (`list_members … role >= 'writer'`), not an ownership one, and it must stay in step with the
 `writers update items` policy. And the revoke is table-wide, so renaming an item is impossible from
-the client too: step 10's `rename_item`
-([migration](../../../supabase/migrations/20260911000000_rename_item.sql)) is its own definer
-function rather than a re-granted `title` column — unlike `lists`, where step 7 did re-grant a single
-column — and it repeats the same `role >= 'writer'` predicate, so two function bodies now move with
-that policy. See [supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)
+the client too: step 10's `rename_item` ([migration](../../../supabase/migrations/20260911000000_rename_item.sql))
+is its own definer function rather than a re-granted `title` column — unlike `lists`, where step 7
+did re-grant a single column — and it repeats the same `role >= 'writer'` predicate, so two function
+bodies now move with that policy. See [supabase-default-grants-defeat-revokes](supabase-default-grants-defeat-revokes.md)
 for why neither could be dodged, and [list-data-scoped-by-rls](list-data-scoped-by-rls.md) for the
 whole authorization picture.
 
