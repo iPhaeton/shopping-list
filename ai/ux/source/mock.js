@@ -88,6 +88,23 @@ function PillButton({ label, variant = 'outline', tone = 'default', size = 'sm',
     glyph + T({ fontFamily: font, fontSize, color: ink, whiteSpace: 'nowrap' }, label).replace('class="t"', 'class="t ptxt"'), 'pill');
 }
 
+// ---------- New: AppleAuthenticationButton (expo-apple-authentication) ----------
+// The native ASAuthorizationAppleIDButton. Apple draws its inside — the logo, the words (in the
+// device's language), the font and the colours — and the app sets only `buttonType`, `buttonStyle`,
+// `cornerRadius` and the size; `style` may not set `backgroundColor` or `borderRadius`. So only the
+// frame is design here. The inside is an approximation until a simulator shot recalibrates it: the
+// logo is the system font's U+F8FF, the title SF Pro Medium at 43% of the height, after Apple's
+// guidelines for the button.
+const APPLE_TITLE = { SIGN_IN: 'Sign in with Apple', CONTINUE: 'Continue with Apple', SIGN_UP: 'Sign up with Apple' };
+const APPLE_LOOK = { BLACK: ['#000000', '#ffffff', null], WHITE: ['#ffffff', '#000000', null], WHITE_OUTLINE: ['#ffffff', '#000000', '#000000'] };
+function AppleButton({ buttonType = 'CONTINUE', buttonStyle = 'BLACK', cornerRadius = 26, height = 52, style = {} }) {
+  const [fill, ink, ring] = APPLE_LOOK[buttonStyle];
+  const fontSize = +(height * 0.43).toFixed(1);
+  const type = { fontFamily: '-apple-system, system-ui', fontWeight: 500, fontSize, color: ink, whiteSpace: 'nowrap' };
+  return R({ height, borderRadius: cornerRadius, backgroundColor: fill, border: ring ? `1px solid ${ring}` : 'none', alignItems: 'center', justifyContent: 'center', gap: 4, ...style },
+    T(type, '') + T(type, APPLE_TITLE[buttonType]), 'apple');
+}
+
 // ---------- AddBar (52 pill: input + filled button, 20 inset) ----------
 const barSurface = () => ({ marginLeft: 20, marginRight: 20, borderRadius: 999, border: `1px solid ${C.surfaceOutline}`, backgroundColor: C.surface, boxShadow: `0px 3px 16px ${C.barShadow}` });
 function AddBar({ placeholder, value = '', button, disabled }) {
@@ -485,7 +502,8 @@ function ListDetailScreen(s) {
 // { day, night } }), `editing` ({ value }), `everywhere` (that confirm open), `del` ('rest' | 'confirm'),
 // `delError`. `scroll` offsets the content; `reveal` scrolls just far enough that the last card ends at
 // the safe area's bottom, as opening the delete confirm does. Scrolled, the sky's top slice is redrawn
-// over the status bar, as Backdrop does.
+// over the status bar, as Backdrop does. `relayNote` is the hidden-email sentence under the address;
+// `share` puts a Share pill beside the address, as Edit sits beside the name.
 const DELETE_WARNING = "Deleting your account can't be undone. Lists you're the only owner of will be deleted, including for anyone you shared them with. Lists that have another owner will stay with their members.";
 function AccountScreen(s) {
   const label = (t) => T({ fontFamily: fontOf.sans, fontSize: 14, lineHeight: '19px', color: C.textSecondary, whiteSpace: 'nowrap' }, t);
@@ -503,7 +521,16 @@ function AccountScreen(s) {
       TextField({ value: s.editing.value, placeholder: 'Your name', style: { height: 48, marginTop: 10 } }) +
       actions(PillButton({ label: 'Cancel', size: 'md', style: { flex: '1 1 0' } }) + PillButton({ label: 'Save name', variant: 'filled', size: 'md', style: { flex: '1 1 0' } }))
     : R({ alignItems: 'center', gap: 12 }, V({ flex: '1 1 0' }, label('Name') + value(s.name)) + PillButton({ label: 'Edit' }));
-  const profile = card({}, label('Email') + value(s.email) + V({ height: 1, marginTop: 14, marginBottom: 14, backgroundColor: C.divider }) + name);
+  // An address has no line-break opportunity inside it, so one too long for its line breaks between
+  // characters on iOS; `overflowWrap: anywhere` does the same here, where CSS would overflow instead.
+  const address = T({ marginTop: 2, fontFamily: fontOf.sans, fontSize: 17, lineHeight: '23px', color: C.text, overflowWrap: 'anywhere' }, s.email).replace('class="t"', 'class="t email"');
+  const email = s.share
+    ? R({ alignItems: 'center', gap: 12 }, V({ flex: '1 1 0' }, label('Email') + address) + PillButton({ label: 'Share' }))
+    : label('Email') + address;
+  const note = s.relayNote
+    ? T({ marginTop: 8, fontFamily: fontOf.sans, fontSize: 15, lineHeight: '21px', color: C.textSecondary }, s.relayNote).replace('class="t"', 'class="t note"')
+    : '';
+  const profile = card({}, email + note + V({ height: 1, marginTop: 14, marginBottom: 14, backgroundColor: C.divider }) + name);
 
   const a = s.appearance || {};
   const checked = a.checked === 'theme' ? (isDay ? 'Day' : 'Night') : a.checked;
@@ -536,12 +563,16 @@ function AccountScreen(s) {
 
 // SignInScreen's email phase in AuthFrame: the name (serif 43/54) at inset + 82, the card's top at
 // inset + 325, padded 24, over the fixed Landscape. `s.notice` is the notice above the title.
+// `s.apple` adds Apple's button, the `lg` pill's size: `{ order: 'first' | 'last' (beside Google),
+// day, night (its buttonStyle per theme), type }`.
 function SignInScreen(s) {
   const NAME_TOP = 82, CARD_TOP = 325, NAME_H = 54;
   const notice = s.notice
     ? V({ marginBottom: 16, paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderRadius: 20, backgroundColor: C.bannerSurface },
       T({ fontFamily: fontOf.sans, fontSize: 15, color: C.text }, s.notice))
     : '';
+  const google = PillButton({ label: 'Continue with Google', size: 'lg', icon: GOOGLE_G, style: { marginTop: 14 } });
+  const apple = s.apple ? AppleButton({ buttonType: s.apple.type, buttonStyle: s.apple[THEME], style: { marginTop: 14 } }) : '';
   // The serif lines sit higher on iOS than CSS half-leading puts them, as List detail's title does:
   // measured against the 17e shots, the name by 2.33 pt and `Sign in` by 1.33.
   const body = notice +
@@ -549,7 +580,7 @@ function SignInScreen(s) {
     T({ marginTop: 8, fontFamily: fontOf.sans, fontSize: 15.5, lineHeight: '22px', color: C.textSecondary }, "We'll email you a six-digit code. No password needed.") +
     TextField({ placeholder: 'you@example.com', style: { marginTop: 20 } }) +
     PillButton({ label: 'Send code', variant: 'filled', size: 'lg', disabled: true, style: { marginTop: 14 } }) +
-    PillButton({ label: 'Continue with Google', size: 'lg', icon: GOOGLE_G, style: { marginTop: 14 } });
+    (s.apple && s.apple.order === 'last' ? google + apple : apple + google);
   const content = V({ minHeight: H, paddingTop: INSET + NAME_TOP, paddingLeft: 20, paddingRight: 20, paddingBottom: 24 },
     T({ height: NAME_H, fontFamily: fontOf.serif, fontSize: 43, lineHeight: `${NAME_H}px`, top: -2.33, textAlign: 'center', color: C.text }, 'ShoppingLoop') +
     Card({ marginTop: CARD_TOP - NAME_TOP - NAME_H, paddingLeft: 24, paddingRight: 24, paddingTop: 24, paddingBottom: 24 }, body));
@@ -588,6 +619,10 @@ const MAGNIFIER = (dot) => ({ glyph: 'search', dot });
 const ACCOUNT = { screen: 'account', email: 'maya@example.com', name: 'Maya' };
 // As the current Account mockups draw it: Auto, with when it next switches.
 const AUTO = { checked: 'Auto', next: { day: 'Night from 7:48 PM', night: 'Day from 6:52 AM' } };
+const APPLE = { type: 'CONTINUE', order: 'first', day: 'BLACK', night: 'WHITE' };
+// Apple's relay addresses: ten random characters at a domain only Apple issues.
+const RELAY = 'k2x9dqvmp7@privaterelay.appleid.com';
+const RELAY_NOTE = 'This address hides your real email. On another iPhone, use Sign in with Apple. On Android or the web, sign in with this address, and Apple forwards the code to your inbox.';
 
 const SCENES = {
   // Calibration: the app as task 20 step 5 shot it on the 17e.
@@ -684,6 +719,12 @@ const SCENES = {
   // The offline failure, inside the delete card above its control (the confirm closes on failure).
   'account-screen-delete-offline': { ...ACCOUNT, appearance: AUTO, del: 'rest', delError: 'You need a connection to delete your account.' },
   'sign-in-screen-deleted': { screen: 'signIn', notice: 'Your account was deleted.' },
+
+  // Task 26: Sign in with Apple. Apple's button first, `CONTINUE`, black by day and white by night.
+  'sign-in-screen-apple': { screen: 'signIn', apple: APPLE },
+  // A relay address (Hide My Email) with Share beside it, and how to sign in elsewhere under it.
+  // Share leaves the address too little room for one line, so it wraps, between letters.
+  'account-screen-hidden-email': { ...ACCOUNT, email: RELAY, appearance: AUTO, del: 'rest', relayNote: RELAY_NOTE, share: true },
 };
 
 // ---------- Boot ----------
@@ -720,11 +761,21 @@ const SCENES = {
   const clipped = [...fit, ...pillFit].filter(([, need, room]) => need > room + 0.5).map(([f]) => f);
   const top = (txt) => { const e = [...root.querySelectorAll('.t')].find((t) => t.textContent === txt); return e ? +e.closest('.row').getBoundingClientRect().top.toFixed(1) : null; };
   const rect = (e) => e ? [+e.getBoundingClientRect().top.toFixed(1), +e.getBoundingClientRect().bottom.toFixed(1)] : null;
+  // A text's line count, and its widest line's width against the width it has.
+  const lines = (e, lineHeight) => {
+    if (!e) return null;
+    const range = document.createRange();
+    range.selectNodeContents(e);
+    return { rect: rect(e), lines: Math.round(e.getBoundingClientRect().height / lineHeight), need: +range.getBoundingClientRect().width.toFixed(1), room: e.clientWidth };
+  };
   const framed = s.screen === 'account' || s.screen === 'signIn';
   const m = !q.get('measure') ? undefined : framed ? {
     cards: [...root.querySelectorAll('.card')].map(rect),
     confirms: [...root.querySelectorAll('.confirm')].map((e) => ({ rect: rect(e), lines: Math.round(e.getBoundingClientRect().height / 21) })),
     pills: pillFit.map(([f, need, room]) => [f, +need.toFixed(1), +room.toFixed(1)]),
+    apple: rect(root.querySelector('.apple')),
+    email: lines(root.querySelector('.email'), 23),
+    note: lines(root.querySelector('.note'), 21),
     content: +root.querySelector('.content').getBoundingClientRect().height.toFixed(1),
     scroll: -parseFloat(root.querySelector('.content').style.top) || 0,
     safeBottom: H - INSET_BOTTOM,

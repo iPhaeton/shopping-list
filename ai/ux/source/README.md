@@ -1,7 +1,7 @@
 # Mockup harness
 
 Draws the PNGs in `ai/ux/primary/` from the app's own tokens, fonts and component geometry: Lists and List detail since
-task 24 step 1, Account and Sign in since task 25 step 1. Task 20 step 6's harness for the Sharing mockups was lost, which
+task 24 step 1, Account and Sign in since task 25 step 1, Apple's sign-in button since task 26 step 1. Task 20 step 6's harness for the Sharing mockups was lost, which
 is why this one lives in the repo. Change a mockup by editing a scene and re-rendering, never by hand-editing a PNG.
 
 ## Render
@@ -24,14 +24,15 @@ ai/ux/source/render.sh <out-dir> <scene>...     # e.g. render.sh /tmp/m lists-sc
 | file | what |
 |---|---|
 | `mock.html` | `@font-face` for Nunito Sans 400/500/600 and Source Serif 4 400; `.v` = React Native's View defaults (flex column, `border-box`, no shrink) |
-| `mock.js` | the components (`Sky`, `ScreenSky`, `Horizon`, `Hillside`, `HorizonFooter`, `Landscape`, `SkyFill`, `Band`, `ListRow`, `ItemRow`, `AddBar`, `PillButton` (sm/md/lg; outline, filled, danger; tone danger), `IconButton`, `SegmentedPicker` (regular/compact/small; card/surface track), `Card`, `TextField`, `ScreenHeader`, `ErrorBanner`, toggle, `EmptyState`, search field, sort buttons, coverage line, the Google G, status bar, home indicator), four screens, and `SCENES` |
+| `mock.js` | the components (`Sky`, `ScreenSky`, `Horizon`, `Hillside`, `HorizonFooter`, `Landscape`, `SkyFill`, `Band`, `ListRow`, `ItemRow`, `AddBar`, `PillButton` (sm/md/lg; outline, filled, danger; tone danger), `IconButton`, `SegmentedPicker` (regular/compact/small; card/surface track), `Card`, `TextField`, `ScreenHeader`, `ErrorBanner`, toggle, `EmptyState`, search field, sort buttons, coverage line, the Google G, `AppleButton`, status bar, home indicator), four screens, and `SCENES` |
 | `tokens.mjs` | writes `tokens.json`: both palettes plus `bandList` = `bandAt(palette, 0..63)` |
 | `render.sh` | the export above |
 | `offsets.py` | calibration: best (dx, dy) per region between a render and a simulator shot |
 
 Page parameters: `scene`, `theme` (`day`/`night`), `w`, `h`, `inset`, `insetBottom`, and `measure=1`, which adds rects
 (pt) to `document.title`. Lists and List detail report the field, sort row, toggle and first row. Account and Sign in
-report each card, each confirm sentence with its line count, every pill's label width against its room, the content
+report each card, each confirm sentence with its line count, every pill's label width against its room, Apple's button,
+the email address and the hidden-email sentence (each with its line count and widest line against its room), the content
 height, the scroll, and the safe area's bottom. Read the title with `chrome-headless-shell --dump-dom`.
 
 A scene is a plain object, keyed by `screen`:
@@ -40,8 +41,11 @@ A scene is a plain object, keyed by `screen`:
   `toggle`, `rows`, `empty`.
 - `account`: `email`, `name`, `appearance` (`checked`, or `'theme'` for the theme's own value; `next` per theme),
   `editing`, `everywhere`, `del` (`rest`/`confirm`), `delError`, `scroll`, and `reveal`, which scrolls just far enough
-  that the last card ends at the safe area's bottom, as opening the delete confirm does.
-- `signIn`: the email phase; `notice` adds the notice above the title.
+  that the last card ends at the safe area's bottom, as opening the delete confirm does. `relayNote` puts the
+  hidden-email sentence under the address, and `share` a `Share` pill beside it. An address too long for its line
+  breaks between characters, as iOS breaks a word with no break opportunity.
+- `signIn`: the email phase; `notice` adds the notice above the title, and `apple` Apple's button (`type`; `order`,
+  `first` or `last`, beside Google; `day` and `night`, its `buttonStyle` per theme).
 
 Phone sizes, for `measure` (`w h inset insetBottom`): 17e 390 844 47 34 (the canvas); 18 Pro 402 874 62 34 (inset
 measured off task 24 step 3's shots); 13 mini 375 812 50 34; SE 375 667 20 0.
@@ -64,6 +68,9 @@ measured off task 24 step 3's shots); 13 mini 375 812 50 34; SE 375 667 20 0.
     (30/38) −1.33.
   - Cards blur what is behind them with `backdrop-filter` (15 px), which the headless shell honours. Card fills come
     within 4 levels of the simulator's in both themes.
+- **`AppleButton` is not calibrated.** Apple draws the native button's inside (logo, words, font, colours); only its
+  frame is design. The harness sets the title in SF Pro Medium (`-apple-system`) at 43% of the height and takes the logo
+  from the system font's U+F8FF. Recalibrate against the first simulator shot of it (task 26 step 2).
 - Both fonts have hhea = typo metrics (Nunito Sans 1011/−353, Source Serif 4 1036/−335), so `line-height: normal`
   matches iOS's natural line.
 - Band rims are white at `stop-opacity` 0.2 → 0: react-native-svg replaces the token's alpha (KB phone-is-the-product).
