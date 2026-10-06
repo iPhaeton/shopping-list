@@ -6,9 +6,14 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { GoogleIcon } from '../components/icons';
 import { PillButton } from '../components/PillButton';
 import { TextField } from '../components/TextField';
+import {
+  AppleAuthenticationButton,
+  AppleAuthenticationButtonStyle,
+  AppleAuthenticationButtonType,
+} from '../lib/appleSignIn';
 import type { SignInScreenProps } from '../navigation/types';
-import { useSession, type SignOutReason } from '../state/SessionContext';
-import { themedStyles } from '../state/ThemeContext';
+import { useSession, type Result, type SignOutReason } from '../state/SessionContext';
+import { themedStyles, useTheme } from '../state/ThemeContext';
 import { fonts, radius, spacing } from '../theme';
 
 /** Supabase allows one code request per minute; the countdown makes that visible. */
@@ -31,7 +36,8 @@ const NOTICES: Record<SignOutReason, string> = {
  */
 export function SignInScreen(_props: SignInScreenProps) {
   const styles = useStyles();
-  const { requestCode, verifyCode, signInWithGoogle, state } = useSession();
+  const { name: theme } = useTheme();
+  const { requestCode, verifyCode, signInWithGoogle, signInWithApple, state } = useSession();
   const notice = state.status === 'signedOut' && state.reason ? NOTICES[state.reason] : null;
 
   const [phase, setPhase] = useState<'email' | 'code'>('email');
@@ -86,13 +92,15 @@ export function SignInScreen(_props: SignInScreenProps) {
     }
   }
 
-  async function continueWithGoogle() {
+  // Google's and Apple's buttons. The guard is what blocks a second press: Apple's native button has
+  // no `disabled` prop.
+  async function continueWith(signIn: () => Promise<Result>) {
     if (pending) return;
 
     setPending(true);
     setError(null);
 
-    const { error: failure } = await signInWithGoogle();
+    const { error: failure } = await signIn();
 
     // Unlike verify(), always cleared: a cancelled sheet returns `{ error: null }` with no state
     // change, and success unmounts this screen anyway, so clearing here is a harmless no-op.
@@ -145,13 +153,33 @@ export function SignInScreen(_props: SignInScreenProps) {
             style={styles.action}
           />
 
+          {/*
+            Apple draws the inside — logo, words in the device's language, font — and `style` may not
+            set `backgroundColor` or `borderRadius`. The app picks the type, the colour per resolved
+            theme, the corners and the size: the `lg` pill's (task 26 step 1).
+          */}
+          {Platform.OS === 'ios' && (
+            <AppleAuthenticationButton
+              buttonType={AppleAuthenticationButtonType.CONTINUE}
+              buttonStyle={
+                theme === 'night'
+                  ? AppleAuthenticationButtonStyle.WHITE
+                  : AppleAuthenticationButtonStyle.BLACK
+              }
+              cornerRadius={26}
+              accessibilityLabel="Continue with Apple"
+              onPress={() => void continueWith(signInWithApple)}
+              style={[styles.action, styles.apple]}
+            />
+          )}
+
           {Platform.OS !== 'web' && (
             <PillButton
               label="Continue with Google"
               size="lg"
               icon={<GoogleIcon />}
               disabled={pending}
-              onPress={continueWithGoogle}
+              onPress={() => void continueWith(signInWithGoogle)}
               style={styles.action}
             />
           )}
@@ -259,6 +287,10 @@ const useStyles = themedStyles((colors) => ({
   },
   action: {
     marginTop: 14,
+  },
+  // The native button has no intrinsic size: without a height it does not appear at all.
+  apple: {
+    height: 52,
   },
   link: {
     alignSelf: 'center',

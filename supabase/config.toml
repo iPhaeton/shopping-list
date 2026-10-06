@@ -326,18 +326,24 @@ max_frequency = "5s"
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
 [auth.external.apple]
-enabled = false
-client_id = ""
-# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
-secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+enabled = true
+# The bundle id: a native identity token's `aud`. iOS only — there is no web flow, so no Services ID.
+client_id = "com.shoppingloop.app"
+# No `secret`: Apple's client secret is the six-month JWT the web/OAuth flow exchanges codes with.
+# Native sign-in hands GoTrue the identity token directly, which needs none.
 # Overrides the default auth callback URL derived from auth.external_url.
 redirect_uri = ""
 # Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
 # or any other third-party OIDC providers.
 url = ""
-# If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
+# Unlike Google's free module, expo-apple-authentication's `signInAsync` takes a nonce: Apple gets
+# its SHA-256, Supabase the raw value, and GoTrue checks the pair (`src/lib/appleSignIn.ts`).
 skip_nonce_check = false
-# If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+# `public.users.email` is `not null`. Apple's token carries `email` (the `@privaterelay.appleid.com`
+# address when the user hides theirs) on the first authorization only. When a later one has to
+# create a user (the account was deleted, Apple's authorization not revoked), GoTrue 2.196's
+# id-token path ignores this setting and inserts a user with no email: `handle_new_user` fails
+# the sign-in with a 500.
 email_optional = false
 
 [auth.external.google]

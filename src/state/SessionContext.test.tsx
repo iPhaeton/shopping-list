@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
 
+import { signInWithApple } from '../lib/appleSignIn';
 import { signInWithGoogle } from '../lib/googleSignIn';
 import { writeCachedLists } from '../lib/listCache';
 import { saveOutbox } from '../lib/outbox';
@@ -20,7 +21,8 @@ import { SessionProvider, useSession } from './SessionContext';
  * jest's `transformIgnorePatterns` needs no entry for it.
  *
  * `../lib/googleSignIn` is mocked the same way, and for the same reason: the native module it wraps
- * has no jest-safe implementation, so the real file must never load here. `../lib/profileApi` is
+ * has no jest-safe implementation, so the real file must never load here. `../lib/appleSignIn` too:
+ * its module loads under jest, but a sign-in through it would reach the real Supabase client. `../lib/profileApi` is
  * mocked so the name-gate machinery can be driven without a real fetch — its default in `beforeEach`
  * resolves a name, so every existing `status: signedIn` assertion still holds at steady state; an
  * intermediate `nameRequired` tick along the way is invisible to `findByText`'s polling.
@@ -42,6 +44,7 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+jest.mock('../lib/appleSignIn', () => ({ signInWithApple: jest.fn() }));
 jest.mock('../lib/profileApi', () => ({
   fetchProfile: jest.fn(),
   setName: jest.fn(),
@@ -79,8 +82,16 @@ beforeEach(async () => {
 });
 
 function Probe() {
-  const { state, signOut, signOutEverywhere, deleteAccount, signInWithGoogle, setName, retryName } =
-    useSession();
+  const {
+    state,
+    signOut,
+    signOutEverywhere,
+    deleteAccount,
+    signInWithGoogle,
+    signInWithApple,
+    setName,
+    retryName,
+  } = useSession();
   const reason = state.status === 'signedOut' && state.reason ? `, reason: ${state.reason}` : '';
   const nameInfo =
     state.status === 'signedIn'
@@ -88,11 +99,16 @@ function Probe() {
       : state.status === 'nameRequired'
         ? `name: required (confirmed: ${state.confirmed})`
         : '';
+  const fullName =
+    state.status === 'signedIn' || state.status === 'nameRequired'
+      ? state.session.user.user_metadata?.full_name ?? ''
+      : '';
 
   return (
     <>
       <Text>{`status: ${state.status}${reason}`}</Text>
       <Text>{nameInfo}</Text>
+      <Text>{`full name: ${fullName}`}</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Sign out"
@@ -132,6 +148,14 @@ function Probe() {
           void signInWithGoogle();
         }}>
         <Text>Continue with Google</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Continue with Apple"
+        onPress={() => {
+          void signInWithApple();
+        }}>
+        <Text>Continue with Apple</Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -245,6 +269,18 @@ it('delegates Google sign-in to the lib module', async () => {
   expect(signInWithGoogle).toHaveBeenCalledTimes(1);
 });
 
+it('delegates Apple sign-in to the lib module', async () => {
+  jest.mocked(signInWithApple).mockResolvedValue({ error: null });
+
+  await renderProbe();
+  await screen.findByText('status: signedOut');
+
+  await fireEvent.press(screen.getByLabelText('Continue with Apple'));
+
+  expect(signInWithApple).toHaveBeenCalledTimes(1);
+  expect(signInWithGoogle).not.toHaveBeenCalled();
+});
+
 it('unsubscribes from auth changes on unmount', async () => {
   await renderProbe();
   await screen.findByText('status: signedOut');
@@ -335,6 +371,34 @@ describe('the name gate', () => {
     await act(async () => emitAuthChange({ user: { id: 'u1' } }));
 
     expect(await screen.findByText('name: Alice')).toBeOnTheScreen();
+  });
+
+  /**
+   * Apple's name reaches the session through `updateUser` after `signInWithIdToken` resolves, so its
+   * `USER_UPDATED` can land while the live sign-in's profile fetch is still out. The fetch's answer
+   * must not put back the session it captured before that.
+   */
+  it('keeps a session updated while the live sign-in was still confirming its name', async () => {
+    let settle: (value: { name: string | null; error: string | null }) => void = () => {};
+    jest.mocked(fetchProfile).mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      })
+    );
+
+    await renderProbe();
+    await screen.findByText('status: signedOut');
+
+    await act(async () => emitAuthChange({ user: { id: 'u1' } }));
+    await act(async () =>
+      emitAuthChange({ user: { id: 'u1', user_metadata: { full_name: 'Maya Lindqvist' } } }, 'USER_UPDATED')
+    );
+    expect(screen.getByText('full name: Maya Lindqvist')).toBeOnTheScreen();
+
+    await act(async () => settle({ name: null, error: null }));
+
+    expect(await screen.findByText('name: required (confirmed: true)')).toBeOnTheScreen();
+    expect(screen.getByText('full name: Maya Lindqvist')).toBeOnTheScreen();
   });
 
   it('moves a gated account to signedIn once a name is set', async () => {

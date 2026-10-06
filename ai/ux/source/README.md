@@ -68,9 +68,10 @@ measured off task 24 step 3's shots); 13 mini 375 812 50 34; SE 375 667 20 0.
     (30/38) −1.33.
   - Cards blur what is behind them with `backdrop-filter` (15 px), which the headless shell honours. Card fills come
     within 4 levels of the simulator's in both themes.
-- **`AppleButton` is not calibrated.** Apple draws the native button's inside (logo, words, font, colours); only its
-  frame is design. The harness sets the title in SF Pro Medium (`-apple-system`) at 43% of the height and takes the logo
-  from the system font's U+F8FF. Recalibrate against the first simulator shot of it (task 26 step 2).
+- **`AppleButton`'s inside is calibrated against the iPhone 18 Pro simulator** (task 26 step 2). Apple draws the
+  native button's inside (logo, words, font, colours); only its frame is design. `APPLE_INSIDE` sizes the title (SF Pro
+  Medium, `-apple-system`) at 38.7% of the height and the logo (the system font's U+F8FF) at 36.5%, 6.7 pt apart: at
+  52 pt the logo, gap and title width land within 0.3 pt of the simulator's, the text 0.5 pt lower.
 - Both fonts have hhea = typo metrics (Nunito Sans 1011/−353, Source Serif 4 1036/−335), so `line-height: normal`
   matches iOS's natural line.
 - Band rims are white at `stop-opacity` 0.2 → 0: react-native-svg replaces the token's alpha (KB phone-is-the-product).

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ScrollView, Text, View, type LayoutChangeEvent } from 'react-native';
+import { ScrollView, Share, Text, View, type LayoutChangeEvent } from 'react-native';
 
 import { Backdrop } from '../components/Backdrop';
 import { Card } from '../components/Card';
@@ -25,6 +25,16 @@ const APPEARANCES: SegmentedOption<ThemePreference>[] = [
 
 const appearanceLabel = (preference: ThemePreference) =>
   APPEARANCES.find((option) => option.value === preference)?.title ?? preference;
+
+/**
+ * Only Apple issues addresses in this domain: Hide My Email's relay. The test is the address, not an
+ * Apple identity on the session, because the same account opened on Android or the web — signed in
+ * with the email code — must show the sentence too (task 26, request 4).
+ */
+const RELAY_DOMAIN = '@privaterelay.appleid.com';
+
+const isRelayAddress = (email: string | undefined): email is string =>
+  !!email && email.toLowerCase().endsWith(RELAY_DOMAIN);
 
 /**
  * `navigation` only goes back: like `SignInScreen`, a successful sign-out — or a deleted account —
@@ -65,6 +75,8 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
   // `state.session`/`state.name` for everything below instead of an `!` on each use.
   if (state.status !== 'signedIn') return null;
 
+  const { email } = state.session.user;
+  const relay = isRelayAddress(email);
   const canSaveName = nameDraft.trim().length >= 3 && !namePending;
 
   function startEditingName() {
@@ -183,8 +195,34 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
             cardsTop.current = layout.y;
           }}>
           <Card style={styles.card}>
-            <Text style={styles.label}>Email</Text>
-            <Text style={styles.value}>{state.session.user.email}</Text>
+            {relay ? (
+              <>
+                {/* The address wraps between letters rather than ever being cut off (task 26 step 1). */}
+                <View style={styles.nameRow}>
+                  <View style={styles.nameText}>
+                    <Text style={styles.label}>Email</Text>
+                    <Text style={styles.value}>{email}</Text>
+                  </View>
+                  {/* A browser without the Web Share API rejects (react-native-web); the press then
+                      does nothing rather than throwing unhandled. */}
+                  <PillButton
+                    label="Share email address"
+                    visibleLabel="Share"
+                    onPress={() => void Share.share({ message: email }).catch(() => {})}
+                  />
+                </View>
+                <Text style={[styles.confirmText, styles.relayNote]}>
+                  This address hides your real email. On another iPhone, use Sign in with Apple. On
+                  Android or the web, sign in with this address, and Apple forwards the code to your
+                  inbox.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Email</Text>
+                <Text style={styles.value}>{email}</Text>
+              </>
+            )}
 
             <View style={styles.divider} />
 
@@ -441,6 +479,10 @@ const useStyles = themedStyles((colors) => ({
     fontSize: 15,
     lineHeight: 21,
     color: colors.textSecondary,
+  },
+  // The hidden-email sentence, in the confirm's type, under the address.
+  relayNote: {
+    marginTop: 8,
   },
   // As on Sharing: room enough that the sun does not crowd the last card on a page that fills the
   // screen.

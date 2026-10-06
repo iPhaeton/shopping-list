@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Share } from 'react-native';
 
 import { deviceTimeZone } from '../lib/deviceTimeZone';
 import {
@@ -29,9 +30,11 @@ jest.mock('../lib/supabase', () => ({
   },
 }));
 
-/** `SessionProvider` imports this unconditionally; unmocked, the real module crashes under Jest
- *  reaching for a native module that isn't registered in this environment. */
+/** `SessionProvider` imports these unconditionally; unmocked, Google's crashes under Jest reaching
+ *  for a native module that isn't registered in this environment, and Apple's reaches for the real
+ *  Supabase client. */
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+jest.mock('../lib/appleSignIn', () => ({ signInWithApple: jest.fn() }));
 
 /** `SessionProvider` also resolves the account's name on every sign-in now; unmocked, the real
  * module reaches for the real Supabase client. A non-null default keeps `state.status` at
@@ -346,6 +349,61 @@ describe('the account row', () => {
     await fireEvent.press(screen.getByLabelText('Save name'));
 
     await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
+  });
+});
+
+describe('a hidden email', () => {
+  const RELAY_SENTENCE =
+    'This address hides your real email. On another iPhone, use Sign in with Apple. On Android or ' +
+    'the web, sign in with this address, and Apple forwards the code to your inbox.';
+
+  function signedInAs(email: string) {
+    auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1', email } } } });
+  }
+
+  it('says how to sign in elsewhere, under a relay address', async () => {
+    signedInAs('k2x9dqvmp7@privaterelay.appleid.com');
+
+    await renderScreen();
+
+    expect(screen.getByText('k2x9dqvmp7@privaterelay.appleid.com')).toBeOnTheScreen();
+    expect(screen.getByText(RELAY_SENTENCE)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Share email address')).toBeOnTheScreen();
+  });
+
+  it('recognises a relay address written in capitals', async () => {
+    signedInAs('K2X9DQVMP7@PrivateRelay.AppleID.com');
+
+    await renderScreen();
+
+    expect(screen.getByText(RELAY_SENTENCE)).toBeOnTheScreen();
+  });
+
+  it('says nothing under any other address', async () => {
+    await renderScreen();
+
+    expect(screen.queryByText(RELAY_SENTENCE)).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Share email address')).not.toBeOnTheScreen();
+  });
+
+  it('says nothing when the relay domain only appears before the @', async () => {
+    signedInAs('privaterelay.appleid.com@example.com');
+
+    await renderScreen();
+
+    expect(screen.queryByText(RELAY_SENTENCE)).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Share email address')).not.toBeOnTheScreen();
+  });
+
+  it('shares the address alone', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    signedInAs('k2x9dqvmp7@privaterelay.appleid.com');
+
+    await renderScreen();
+    await fireEvent.press(screen.getByLabelText('Share email address'));
+
+    expect(share).toHaveBeenCalledWith({ message: 'k2x9dqvmp7@privaterelay.appleid.com' });
+    share.mockRestore();
   });
 });
 

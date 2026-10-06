@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shoppingloop.app"
+      "bundleIdentifier": "com.shoppingloop.app",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.shoppingloop.app",
@@ -31,6 +32,7 @@
           "iosUrlScheme": "com.googleusercontent.apps.857897394234-7k91redv8k4nfiqbm40m2ln2333btlli"
         }
       ],
+      "expo-apple-authentication",
       "expo-font",
       "expo-status-bar",
       [

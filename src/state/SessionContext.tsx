@@ -13,6 +13,7 @@ import {
 import { clearCachedLists } from '../lib/listCache';
 import type { Result as ApiResult } from '../lib/listsApi';
 import { clearCachedName, readCachedName, writeCachedName } from '../lib/nameCache';
+import { signInWithApple as runAppleSignIn } from '../lib/appleSignIn';
 import { signInWithGoogle as runGoogleSignIn } from '../lib/googleSignIn';
 import { clearOutbox } from '../lib/outbox';
 import {
@@ -80,6 +81,8 @@ type SessionContextValue = {
    */
   deleteAccount: () => Promise<ApiResult>;
   signInWithGoogle: () => Promise<Result>;
+  /** iOS only: `SignInScreen` shows Apple's button nowhere else. */
+  signInWithApple: () => Promise<Result>;
   /**
    * Sets the signed-in account's name — from `SetNameScreen` (the gate) or from `AccountScreen` (an
    * edit); both land the same way. Returns `listsApi`'s richer `Result` (`verdict` +
@@ -109,12 +112,19 @@ function forgetAccount(userId: string) {
 /**
  * Guards a late-resolving fetch or cache read against clobbering state that no longer belongs to it
  * — a sign-out, or a different account signing in, since the read was started.
+ *
+ * For the same account it keeps the session already in state, not the one `next` was built from:
+ * that is whatever the read captured when it started, and `onAuthStateChange` may have replaced it
+ * since — a `USER_UPDATED` carrying the name Apple sent (`appleSignIn.ts`), or a `TOKEN_REFRESHED`.
+ * For one user, the session in state is never the older one.
  */
 function withSameUser(userId: string, next: AuthState) {
   return (prev: AuthState): AuthState => {
-    const current =
-      prev.status === 'signedIn' || prev.status === 'nameRequired' ? prev.session.user.id : undefined;
-    return current === userId ? next : prev;
+    if (prev.status !== 'signedIn' && prev.status !== 'nameRequired') return prev;
+    if (prev.session.user.id !== userId) return prev;
+    return next.status === 'signedIn' || next.status === 'nameRequired'
+      ? { ...next, session: prev.session }
+      : next;
   };
 }
 
@@ -391,10 +401,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void forgetAccount(userId);
   }, [state]);
 
-  // Delegates outright: `../lib/googleSignIn` is the one importer of the native module, same
-  // module-boundary shape as `supabase.ts`. Success flows through `onAuthStateChange` above like
-  // every other sign-in.
+  // Both delegate outright: `../lib/googleSignIn` and `../lib/appleSignIn` are each the one importer
+  // of their native module, same module-boundary shape as `supabase.ts`. Success flows through
+  // `onAuthStateChange` above like every other sign-in.
   const signInWithGoogle = useCallback((): Promise<Result> => runGoogleSignIn(), []);
+  const signInWithApple = useCallback((): Promise<Result> => runAppleSignIn(), []);
 
   const setName = useCallback(
     async (name: string): Promise<ApiResult> => {
@@ -426,6 +437,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signOutEverywhere,
       deleteAccount,
       signInWithGoogle,
+      signInWithApple,
       setName,
       retryName,
     }),
@@ -437,6 +449,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signOutEverywhere,
       deleteAccount,
       signInWithGoogle,
+      signInWithApple,
       setName,
       retryName,
     ]

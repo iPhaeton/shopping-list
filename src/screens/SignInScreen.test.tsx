@@ -1,11 +1,15 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform, Pressable, Text } from 'react-native';
 
+import { AppleAuthenticationButtonStyle, signInWithApple } from '../lib/appleSignIn';
+import { deviceTimeZone } from '../lib/deviceTimeZone';
 import { signInWithGoogle } from '../lib/googleSignIn';
 import { deleteAccount as deleteAccountApi, fetchProfile } from '../lib/profileApi';
 import { supabase } from '../lib/supabase';
 import type { SignInScreenProps } from '../navigation/types';
 import { SessionProvider, useSession } from '../state/SessionContext';
+import { ThemeProvider } from '../state/ThemeContext';
 import { SignInScreen } from './SignInScreen';
 
 /**
@@ -13,7 +17,9 @@ import { SignInScreen } from './SignInScreen';
  * the screen and the state machine together — the seam is the client module, not the context.
  *
  * `../lib/googleSignIn` is mocked for the same reason `supabase.ts` is: the native module it wraps
- * has no jest-safe implementation.
+ * has no jest-safe implementation. `../lib/appleSignIn` keeps its real re-exports of Apple's button,
+ * which jest-expo renders as a host view carrying the props it was given — so the button's a11y
+ * label, type and style are the ones the screen set. Only the sign-in itself is mocked.
  *
  * Note: `render` and `fireEvent` are async in React Native Testing Library 14 and must be awaited.
  */
@@ -30,6 +36,14 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+jest.mock('../lib/appleSignIn', () => ({
+  ...jest.requireActual('../lib/appleSignIn'),
+  signInWithApple: jest.fn(),
+}));
+
+/** The night-style test renders `ThemeProvider`, whose Auto reads the zone; pinned so it never
+ *  depends on where or when jest runs. */
+jest.mock('../lib/deviceTimeZone', () => ({ deviceTimeZone: jest.fn() }));
 
 /** Only the deleted-notice test signs in, which resolves a name; deleting goes through the RPC. */
 jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), deleteAccount: jest.fn() }));
@@ -66,6 +80,7 @@ beforeEach(() => {
   auth.signInWithOtp.mockResolvedValue({ error: null });
   auth.verifyOtp.mockResolvedValue({ error: null });
   jest.mocked(signInWithGoogle).mockResolvedValue({ error: null });
+  jest.mocked(signInWithApple).mockResolvedValue({ error: null });
   jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
   jest.mocked(deleteAccountApi).mockResolvedValue({ error: null, verdict: 'ok' });
 });
@@ -250,6 +265,130 @@ it('shows why Google sign-in failed', async () => {
   await fireEvent.press(screen.getByLabelText('Continue with Google'));
 
   expect(await screen.findByText('Bad ID token')).toBeOnTheScreen();
+});
+
+describe('the Apple button', () => {
+  /**
+   * The label finds the host view jest-expo renders for the native button, which receives
+   * `onButtonPress`; `press` still reaches the handler, walking up to `AppleAuthenticationButton`'s
+   * own `onPress`.
+   */
+  async function pressApple() {
+    await fireEvent.press(screen.getByLabelText('Continue with Apple'));
+  }
+
+  it('is offered on iOS, between Send code and Google', async () => {
+    runningOn('ios');
+
+    await renderScreen();
+
+    const labels = screen
+      .getAllByLabelText(/^(Send code|Continue with Apple|Continue with Google)$/)
+      .map((element) => element.props.accessibilityLabel);
+    expect(labels).toEqual(['Send code', 'Continue with Apple', 'Continue with Google']);
+  });
+
+  it('is not offered on Android, which keeps Google', async () => {
+    runningOn('android');
+
+    await renderScreen();
+
+    expect(screen.queryByLabelText('Continue with Apple')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Continue with Google')).toBeOnTheScreen();
+  });
+
+  it('is not offered on web', async () => {
+    runningOn('web');
+
+    await renderScreen();
+
+    expect(screen.queryByLabelText('Continue with Apple')).not.toBeOnTheScreen();
+  });
+
+  it("is black by day, with the lg pill's height and corners", async () => {
+    runningOn('ios');
+
+    await renderScreen();
+
+    const button = screen.getByLabelText('Continue with Apple');
+    expect(button.props.buttonStyle).toBe(AppleAuthenticationButtonStyle.BLACK);
+    expect(button.props.cornerRadius).toBe(26);
+    expect(button).toHaveStyle({ height: 52, marginTop: 14 });
+  });
+
+  describe('under ThemeProvider', () => {
+    // Noon in Warsaw, so Auto alone would paint Day: Night here comes from the stored choice.
+    beforeEach(async () => {
+      jest.useFakeTimers({ now: new Date('2026-06-21T12:00:00+02:00') });
+      jest.mocked(deviceTimeZone).mockReturnValue('Europe/Warsaw');
+      await AsyncStorage.clear();
+    });
+
+    afterEach(async () => {
+      jest.useRealTimers();
+      await AsyncStorage.clear();
+    });
+
+    it('is white by night', async () => {
+      runningOn('ios');
+      await AsyncStorage.setItem('theme-preference', JSON.stringify({ v: 1, preference: 'night' }));
+
+      await render(
+        <ThemeProvider>
+          <SessionProvider>
+            <SignInScreen {...({ navigation: {} } as unknown as SignInScreenProps)} />
+          </SessionProvider>
+        </ThemeProvider>
+      );
+
+      const button = await screen.findByLabelText('Continue with Apple');
+      expect(button.props.buttonStyle).toBe(AppleAuthenticationButtonStyle.WHITE);
+    });
+  });
+
+  it('starts native Apple sign-in when pressed', async () => {
+    runningOn('ios');
+    await renderScreen();
+
+    await pressApple();
+
+    expect(signInWithApple).toHaveBeenCalledTimes(1);
+    expect(signInWithGoogle).not.toHaveBeenCalled();
+  });
+
+  it('shows why Apple sign-in failed', async () => {
+    runningOn('ios');
+    jest.mocked(signInWithApple).mockResolvedValue({ error: 'Nonces mismatch' });
+
+    await renderScreen();
+    await pressApple();
+
+    expect(await screen.findByText('Nonces mismatch')).toBeOnTheScreen();
+  });
+
+  it('shows no banner for a cancelled sheet', async () => {
+    runningOn('ios');
+
+    await renderScreen();
+    await pressApple();
+
+    expect(signInWithApple).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Continue with Apple')).toBeOnTheScreen();
+  });
+
+  it('does nothing when pressed while another sign-in is running', async () => {
+    runningOn('ios');
+    let finishGoogle: (result: { error: string | null }) => void = () => {};
+    jest.mocked(signInWithGoogle).mockReturnValue(new Promise((resolve) => (finishGoogle = resolve)));
+
+    await renderScreen();
+    await fireEvent.press(screen.getByLabelText('Continue with Google'));
+    await pressApple();
+
+    expect(signInWithApple).not.toHaveBeenCalled();
+    await act(async () => finishGoogle({ error: null }));
+  });
 });
 
 /**

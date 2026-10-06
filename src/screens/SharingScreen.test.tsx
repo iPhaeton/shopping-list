@@ -94,6 +94,7 @@ const auth = supabase.auth as unknown as {
 
 /** `SessionContext` imports this at the module boundary; the native module has no jest-safe stand-in. */
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+jest.mock('../lib/appleSignIn', () => ({ signInWithApple: jest.fn() }));
 
 /** `SessionProvider` resolves the account's own name on every sign-in now; unmocked, the real module
  * reaches for the real Supabase client. This screen never reads it directly, so the default value

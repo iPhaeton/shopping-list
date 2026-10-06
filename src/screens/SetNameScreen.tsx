@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native';
 
 import { AuthFrame } from '../components/AuthFrame';
@@ -24,6 +24,21 @@ export function SetNameScreen(_props: SetNameScreenProps) {
   const [name, setNameDraft] = useState(() => prefillFrom(session));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Apple's name lands after the gate may already be up: `appleSignIn` saves it with `updateUser`
+  // once `signInWithIdToken` has resolved, and its `USER_UPDATED` refreshes the session in state. A
+  // name arriving then fills the field, but only one nobody has typed in yet — never over anything
+  // typed, even if it was typed and then cleared.
+  const touched = useRef(false);
+  const suggested = prefillFrom(session);
+  useEffect(() => {
+    if (suggested && !touched.current) setNameDraft((draft) => draft || suggested);
+  }, [suggested]);
+
+  function editName(text: string) {
+    touched.current = true;
+    setNameDraft(text);
+  }
 
   // One retry, only for a gate that arrived unconfirmed (a fetch that failed right after a live
   // sign-in, not a database-confirmed empty name) — closes the case where someone opens an
@@ -68,7 +83,7 @@ export function SetNameScreen(_props: SetNameScreenProps) {
       <TextField
         style={styles.field}
         value={name}
-        onChangeText={setNameDraft}
+        onChangeText={editName}
         placeholder="Your name"
         accessibilityLabel="Your name"
         autoCapitalize="words"
@@ -89,8 +104,9 @@ export function SetNameScreen(_props: SetNameScreenProps) {
   );
 }
 
-/** Google's OAuth claim GoTrue stores at `full_name` — a client-side suggestion only, never seeded
- * into the database (see the migration's own comment on why a collision there would be worse). */
+/** `full_name`: Google's OAuth claim, which GoTrue stores there, or the name Apple sent on its first
+ * authorization, which `appleSignIn` saves there. A client-side suggestion only, never seeded into
+ * the database (see the migration's own comment on why a collision there would be worse). */
 function prefillFrom(session: { user: { user_metadata?: Record<string, unknown> } } | null): string {
   const fullName = session?.user.user_metadata?.full_name;
   return typeof fullName === 'string' ? fullName : '';

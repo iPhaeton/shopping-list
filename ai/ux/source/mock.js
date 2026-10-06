@@ -92,17 +92,18 @@ function PillButton({ label, variant = 'outline', tone = 'default', size = 'sm',
 // The native ASAuthorizationAppleIDButton. Apple draws its inside — the logo, the words (in the
 // device's language), the font and the colours — and the app sets only `buttonType`, `buttonStyle`,
 // `cornerRadius` and the size; `style` may not set `backgroundColor` or `borderRadius`. So only the
-// frame is design here. The inside is an approximation until a simulator shot recalibrates it: the
-// logo is the system font's U+F8FF, the title SF Pro Medium at 43% of the height, after Apple's
-// guidelines for the button.
+// frame is design here. The inside is drawn to match the iPhone 18 Pro simulator's 52 pt button
+// (task 26 step 2): the logo is the system font's U+F8FF, the title SF Pro Medium, each sized as a
+// fraction of the height, with the gap between them.
 const APPLE_TITLE = { SIGN_IN: 'Sign in with Apple', CONTINUE: 'Continue with Apple', SIGN_UP: 'Sign up with Apple' };
 const APPLE_LOOK = { BLACK: ['#000000', '#ffffff', null], WHITE: ['#ffffff', '#000000', null], WHITE_OUTLINE: ['#ffffff', '#000000', '#000000'] };
+const APPLE_INSIDE = { title: 0.387, logo: 0.365, gap: 6.7 };
 function AppleButton({ buttonType = 'CONTINUE', buttonStyle = 'BLACK', cornerRadius = 26, height = 52, style = {} }) {
   const [fill, ink, ring] = APPLE_LOOK[buttonStyle];
-  const fontSize = +(height * 0.43).toFixed(1);
-  const type = { fontFamily: '-apple-system, system-ui', fontWeight: 500, fontSize, color: ink, whiteSpace: 'nowrap' };
-  return R({ height, borderRadius: cornerRadius, backgroundColor: fill, border: ring ? `1px solid ${ring}` : 'none', alignItems: 'center', justifyContent: 'center', gap: 4, ...style },
-    T(type, '') + T(type, APPLE_TITLE[buttonType]), 'apple');
+  const type = { fontFamily: '-apple-system, system-ui', fontWeight: 500, fontSize: +(height * APPLE_INSIDE.title).toFixed(1), color: ink, whiteSpace: 'nowrap' };
+  const logo = { ...type, fontSize: +(height * APPLE_INSIDE.logo).toFixed(1) };
+  return R({ height, borderRadius: cornerRadius, backgroundColor: fill, border: ring ? `1px solid ${ring}` : 'none', alignItems: 'center', justifyContent: 'center', gap: APPLE_INSIDE.gap, ...style },
+    T(logo, '') + T(type, APPLE_TITLE[buttonType]), 'apple');
 }
 
 // ---------- AddBar (52 pill: input + filled button, 20 inset) ----------

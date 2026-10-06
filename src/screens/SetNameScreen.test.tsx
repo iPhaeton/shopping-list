@@ -18,6 +18,7 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
+jest.mock('../lib/appleSignIn', () => ({ signInWithApple: jest.fn() }));
 jest.mock('../lib/profileApi', () => ({ fetchProfile: jest.fn(), setName: jest.fn() }));
 
 const auth = supabase.auth as unknown as {
@@ -43,6 +44,8 @@ function GateHarness() {
 }
 
 let emitAuthChange: (session: unknown) => void;
+/** A metadata update, the way `appleSignIn`'s `updateUser` reaches the state: same account, new session. */
+let emitUserUpdated: (session: unknown) => void;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -50,6 +53,7 @@ beforeEach(() => {
   auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
   auth.onAuthStateChange.mockImplementation((callback: (event: string, session: unknown) => void) => {
     emitAuthChange = (session) => callback('SIGNED_IN', session);
+    emitUserUpdated = (session) => callback('USER_UPDATED', session);
     return { data: { subscription: { unsubscribe: jest.fn() } } };
   });
   auth.signOut.mockResolvedValue({ error: null });
@@ -100,6 +104,38 @@ it("prefills from Google's OAuth name claim when present", async () => {
 
   expect(screen.getByLabelText('Your name').props.value).toBe('Googled Gary');
   expect(screen.getByLabelText('Continue')).not.toBeDisabled();
+});
+
+describe("Apple's name, arriving after the gate is up", () => {
+  const withAppleName = { user: { id: 'u1', user_metadata: { full_name: 'Maya Lindqvist' } } };
+
+  it('fills a field nobody has typed in', async () => {
+    await renderScreen();
+    expect(screen.getByLabelText('Your name').props.value).toBe('');
+
+    await act(async () => emitUserUpdated(withAppleName));
+
+    expect(screen.getByLabelText('Your name').props.value).toBe('Maya Lindqvist');
+  });
+
+  it('never replaces typed text', async () => {
+    await renderScreen();
+    await fireEvent.changeText(screen.getByLabelText('Your name'), 'Al');
+
+    await act(async () => emitUserUpdated(withAppleName));
+
+    expect(screen.getByLabelText('Your name').props.value).toBe('Al');
+  });
+
+  it('never refills a field typed in and cleared again', async () => {
+    await renderScreen();
+    await fireEvent.changeText(screen.getByLabelText('Your name'), 'Al');
+    await fireEvent.changeText(screen.getByLabelText('Your name'), '');
+
+    await act(async () => emitUserUpdated(withAppleName));
+
+    expect(screen.getByLabelText('Your name').props.value).toBe('');
+  });
 });
 
 it('submits whatever was typed, trimming happens one layer down', async () => {
