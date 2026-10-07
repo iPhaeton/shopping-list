@@ -9,15 +9,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { Platform } from 'react-native';
 
 import { clearCachedLists } from '../lib/listCache';
 import type { Result as ApiResult } from '../lib/listsApi';
 import { clearCachedName, readCachedName, writeCachedName } from '../lib/nameCache';
-import { signInWithApple as runAppleSignIn } from '../lib/appleSignIn';
+import { reauthorizeWithApple, signInWithApple as runAppleSignIn } from '../lib/appleSignIn';
 import { signInWithGoogle as runGoogleSignIn } from '../lib/googleSignIn';
 import { clearOutbox } from '../lib/outbox';
 import {
   deleteAccount as deleteAccountRpc,
+  deleteAccountWithApple,
   fetchProfile,
   setName as setNameRpc,
 } from '../lib/profileApi';
@@ -62,6 +64,13 @@ export type AuthState =
  */
 export type Result = { error: string | null };
 
+/**
+ * What `deleteAccount` returns when Apple's sheet was dismissed: nothing was deleted and nothing
+ * failed, so the caller leaves everything as it was. It has no `error` field, so it can be mistaken
+ * for neither a success nor a failure.
+ */
+export type DeletionCancelled = { cancelled: true };
+
 type SessionContextValue = {
   state: AuthState;
   /** Emails a six-digit code, creating the account if the address is new. */
@@ -73,13 +82,15 @@ type SessionContextValue = {
   /** `scope: 'global'` — revokes every device the account is signed in on. */
   signOutEverywhere: () => Promise<Result>;
   /**
-   * Deletes the account, and every list it is the only owner of, through the `delete_account` RPC.
-   * Returns `listsApi`'s richer `Result`, as `setName` does, so `AccountScreen` can tell a revoked
-   * session and an offline failure apart. A failure changes nothing on this device. A success clears
-   * the account's list cache, name cache and outbox — the one path that discards the outbox — and
-   * always ends `signedOut` with `reason: 'deleted'`.
+   * Deletes the account, and every list it is the only owner of, through the `delete_account` RPC
+   * — or, for an Apple-linked account on iOS, through Apple's sheet and the `delete-account`
+   * function, which revokes Apple's token first. Returns `listsApi`'s richer `Result`, as `setName`
+   * does, so `AccountScreen` can tell a revoked session and an offline failure apart, or
+   * `DeletionCancelled` when Apple's sheet was dismissed. A failure or a cancel changes nothing on
+   * this device. A success clears the account's list cache, name cache and outbox — the one path
+   * that discards the outbox — and always ends `signedOut` with `reason: 'deleted'`.
    */
-  deleteAccount: () => Promise<ApiResult>;
+  deleteAccount: () => Promise<ApiResult | DeletionCancelled>;
   signInWithGoogle: () => Promise<Result>;
   /** iOS only: `SignInScreen` shows Apple's button nowhere else. */
   signInWithApple: () => Promise<Result>;
@@ -103,6 +114,24 @@ type SessionContextValue = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+/**
+ * Apple requires the iOS app to revoke Apple's token when an Apple-linked account is deleted, so on
+ * iOS such an account goes through `delete-account`, with a fresh code from Apple's sheet. Everything
+ * else is the RPC. Web and Android have no Apple sheet, so there an Apple-linked account is deleted
+ * with its token unrevoked (decided in writing, task 26 step 3). That locks nothing out: while the
+ * authorization stands, Apple's token carries the email (seen for a Hide My Email authorization), so
+ * the next Sign in with Apple makes a new account.
+ */
+async function deleteOnServer(session: Session): Promise<ApiResult | DeletionCancelled> {
+  const appleLinked = session.user.app_metadata?.providers?.includes('apple') === true;
+  if (Platform.OS !== 'ios' || !appleLinked) return deleteAccountRpc();
+
+  const reauthorization = await reauthorizeWithApple();
+  if ('cancelled' in reauthorization) return reauthorization;
+  if ('error' in reauthorization) return { error: reauthorization.error, verdict: 'permanent' };
+  return deleteAccountWithApple(reauthorization.code);
+}
 
 /** Everything this device keeps for one account. Deletion only: signing out keeps the outbox. */
 function forgetAccount(userId: string) {
@@ -363,14 +392,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
   const signOutEverywhere = useCallback(() => performSignOut('global'), [performSignOut]);
 
-  const deleteAccount = useCallback(async (): Promise<ApiResult> => {
+  const deleteAccount = useCallback(async (): Promise<ApiResult | DeletionCancelled> => {
     if (state.status !== 'signedIn' && state.status !== 'nameRequired') {
       return { error: 'Not signed in.', verdict: 'permanent' };
     }
     const userId = state.session.user.id;
 
-    const result = await deleteAccountRpc();
-    if (result.error) return result;
+    const result = await deleteOnServer(state.session);
+    if ('cancelled' in result || result.error) return result;
 
     // The account is gone, so nothing kept for it can ever be used again: not the cached rows, not
     // the name, and not the outbox — its writes are owed to an account that no longer exists.

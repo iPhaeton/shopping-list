@@ -1,10 +1,12 @@
-import { deleteAccount, fetchProfile, setName } from './profileApi';
+import { deleteAccount, deleteAccountWithApple, fetchProfile, setName } from './profileApi';
 import { supabase } from './supabase';
 
 /** `src/lib/supabase.ts` is mocked at the module boundary, the same seam `listsApi.test.ts` and
- * `membersApi.test.ts` mock — `fetchProfile` is a plain read (needs the builder stub) and `setName`
- * is an RPC (needs the rpc stub), so this file needs both. */
-jest.mock('./supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
+ * `membersApi.test.ts` mock — `fetchProfile` is a plain read (needs the builder stub), `setName`
+ * is an RPC (needs the rpc stub), and `deleteAccountWithApple` invokes an Edge Function. */
+jest.mock('./supabase', () => ({
+  supabase: { from: jest.fn(), rpc: jest.fn(), functions: { invoke: jest.fn() } },
+}));
 
 type Response = { data: unknown; error: { message: string; code?: string } | null; status?: number };
 type Call = [method: string, args: unknown[]];
@@ -148,4 +150,78 @@ describe('deleteAccount', () => {
       error: 'canceling statement due to statement timeout',
     });
   });
+});
+
+describe('deleteAccountWithApple', () => {
+  const invoke = jest.mocked(supabase.functions.invoke);
+
+  /** What functions-js 2.112.4 returns for each kind of failure: the class's name, and for an HTTP
+   * error the `Response` as `context`. Only `json()` and `status` of it are read. */
+  function failedWith(name: string, context?: { status: number; body: unknown }) {
+    const error = Object.assign(new Error(`${name} message`), {
+      name,
+      context: context && { status: context.status, json: async () => context.body },
+    });
+    invoke.mockResolvedValue({ data: null, error } as never);
+  }
+
+  it('sends the code to delete-account', async () => {
+    invoke.mockResolvedValue({ data: '', error: null } as never);
+
+    expect(await deleteAccountWithApple('apple-code')).toEqual({ error: null, verdict: 'ok' });
+    expect(invoke.mock.calls).toEqual([
+      ['delete-account', { body: { authorizationCode: 'apple-code' } }],
+    ]);
+  });
+
+  it("shows the function's own sentence as a permanent failure", async () => {
+    failedWith('FunctionsHttpError', {
+      status: 424,
+      body: { code: 'apple_unavailable', message: "Apple couldn't be reached. Try again in a minute." },
+    });
+
+    expect(await deleteAccountWithApple('apple-code')).toEqual({
+      error: "Apple couldn't be reached. Try again in a minute.",
+      verdict: 'permanent',
+      sessionRevoked: false,
+    });
+  });
+
+  it("passes the RPC's refusal for a revoked session back as sessionRevoked", async () => {
+    failedWith('FunctionsHttpError', {
+      status: 403,
+      body: { code: '42501', message: 'this device has been signed out' },
+    });
+
+    expect(await deleteAccountWithApple('apple-code')).toMatchObject({ sessionRevoked: true });
+  });
+
+  it('reads a 5xx as retryable, like an RPC that failed on the server', async () => {
+    failedWith('FunctionsHttpError', { status: 500, body: { code: 'WORKER_ERROR', message: 'x' } });
+
+    expect(await deleteAccountWithApple('apple-code')).toMatchObject({ verdict: 'retryable' });
+  });
+
+  it('keeps the error when the body is not JSON', async () => {
+    const error = Object.assign(new Error('Edge Function returned a non-2xx status code'), {
+      name: 'FunctionsHttpError',
+      context: { status: 400, json: async () => Promise.reject(new SyntaxError('not JSON')) },
+    });
+    invoke.mockResolvedValue({ data: null, error } as never);
+
+    expect(await deleteAccountWithApple('apple-code')).toEqual({
+      error: 'Edge Function returned a non-2xx status code',
+      verdict: 'permanent',
+      sessionRevoked: false,
+    });
+  });
+
+  it.each(['FunctionsFetchError', 'FunctionsRelayError'])(
+    'reads a %s as retryable, so the screen says it needs a connection',
+    async (name) => {
+      failedWith(name);
+
+      expect(await deleteAccountWithApple('apple-code')).toMatchObject({ verdict: 'retryable' });
+    }
+  );
 });

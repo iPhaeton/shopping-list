@@ -38,3 +38,34 @@ export async function deleteAccount(): Promise<Result> {
   const { error, status } = await supabase.rpc('delete_account');
   return resultFor(error, status);
 }
+
+/**
+ * `deleteAccount` for an Apple-linked account on iOS: the `delete-account` Edge Function trades the
+ * code from Apple's sheet for Apple's token, revokes it, then runs the same `delete_account()` with
+ * this caller's token. Apple requires the revoke, and a deletion without it locks the next Sign in
+ * with Apple out (`appleSignIn.ts`).
+ *
+ * Its failures come back in the shape `resultFor` reads: the function's own are 4xx with the
+ * sentence to show, so they are `permanent`; the RPC's status and words are passed back unchanged,
+ * so a revoked session still sets `sessionRevoked`. A request that never got an answer is status 0,
+ * so `retryable`, the same as an offline RPC.
+ */
+export async function deleteAccountWithApple(authorizationCode: string): Promise<Result> {
+  const { error } = await supabase.functions.invoke('delete-account', {
+    body: { authorizationCode },
+  });
+  if (!error) return resultFor(null, 204);
+
+  // Told apart by name, since only `supabase.ts` may import supabase-js's classes at runtime. Only an
+  // HTTP error carries the function's answer, as a `Response`; a fetch or relay error has none.
+  if (error.name !== 'FunctionsHttpError') return resultFor({ message: error.message }, 0);
+  const response = error.context as Response;
+  const body = await response.json().catch(() => ({}));
+  return resultFor(
+    {
+      message: typeof body.message === 'string' ? body.message : error.message,
+      code: typeof body.code === 'string' ? body.code : null,
+    },
+    response.status
+  );
+}
