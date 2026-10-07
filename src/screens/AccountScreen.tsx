@@ -147,16 +147,9 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
     setPendingDelete(true);
     setDeleteError(null);
 
-    const result = await deleteAccount();
-
-    // Apple's sheet was dismissed: nothing was deleted, so the confirm stays open as it was.
-    if ('cancelled' in result) {
-      setPendingDelete(false);
-      return;
-    }
+    const { error: failure, verdict, sessionRevoked } = await deleteAccount();
 
     // On success the navigator swaps stacks and this screen unmounts, as on sign-out.
-    const { error: failure, verdict, sessionRevoked } = result;
     if (!failure) return;
 
     if (sessionRevoked) {

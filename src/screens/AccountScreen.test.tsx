@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform, Share } from 'react-native';
+import { Share } from 'react-native';
 
-import { reauthorizeWithApple } from '../lib/appleSignIn';
 import { deviceTimeZone } from '../lib/deviceTimeZone';
 import {
   deleteAccount as deleteAccountApi,
@@ -36,10 +35,7 @@ jest.mock('../lib/supabase', () => ({
  *  for a native module that isn't registered in this environment, and Apple's reaches for the real
  *  Supabase client. */
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
-jest.mock('../lib/appleSignIn', () => ({
-  signInWithApple: jest.fn(),
-  reauthorizeWithApple: jest.fn(),
-}));
+jest.mock('../lib/appleSignIn', () => ({ signInWithApple: jest.fn() }));
 
 /** `SessionProvider` also resolves the account's name on every sign-in now; unmocked, the real
  * module reaches for the real Supabase client. A non-null default keeps `state.status` at
@@ -272,16 +268,9 @@ describe('deleting the account', () => {
     expect(screen.queryByText('this device has been signed out')).toBeNull();
   });
 
-  /** On iOS an Apple-linked account is deleted through Apple's sheet and `delete-account`. */
+  /** An Apple-linked account is deleted through `delete-account`, which revokes Apple's token. */
   describe('linked to Apple', () => {
-    const originalOS = Platform.OS;
-
-    function runningOn(os: typeof Platform.OS) {
-      Object.defineProperty(Platform, 'OS', { value: os, configurable: true, writable: true });
-    }
-
     beforeEach(() => {
-      runningOn('ios');
       auth.getSession.mockResolvedValue({
         data: {
           session: {
@@ -289,37 +278,12 @@ describe('deleting the account', () => {
           },
         },
       });
-      jest.mocked(reauthorizeWithApple).mockResolvedValue({ code: 'apple-code' });
     });
 
-    afterEach(() => runningOn(originalOS));
-
-    it("keeps the confirm open, with no banner, when Apple's sheet is cancelled", async () => {
-      jest.mocked(reauthorizeWithApple).mockResolvedValue({ cancelled: true });
-
-      await renderScreen();
-      await openConfirm();
-      await fireEvent.press(screen.getByLabelText('Confirm delete account'));
-
-      await waitFor(() =>
-        expect(screen.getByLabelText('Confirm delete account')).toHaveTextContent(
-          'Yes, delete my account'
-        )
-      );
-      expect(screen.getByText(WARNING)).toBeOnTheScreen();
-      expect(screen.getByLabelText('Confirm delete account')).not.toBeDisabled();
-      expect(screen.getByLabelText('Cancel deleting account')).not.toBeDisabled();
-      expect(screen.getByLabelText('Sign out')).not.toBeDisabled();
-      expect(screen.queryByRole('alert')).toBeNull();
-      expect(deleteAccountWithApple).not.toHaveBeenCalled();
-      expect(auth.signOut).not.toHaveBeenCalled();
-    });
-
-    /** `supabase/functions/_shared/apple.ts`' sentences, which reach the banner as they are. */
+    /** The sentences `delete-account` can answer with (`supabase/functions/_shared/apple.ts`), which
+     * reach the banner as they are. */
     it.each([
       "This account doesn't sign in with Apple.",
-      "Apple didn't confirm it's you. Try again.",
-      "That Apple ID isn't the one this account signs in with.",
       "Apple couldn't be reached. Try again in a minute.",
     ])('shows "%s" verbatim', async (message) => {
       jest
@@ -331,7 +295,7 @@ describe('deleting the account', () => {
       await fireEvent.press(screen.getByLabelText('Confirm delete account'));
 
       expect(await screen.findByText(message)).toBeOnTheScreen();
-      expect(deleteAccountWithApple).toHaveBeenCalledWith('apple-code');
+      expect(jest.mocked(deleteAccountWithApple).mock.calls).toEqual([[]]);
       expect(screen.getByLabelText('Delete account')).not.toBeDisabled();
     });
   });

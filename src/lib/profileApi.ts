@@ -40,20 +40,18 @@ export async function deleteAccount(): Promise<Result> {
 }
 
 /**
- * `deleteAccount` for an Apple-linked account on iOS: the `delete-account` Edge Function trades the
- * code from Apple's sheet for Apple's token, revokes it, then runs the same `delete_account()` with
- * this caller's token. Apple requires the revoke, and a deletion without it locks the next Sign in
- * with Apple out (`appleSignIn.ts`).
+ * `deleteAccount` for an Apple-linked account, on every platform: the `delete-account` Edge Function
+ * revokes the Apple tokens `store-apple-token` kept for the account, then runs the same
+ * `delete_account()` with this caller's token. Apple requires the revoke. No body: the tokens are
+ * already on the server.
  *
  * Its failures come back in the shape `resultFor` reads: the function's own are 4xx with the
  * sentence to show, so they are `permanent`; the RPC's status and words are passed back unchanged,
  * so a revoked session still sets `sessionRevoked`. A request that never got an answer is status 0,
  * so `retryable`, the same as an offline RPC.
  */
-export async function deleteAccountWithApple(authorizationCode: string): Promise<Result> {
-  const { error } = await supabase.functions.invoke('delete-account', {
-    body: { authorizationCode },
-  });
+export async function deleteAccountWithApple(): Promise<Result> {
+  const { error } = await supabase.functions.invoke('delete-account');
   if (!error) return resultFor(null, 204);
 
   // Told apart by name, since only `supabase.ts` may import supabase-js's classes at runtime. Only an

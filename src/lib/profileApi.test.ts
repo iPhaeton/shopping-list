@@ -165,13 +165,11 @@ describe('deleteAccountWithApple', () => {
     invoke.mockResolvedValue({ data: null, error } as never);
   }
 
-  it('sends the code to delete-account', async () => {
+  it('calls delete-account with no body, the tokens being on the server already', async () => {
     invoke.mockResolvedValue({ data: '', error: null } as never);
 
-    expect(await deleteAccountWithApple('apple-code')).toEqual({ error: null, verdict: 'ok' });
-    expect(invoke.mock.calls).toEqual([
-      ['delete-account', { body: { authorizationCode: 'apple-code' } }],
-    ]);
+    expect(await deleteAccountWithApple()).toEqual({ error: null, verdict: 'ok' });
+    expect(invoke.mock.calls).toEqual([['delete-account']]);
   });
 
   it("shows the function's own sentence as a permanent failure", async () => {
@@ -180,7 +178,7 @@ describe('deleteAccountWithApple', () => {
       body: { code: 'apple_unavailable', message: "Apple couldn't be reached. Try again in a minute." },
     });
 
-    expect(await deleteAccountWithApple('apple-code')).toEqual({
+    expect(await deleteAccountWithApple()).toEqual({
       error: "Apple couldn't be reached. Try again in a minute.",
       verdict: 'permanent',
       sessionRevoked: false,
@@ -193,13 +191,13 @@ describe('deleteAccountWithApple', () => {
       body: { code: '42501', message: 'this device has been signed out' },
     });
 
-    expect(await deleteAccountWithApple('apple-code')).toMatchObject({ sessionRevoked: true });
+    expect(await deleteAccountWithApple()).toMatchObject({ sessionRevoked: true });
   });
 
   it('reads a 5xx as retryable, like an RPC that failed on the server', async () => {
     failedWith('FunctionsHttpError', { status: 500, body: { code: 'WORKER_ERROR', message: 'x' } });
 
-    expect(await deleteAccountWithApple('apple-code')).toMatchObject({ verdict: 'retryable' });
+    expect(await deleteAccountWithApple()).toMatchObject({ verdict: 'retryable' });
   });
 
   it('keeps the error when the body is not JSON', async () => {
@@ -209,7 +207,7 @@ describe('deleteAccountWithApple', () => {
     });
     invoke.mockResolvedValue({ data: null, error } as never);
 
-    expect(await deleteAccountWithApple('apple-code')).toEqual({
+    expect(await deleteAccountWithApple()).toEqual({
       error: 'Edge Function returned a non-2xx status code',
       verdict: 'permanent',
       sessionRevoked: false,
@@ -221,7 +219,7 @@ describe('deleteAccountWithApple', () => {
     async (name) => {
       failedWith(name);
 
-      expect(await deleteAccountWithApple('apple-code')).toMatchObject({ verdict: 'retryable' });
+      expect(await deleteAccountWithApple()).toMatchObject({ verdict: 'retryable' });
     }
   );
 });

@@ -410,12 +410,14 @@ deno_version = 2
 [edge_runtime.secrets]
 # The Sign in with Apple key (task 26 step 3), which `supabase/functions/_shared/apple.ts` signs its
 # client secret with. Resolved at `npx supabase start` from the gitignored `.env`; `.env.example`
-# says where each comes from. Unset, both functions answer `apple_not_configured`.
+# says where each comes from. Unset, all three functions answer `apple_not_configured` once they
+# reach Apple.
 APPLE_SIGN_IN_KEY_ID = "env(APPLE_SIGN_IN_KEY_ID)"
 APPLE_SIGN_IN_PRIVATE_KEY = "env(APPLE_SIGN_IN_PRIVATE_KEY)"
 
 # The caller has no session: the Apple sign-in it recovers from just failed. Why that is safe is in
-# the function's own comment. `delete-account` keeps the default, `verify_jwt = true`.
+# the function's own comment. `delete-account` and `store-apple-token` keep the default,
+# `verify_jwt = true`.
 [functions.reset-apple-sign-in]
 verify_jwt = false
 

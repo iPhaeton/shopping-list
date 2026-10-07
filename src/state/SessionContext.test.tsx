@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { useState } from 'react';
 import { Platform, Pressable, Text } from 'react-native';
 
-import { reauthorizeWithApple, signInWithApple } from '../lib/appleSignIn';
+import { signInWithApple } from '../lib/appleSignIn';
 import { signInWithGoogle } from '../lib/googleSignIn';
 import { writeCachedLists } from '../lib/listCache';
 import { saveOutbox } from '../lib/outbox';
@@ -46,10 +46,7 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('../lib/googleSignIn', () => ({ signInWithGoogle: jest.fn() }));
-jest.mock('../lib/appleSignIn', () => ({
-  signInWithApple: jest.fn(),
-  reauthorizeWithApple: jest.fn(),
-}));
+jest.mock('../lib/appleSignIn', () => ({ signInWithApple: jest.fn() }));
 jest.mock('../lib/profileApi', () => ({
   fetchProfile: jest.fn(),
   setName: jest.fn(),
@@ -562,8 +559,9 @@ describe('deleting the account', () => {
     expect(screen.getByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
   });
   /**
-   * Apple requires the iOS app to revoke Apple's token when an Apple-linked account is deleted, so
-   * on iOS it is Apple's sheet, then the `delete-account` function, never the RPC.
+   * Apple requires the app to revoke Apple's token when an Apple-linked account is deleted, so such
+   * an account goes through the `delete-account` function, never the RPC, on every platform: the
+   * token is on the server already, so there is no Apple sheet to open.
    */
   describe('an Apple-linked account', () => {
     const originalOS = Platform.OS;
@@ -574,63 +572,32 @@ describe('deleting the account', () => {
     }
 
     beforeEach(() => {
-      runningOn('ios');
       auth.getSession.mockResolvedValue({
         data: { session: { user: { id: 'u1', app_metadata: { providers: ['email', 'apple'] } } } },
       });
-      jest.mocked(reauthorizeWithApple).mockResolvedValue({ code: 'apple-code' });
       jest.mocked(deleteAccountWithApple).mockResolvedValue({ error: null, verdict: 'ok' });
     });
 
     afterEach(() => runningOn(originalOS));
 
-    it("shows Apple's sheet, then deletes through the function and never the RPC", async () => {
-      await renderProbe();
-      await screen.findByText('status: signedIn');
+    it.each(['ios', 'android', 'web'] as const)(
+      'deletes through the function on %s, never the RPC',
+      async (os) => {
+        runningOn(os);
 
-      await fireEvent.press(screen.getByLabelText('Delete account'));
+        await renderProbe();
+        await screen.findByText('status: signedIn');
 
-      expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
-      expect(reauthorizeWithApple).toHaveBeenCalledTimes(1);
-      expect(deleteAccountWithApple).toHaveBeenCalledWith('apple-code');
-      expect(deleteAccountApi).not.toHaveBeenCalled();
-      await waitFor(async () => expect(await keys()).toEqual([...KEPT_KEYS].sort()));
-    });
+        await fireEvent.press(screen.getByLabelText('Delete account'));
 
-    it('clears nothing and stays signed in when the sheet is cancelled, and says it was a cancel', async () => {
-      jest.mocked(reauthorizeWithApple).mockResolvedValue({ cancelled: true });
+        expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
+        expect(jest.mocked(deleteAccountWithApple).mock.calls).toEqual([[]]);
+        expect(deleteAccountApi).not.toHaveBeenCalled();
+        await waitFor(async () => expect(await keys()).toEqual([...KEPT_KEYS].sort()));
+      }
+    );
 
-      await renderProbe();
-      await screen.findByText('status: signedIn');
-
-      await fireEvent.press(screen.getByLabelText('Delete account'));
-
-      expect(await screen.findByText('deletion: {"cancelled":true}')).toBeOnTheScreen();
-      expect(screen.getByText('status: signedIn')).toBeOnTheScreen();
-      expect(deleteAccountWithApple).not.toHaveBeenCalled();
-      expect(deleteAccountApi).not.toHaveBeenCalled();
-      expect(auth.signOut).not.toHaveBeenCalled();
-      expect(await keys()).toEqual([...U1_KEYS, ...KEPT_KEYS].sort());
-    });
-
-    it("reports a failure of the sheet as its own words, and deletes nothing", async () => {
-      jest.mocked(reauthorizeWithApple).mockResolvedValue({ error: 'The authorization attempt failed' });
-
-      await renderProbe();
-      await screen.findByText('status: signedIn');
-
-      await fireEvent.press(screen.getByLabelText('Delete account'));
-
-      expect(
-        await screen.findByText(
-          'deletion: {"error":"The authorization attempt failed","verdict":"permanent"}'
-        )
-      ).toBeOnTheScreen();
-      expect(deleteAccountWithApple).not.toHaveBeenCalled();
-      expect(screen.getByText('status: signedIn')).toBeOnTheScreen();
-    });
-
-    it('changes nothing on the device when the function fails', async () => {
+    it('changes nothing on the device when the function fails, and passes its answer back', async () => {
       jest.mocked(deleteAccountWithApple).mockResolvedValue({
         error: "Apple couldn't be reached. Try again in a minute.",
         verdict: 'permanent',
@@ -642,16 +609,25 @@ describe('deleting the account', () => {
 
       await fireEvent.press(screen.getByLabelText('Delete account'));
 
-      await waitFor(() => expect(deleteAccountWithApple).toHaveBeenCalled());
+      expect(
+        await screen.findByText(
+          'deletion: {"error":"Apple couldn\'t be reached. Try again in a minute.","verdict":"permanent","sessionRevoked":false}'
+        )
+      ).toBeOnTheScreen();
       expect(screen.getByText('status: signedIn')).toBeOnTheScreen();
       expect(auth.signOut).not.toHaveBeenCalled();
       expect(await keys()).toEqual([...U1_KEYS, ...KEPT_KEYS].sort());
     });
 
-    it.each(['web', 'android'] as const)(
-      'deletes through the RPC on %s, with no sheet, leaving the token unrevoked',
+    it.each(['ios', 'web'] as const)(
+      'deletes an account without Apple through the RPC on %s',
       async (os) => {
         runningOn(os);
+        auth.getSession.mockResolvedValue({
+          data: {
+            session: { user: { id: 'u1', app_metadata: { providers: ['email', 'google'] } } },
+          },
+        });
 
         await renderProbe();
         await screen.findByText('status: signedIn');
@@ -660,24 +636,8 @@ describe('deleting the account', () => {
 
         expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
         expect(deleteAccountApi).toHaveBeenCalledTimes(1);
-        expect(reauthorizeWithApple).not.toHaveBeenCalled();
         expect(deleteAccountWithApple).not.toHaveBeenCalled();
       }
     );
-
-    it('deletes an account without Apple through the RPC on iOS, with no sheet', async () => {
-      auth.getSession.mockResolvedValue({
-        data: { session: { user: { id: 'u1', app_metadata: { providers: ['email', 'google'] } } } },
-      });
-
-      await renderProbe();
-      await screen.findByText('status: signedIn');
-
-      await fireEvent.press(screen.getByLabelText('Delete account'));
-
-      expect(await screen.findByText('status: signedOut, reason: deleted')).toBeOnTheScreen();
-      expect(deleteAccountApi).toHaveBeenCalledTimes(1);
-      expect(reauthorizeWithApple).not.toHaveBeenCalled();
-    });
   });
 });

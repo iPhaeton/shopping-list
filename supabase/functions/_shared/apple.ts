@@ -1,12 +1,13 @@
 /**
- * The Apple half of `delete-account` and `reset-apple-sign-in`: a client secret, the exchange of an
- * `authorizationCode` for a refresh token, and the revoke of that token, against Apple's REST API.
+ * The Apple half of `store-apple-token`, `delete-account` and `reset-apple-sign-in`: a client
+ * secret, the exchange of an `authorizationCode` for a refresh token, and the revoke of a token,
+ * against Apple's REST API.
  *
  * Apple requires an app that offers Sign in with Apple to revoke the user's tokens when the account
- * is deleted. The revoke has a side effect the app copes with in `signInWithApple()`: for a few
- * minutes the device still shows its returning-user sheet, whose token has no email.
+ * is deleted. The revoke has a side effect the app copes with in `signInWithApple()`: for a short
+ * time the device still shows its returning-user sheet, whose token has no email.
  *
- * **Never log** the code, the tokens or the key. The only thing either function logs from Apple is
+ * **Never log** the code, the tokens or the key. The only things the functions log from Apple are
  * its `error` field (`invalid_grant`, `invalid_client`, …) and the status, which say nothing secret.
  */
 
@@ -39,9 +40,16 @@ const FAILURES = {
 
 export type FailureCode = keyof typeof FAILURES;
 
-/** Apple said no, or could not be asked: the code names which, and `fail` turns it into a response. */
+/**
+ * Apple said no, or could not be asked: the code names which, and `fail` turns it into a response.
+ * `appleError` is Apple's own `error` field when it answered one, for a caller that must tell its
+ * refusals apart.
+ */
 export class AppleFailure extends Error {
-  constructor(readonly code: FailureCode) {
+  constructor(
+    readonly code: FailureCode,
+    readonly appleError?: string
+  ) {
     super(code);
   }
 }
@@ -81,8 +89,12 @@ export async function exchangeCode(code: string): Promise<{ sub: string; refresh
 }
 
 /**
- * After this, Settings no longer lists the app. Apple's sheet asks for consent again only once the
- * device has caught up: on an iPhone 13, 10 s after was too soon and 3½ minutes was enough.
+ * Ends the authorization the token belongs to: Settings no longer lists the app, on every device.
+ * Apple's sheet asks for consent again only once the device has caught up: on an iPhone 13, 10 s
+ * after was too soon and 13 s was enough (task 26 step 3). The simulator never caught up.
+ *
+ * A token already revoked is answered like a live one, 200 with an empty body, while a
+ * `refresh_token` grant with it gets 400 `invalid_grant` (measured, task 26 step 4).
  */
 export async function revoke(refreshToken: string): Promise<void> {
   await post('/auth/revoke', { token: refreshToken, token_type_hint: 'refresh_token' });
@@ -111,11 +123,17 @@ async function post(path: string, fields: Record<string, string>): Promise<Respo
     console.error(`apple ${path}: no answer (${(error as Error).name})`);
     throw new AppleFailure('apple_unavailable');
   }
-  if (response.ok) return response;
+  if (response.ok) {
+    console.log(`apple ${path}: ${response.status}`);
+    return response;
+  }
 
   const { error } = await response.json().catch(() => ({ error: undefined }));
   console.error(`apple ${path}: ${response.status} ${error ?? '(no error field)'}`);
-  throw new AppleFailure(response.status >= 500 ? 'apple_unavailable' : 'apple_code_rejected');
+  throw new AppleFailure(
+    response.status >= 500 ? 'apple_unavailable' : 'apple_code_rejected',
+    typeof error === 'string' ? error : undefined
+  );
 }
 
 /**

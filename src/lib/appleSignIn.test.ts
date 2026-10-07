@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { AppleAuthenticationScope, formatFullName, signInAsync } from 'expo-apple-authentication';
 
-import { reauthorizeWithApple, signInWithApple } from './appleSignIn';
+import { signInWithApple } from './appleSignIn';
 import { supabase } from './supabase';
 
 /**
@@ -147,29 +147,74 @@ it('still succeeds when saving the name fails', async () => {
   expect(result).toEqual({ error: null });
 });
 
-describe('reauthorizeWithApple', () => {
-  it("returns the code from Apple's sheet, asking for no scopes and calling Supabase for nothing", async () => {
-    expect(await reauthorizeWithApple()).toEqual({ code: 'a-code' });
-    expect(appleSignIn).toHaveBeenCalledWith({ requestedScopes: [] });
-    expect(signInWithIdToken).not.toHaveBeenCalled();
+/**
+ * Every successful sign-in hands its code to `store-apple-token`, so that `delete-account` can revoke
+ * Apple's token from any device. The sign-in never waits for it, and nothing it returns matters.
+ */
+describe("storing Apple's token", () => {
+  it('sends the code of the credential that signed in to store-apple-token', async () => {
+    expect(await signInWithApple()).toEqual({ error: null });
+    expect(invoke.mock.calls).toEqual([
+      ['store-apple-token', { body: { authorizationCode: 'a-code' } }],
+    ]);
   });
 
-  it('reports a cancelled sheet as a cancel, not a failure', async () => {
-    appleSignIn.mockRejectedValue(Object.assign(new Error('The user canceled'), { code: 'ERR_REQUEST_CANCELED' }));
+  it('does not wait for it', async () => {
+    invoke.mockReturnValue(new Promise(() => {}));
 
-    expect(await reauthorizeWithApple()).toEqual({ cancelled: true });
+    expect(await signInWithApple()).toEqual({ error: null });
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces any other failure of the sheet', async () => {
-    appleSignIn.mockRejectedValue(Object.assign(new Error('The authorization attempt failed'), { code: 'ERR_REQUEST_FAILED' }));
+  it('still succeeds when the function answers an error', async () => {
+    invoke.mockResolvedValue({
+      data: null,
+      error: new Error('Edge Function returned a non-2xx status code'),
+    } as never);
 
-    expect(await reauthorizeWithApple()).toEqual({ error: 'The authorization attempt failed' });
+    expect(await signInWithApple()).toEqual({ error: null });
   });
 
-  it('surfaces a missing code', async () => {
+  it('still succeeds when the call rejects', async () => {
+    invoke.mockRejectedValue(new Error('Failed to fetch'));
+
+    expect(await signInWithApple()).toEqual({ error: null });
+    // One more turn, so that a rejection left unhandled fails this test rather than a later one.
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+
+  it('stores nothing when Apple sent no code, and still succeeds', async () => {
     appleSignIn.mockResolvedValue(credential({ authorizationCode: null }));
 
-    expect(await reauthorizeWithApple()).toEqual({ error: 'Apple did not return an authorization code' });
+    expect(await signInWithApple()).toEqual({ error: null });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a cancelled sheet',
+      () =>
+        appleSignIn.mockRejectedValue(
+          Object.assign(new Error('The user canceled'), { code: 'ERR_REQUEST_CANCELED' })
+        ),
+    ],
+    [
+      'a missing identity token',
+      () => appleSignIn.mockResolvedValue(credential({ identityToken: null })),
+    ],
+    [
+      'a refused token',
+      () =>
+        signInWithIdToken.mockResolvedValue({
+          error: { message: 'Nonces mismatch', status: 400 },
+        } as never),
+    ],
+  ])('stores nothing after %s', async (_, arrange) => {
+    arrange();
+
+    await signInWithApple();
+
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
 

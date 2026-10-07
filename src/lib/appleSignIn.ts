@@ -40,8 +40,8 @@ const RESET_FAILED = "Apple sign-in couldn't finish. Try again in a minute.";
  * pair can be produced, unlike with Google's free module.
  *
  * **The sign-in a revoke leaves behind.** A device keeps showing Apple's returning-user sheet for a
- * few minutes after the app's authorization was revoked — by `delete-account`, or by Stop Using on
- * another device. That sheet's token has no email, since the consent that shared it is gone, and the
+ * short time after the app's authorization was revoked — by `delete-account`, from any device, or by
+ * Stop Using. That sheet's token has no email, since the consent that shared it is gone, and the
  * sheet authorizes the app again, still without it. With no account for its `sub`, GoTrue tries to
  * create a user with no email, and `public.users.email not null` fails that with a 500 — on every
  * attempt. So a 500 for an email-less token sends the sheet's code to `reset-apple-sign-in`, which
@@ -80,6 +80,7 @@ export async function signInWithApple(): Promise<Result> {
     return { error: error.message };
   }
 
+  storeAppleToken(credential.authorizationCode);
   await saveSuggestedName(credential);
   return { error: null };
 }
@@ -109,22 +110,17 @@ async function resetAppleSignIn(authorizationCode: string | null): Promise<strin
 }
 
 /**
- * A fresh `authorizationCode` for `delete-account`, which trades it with Apple for the token it
- * revokes. Apple's sheet again, with no scopes: no Supabase call, and nothing to save. A cancel is
- * its own result, so that the caller can leave everything as it was.
+ * Hands the code of the credential that just signed in to `store-apple-token`, which trades it with
+ * Apple for a refresh token and keeps it, so that `delete-account` can revoke it from any device.
+ * Not awaited, so the sign-in never waits on Apple or a function's cold start, and its result is
+ * ignored: a failure only leaves the account with no stored token, which `delete-account` then
+ * deletes unrevoked. The session the sign-in just made authorizes the call.
  */
-export async function reauthorizeWithApple(): Promise<
-  { code: string } | { cancelled: true } | { error: string }
-> {
-  let credential: AppleAuthenticationCredential;
-  try {
-    credential = await signInAsync({ requestedScopes: [] });
-  } catch (error) {
-    if (isCancel(error)) return { cancelled: true };
-    return { error: (error as Error).message };
-  }
-  if (!credential.authorizationCode) return { error: 'Apple did not return an authorization code' };
-  return { code: credential.authorizationCode };
+function storeAppleToken(authorizationCode: string | null) {
+  if (!authorizationCode) return;
+  supabase.functions
+    .invoke('store-apple-token', { body: { authorizationCode } })
+    .catch(() => undefined);
 }
 
 /** A cancel is a rejection, not a result (expo-apple-authentication 57.0.2). */
