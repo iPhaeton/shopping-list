@@ -4,13 +4,11 @@ title: Deleting an account is one guarded definer RPC that locks every list the 
 type: decision
 status: current
 tags: [supabase, postgres, auth, deletion, account, concurrency]
-sources: [ai/tasks/25-account-deletion/description-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, supabase/migrations/20261005000000_delete_account.sql, supabase/migrations/20261005100000_list_owner_locks.sql]
-last_verified: 2026-10-05
+sources: [ai/tasks/25-account-deletion/description-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, supabase/migrations/20261005000000_delete_account.sql, supabase/migrations/20261005100000_list_owner_locks.sql, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, ai/tasks/26-apple-sign-in/implementation-log-step-3.md, ai/tasks/26-apple-sign-in/implementation-log-step-4.md, b15d384, 9421c3c, 42cd547]
+last_verified: 2026-10-07
 verify: f=$(grep -lE '^create (or replace )?function public\.delete_account\(' supabase/migrations/*.sql | tail -1) && test -n "$f" && b=$(sed -n -E '/^create (or replace )?function public\.delete_account\(\)/,/^\$\$;/p' "$f" | grep -v '^ *--') && echo "$b" | grep -q 'security definer' && test "$(echo "$b" | grep -E '^ *delete from (public\.lists|auth\.users)' | sed -E 's/^ *delete from ([a-z_.]+).*/\1/' | tr '\n' ' ')" = "public.lists auth.users " && echo "$b" | grep -q "m.user_id <> (select auth.uid()) and m.role = 'owner'" && echo "$b" | tr '\n' ' ' | grep -qE 'perform 1 from public\.lists l +where l\.id in \(select m\.list_id from public\.list_members m where m\.user_id = \(select auth\.uid\(\)\)\) +order by l\.id +for no key update; +delete from public\.lists' && ! echo "$b" | grep -qiE 'advisory|for update|deleted_at' && grep -rq '^revoke execute on function public.delete_account() from public, anon;' supabase/migrations && grep -rq '^grant execute on function public.delete_account() to authenticated;' supabase/migrations && ! grep -rqiE '^create index.*\(created_by' supabase/migrations && grep -A1 'add constraint lists_created_by_fkey' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'on delete set null'
-' ' ')" = "public.lists auth.users " && echo "$b" | grep -q "m.user_id <> (select auth.uid()) and m.role = 'owner'" && echo "$b" | tr '
-' ' ' | grep -qE 'perform 1 from public\.lists l +where l\.id in \(select m\.list_id from public\.list_members m where m\.user_id = \(select auth\.uid\(\)\)\) +order by l\.id +for no key update; +delete from public\.lists' && ! echo "$b" | grep -qiE 'advisory|for update|deleted_at' && grep -rq '^revoke execute on function public.delete_account() from public, anon;' supabase/migrations && grep -rq '^grant execute on function public.delete_account() to authenticated;' supabase/migrations && ! grep -rqiE '^create index.*\(created_by' supabase/migrations && grep -A1 'add constraint lists_created_by_fkey' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'on delete set null'
 indexed: false
-related: [session-still-valid-guards-writes, deletion-is-a-tombstone, list-data-scoped-by-rls, session-revoked-write-redirects, supabase-default-grants-defeat-revokes, supabase-local-stack, ownership-changes-lock-the-list-row-first, delete-account-removes-sole-owned-lists, account-deletion-forces-signed-out-and-clears-twice]
+related: [session-still-valid-guards-writes, deletion-is-a-tombstone, list-data-scoped-by-rls, session-revoked-write-redirects, supabase-default-grants-defeat-revokes, supabase-local-stack, ownership-changes-lock-the-list-row-first, delete-account-removes-sole-owned-lists, account-deletion-forces-signed-out-and-clears-twice, apple-refresh-token-revoked-before-account-deletion]
 ---
 
 **`public.delete_account()`** — first created in
@@ -32,7 +30,10 @@ its current definition in
 
 The app calls it while the user watches and never queues it in the outbox. Through REST: 204 with no
 body on success, 403 `42501` for a revoked session (`resultFor` maps it to `sessionRevoked`), 401 for
-`anon`. It returns nothing and promotes no heir. Signing up again with the same email is a new user id,
+`anon`. An Apple-linked account reaches it through the `delete-account` Edge Function instead (below),
+which answers a session GoTrue already refuses with the same 403
+`{ code: '42501', message: 'this device has been signed out' }`, the words of `session_still_valid()`,
+so `sessionRevoked` fires either way. It returns nothing and promotes no heir. Signing up again with the same email is a new user id,
 nameless, in no list. What the device does after a success — forced sign-out, two clears — is
 [account-deletion-forces-signed-out-and-clears-twice](account-deletion-forces-signed-out-and-clears-twice.md).
 
@@ -55,14 +56,19 @@ list is kept with the remaining owner (T1–T3). The general rule and why `for n
   account on 3 lists.
 
 **An RPC, not an Edge Function calling `auth.admin.deleteUser`**: every write here is already a
-guarded RPC, there is no functions infrastructure, and only a database function deletes the lists and
-the account atomically. It works because `postgres`, the function's owner, holds DELETE on
+guarded RPC, and only a database function deletes the lists and the account atomically. The
+`delete-account` function wraps the RPC rather than replacing it: called with no body, it revokes
+every stored Apple token of the caller, then calls `delete_account()` with the caller's token, and
+nothing is deleted unless every revoke succeeded. The `apple_tokens` rows cascade with `auth.users`
+([apple-refresh-token-revoked-before-account-deletion](apple-refresh-token-revoked-before-account-deletion.md)).
+It works because `postgres`, the function's owner, holds DELETE on
 `auth.users` (owned by `supabase_auth_admin`) and has `rolbypassrls` (`rolsuper` is false). As
 owner, `postgres` skips RLS on `lists` and `list_members` anyway, but not on `auth.users`, where RLS
 is on. **Without `rolbypassrls` the final delete would match zero rows with no error**: the lists
 gone, the account kept, a silent half-delete. **Both preconditions are checked true on the local
-stack and on cloud** (2026-10-05). The locking migration is applied to the local stack only and
-**not pushed to cloud**. Any new environment must re-check both before it gets these migrations:
+stack and on cloud** (2026-10-05). Both task-25 migrations, the locking one included, are applied on
+cloud and `public.delete_account` exists there (`migration list --linked`, 2026-10-06); task 26's
+`apple_tokens` migration and the `delete-account` function are local only. Any new environment must re-check both before it gets these migrations:
 `select has_table_privilege('postgres', 'auth.users', 'DELETE');` and
 `select rolbypassrls from pg_roles where rolname = 'postgres';` — a bare expression without
 `select` fails with `42601` at position 1.

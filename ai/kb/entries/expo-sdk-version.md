@@ -5,7 +5,7 @@ type: reference
 status: current
 tags: [expo, versions, docs, react-native-screens, hermes]
 sources: [ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, 4d55c18, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md]
-last_verified: 2026-09-29
+last_verified: 2026-10-07
 verify: grep -q '"expo": "~57' package.json && grep -q 'docs.expo.dev/versions/v57.0.0/' AGENTS.md && grep -q '"@react-native/jest-preset"' package.json && test "$(node -p "require('./package.json').dependencies['react-native-screens']")" = "$(node -p "require('expo/bundledNativeModules.json')['react-native-screens']")"
 related: [ios-scene-support-is-opt-in, native-build-toolchain, expo-sdk-54-pinned, react-native-screens-past-the-sdk-pin, jest-cold-cache-timeouts, auto-theme-follows-the-time-zone]
 indexed: false

@@ -5,14 +5,14 @@ type: gotcha
 status: current
 tags: [supabase, auth]
 sources: [ai/tasks/17-user-names/implementation-log-step-1.md, src/state/SessionContext.tsx, node_modules/@supabase/auth-js/dist/module/GoTrueClient.js]
-last_verified: 2026-10-05
+last_verified: 2026-10-07
 verify: grep -q "hasResolvedOnce.current ? 'live' : 'restored'" src/state/SessionContext.tsx && grep -q "_recoverAndRefresh" src/state/SessionContext.tsx && grep -q "_notifyAllSubscribers('SIGNED_IN', currentSession)" node_modules/@supabase/auth-js/dist/module/GoTrueClient.js
 related: [session-still-valid-guards-writes, supabase-client-module-boundary, restored-session-state-waits-for-evidence]
 indexed: false
 ---
 
 `supabase.auth.onAuthStateChange`'s callback receives the literal event string `'SIGNED_IN'` for two
-different things: an interactive sign-in (OTP code verified, Google token exchanged) **and**, just as
+different things: an interactive sign-in (OTP code verified, Google's or Apple's id token exchanged) **and**, just as
 often, an ordinary cold-start restore of a session already on disk. Nothing in the event's name or
 payload tells the two apart. That distinction matters whenever a follow-up async step — a profile
 fetch, anything else keyed off "a session just appeared" — should behave differently for a returning

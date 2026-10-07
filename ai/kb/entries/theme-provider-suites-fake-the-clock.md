@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [testing, jest, theme, time]
 sources: [ai/tasks/20-ux/implementation-log-step-2.md]
-last_verified: 2026-10-05
+last_verified: 2026-10-07
 verify: for f in $(grep -rl '<ThemeProvider' src --include='*.test.tsx'); do grep -qE "jest.mock\('[./]+/lib/deviceTimeZone'" "$f" && grep -q 'useFakeTimers({ now:' "$f" || exit 1; done; grep -A7 'createContext<ThemeContextValue>' src/state/ThemeContext.tsx | grep -q "preference: 'day'" && grep -A7 'createContext<ThemeContextValue>' src/state/ThemeContext.tsx | grep -q 'nextChange: null'
 related: [auto-theme-follows-the-time-zone, theme-tokens-only, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 indexed: false
@@ -23,8 +23,8 @@ whatever zone the machine running jest is in — green at your desk, red in the 
   `beforeEach` (`jest.mocked(deviceTimeZone).mockReturnValue('Europe/Warsaw')`).
 - `jest.useFakeTimers({ now: <a fixed instant> })` in `beforeEach`, `jest.useRealTimers()` after.
 - Copy [ThemeContext.test.tsx](../../../src/state/ThemeContext.test.tsx) or the appearance
-  `describe` in [AccountScreen.test.tsx](../../../src/screens/AccountScreen.test.tsx) — the only two
-  today. The `verify:` fails on a `<ThemeProvider` suite that skips either.
+  `describe` in [AccountScreen.test.tsx](../../../src/screens/AccountScreen.test.tsx). The `verify:`
+  sweeps every `<ThemeProvider` suite and fails on one that skips either.
 - Prove it by re-running under another zone and locale — the theme suites pass with `TZ` set to
   `Pacific/Auckland`, `America/Los_Angeles`, `UTC`, or `Asia/Kolkata`, and `LANG=pl_PL.UTF-8`.
 

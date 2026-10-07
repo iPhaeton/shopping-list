@@ -4,9 +4,9 @@ title: `npm run ios -- --device` never lets Xcode create a provisioning profile 
 type: gotcha
 status: current
 tags: [ios, signing, xcode, expo, apple-developer, device]
-sources: [node_modules/expo/node_modules/@expo/cli/build/src/run/ios/XcodeBuild.js, node_modules/expo/node_modules/@expo/cli/build/src/run/ios/codeSigning/configureCodeSigning.js, .expo/xcodebuild.log]
-last_verified: 2026-10-05
-verify: F=node_modules/expo/node_modules/@expo/cli/build/src/run/ios/codeSigning/configureCodeSigning.js && grep -A3 '^async function ensureDeviceIsCodeSignedForDeploymentAsync' "$F" | grep -q 'return null;' && grep -q "'-allowProvisioningUpdates'" node_modules/expo/node_modules/@expo/cli/build/src/run/ios/XcodeBuild.js && (! test -f ios/ShoppingLoop.xcodeproj/project.pbxproj || grep -q 'DEVELOPMENT_TEAM = YZ75T58P4Z;' ios/ShoppingLoop.xcodeproj/project.pbxproj)
+sources: [node_modules/expo/node_modules/@expo/cli/build/src/run/ios/XcodeBuild.js, node_modules/expo/node_modules/@expo/cli/build/src/run/ios/codeSigning/configureCodeSigning.js, .expo/xcodebuild.log, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384]
+last_verified: 2026-10-07
+verify: F=node_modules/expo/node_modules/@expo/cli/build/src/run/ios/codeSigning/configureCodeSigning.js && grep -A3 '^async function ensureDeviceIsCodeSignedForDeploymentAsync' "$F" | grep -q 'return null;' && grep -q "'-allowProvisioningUpdates'" node_modules/expo/node_modules/@expo/cli/build/src/run/ios/XcodeBuild.js && (! test -f ios/ShoppingLoop.xcodeproj/project.pbxproj || grep -qE 'DEVELOPMENT_TEAM = "?YZ75T58P4Z"?;' ios/ShoppingLoop.xcodeproj/project.pbxproj)
 related: [native-build-toolchain]
 indexed: false
 ---
@@ -21,7 +21,8 @@ being auto-provisioned.
 `DEVELOPMENT_TEAM=… -allowProvisioningUpdates -allowProvisioningDeviceRegistration` only when
 `ensureDeviceIsCodeSignedForDeploymentAsync` returns a team id. That function returns `null` — no
 flags — whenever every target in `ios/ShoppingLoop.xcodeproj/project.pbxproj` already has a
-`DEVELOPMENT_TEAM`, which ours does (`YZ75T58P4Z`, `CODE_SIGN_STYLE = Automatic`). Only when the
+`DEVELOPMENT_TEAM`, which ours does (`YZ75T58P4Z`, quoted or not depending on the prebuild,
+`CODE_SIGN_STYLE = Automatic`). Only when the
 team is missing does Expo write it and return the id. So with a team already set, xcodebuild may
 use an existing profile but can never create one. `.expo/xcodebuild.log`'s first lines show the
 real invocation: no provisioning flags in it.
@@ -37,10 +38,15 @@ Get the UDID from `xcrun devicectl list devices`. This registers the device to t
 the App ID if needed, and writes the profile to
 `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`.
 
+**The user runs it, in their own terminal — not the agent.** The agent's command sandbox blocks
+apple.com, so run by the agent it fails with `Unable to log in with account … (Underlying error
+code -1001)`, which reads like a bad Apple login and is not one. Hand the command to the user.
+
 **When it comes back.** Whenever a new profile is needed: a phone not yet registered, a new
-capability or entitlement (`ios/ShoppingLoop/ShoppingLoop.entitlements` is an empty dict today), or
-the profile expiring — the first one, "iOS Team Provisioning Profile: com.shoppingloop.app", made
-2026-10-05, expires 2027-10-05. The same command fixes all three.
+capability or entitlement, or the profile expiring. A new entitlement shows as the profile "does
+not support the Sign In with Apple capability" — the case task 26 hit when `usesAppleSignIn` put
+`com.apple.developer.applesignin` in `ios/ShoppingLoop/ShoppingLoop.entitlements`. The profile with
+that entitlement was made 2026-10-06 and expires 2027-10-06. The same command fixes all three.
 
 Stripping `DEVELOPMENT_TEAM` from the pbxproj to make Expo take its own path also works, but only
 once: Expo writes the team back. Retire this entry if a later `@expo/cli` passes the flags for a

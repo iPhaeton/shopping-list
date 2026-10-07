@@ -1,17 +1,16 @@
 ---
 id: scope-boundaries
-title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and paged lists, required unique names, leaving a list, Day/Night/Auto themes, list and item limits, search and sort of live rows, and account deletion in; invites out
+title: Scope — named lists, OTP sign-in, offline writes, sharing, realtime, deletion, paged items and paged lists, required unique names, leaving a list, Day/Night/Auto themes, list and item limits, search and sort of live rows, account deletion, and Sign in with Apple (native, iOS only) in; invites out
 type: constraint
 status: current
 tags: [scope, product]
-sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/description-step-5.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/23-list-limits/description-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/description-step-2.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, b78d16f]
-last_verified: 2026-10-05
-related: [suggestions-are-proposals, keyset-paging-in-the-order-shown, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters, phone-is-the-product, theme-reaches-native-surfaces, theme-tokens-only, auto-theme-follows-the-time-zone, limit-checks-pass-an-applied-resend, ownership-changes-lock-the-list-row-first, delete-account-locks-then-removes-sole-owned-lists]
+sources: [ai/tasks/1/description-step-1.md, ai/tasks/2/description-step-2.md, ai/tasks/3/description-step-1.md, ai/tasks/4-offline-support/description-step-1.md, ai/tasks/4-offline-support/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/description-step-1.md, ai/tasks/6-custom-smtp/description-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/description-step-1.md, ai/tasks/7-list-sharing/description-step-2.md, ai/tasks/8-realtime/description-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/description-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/10-rename-item/description-step-1.md, ai/tasks/10-rename-item/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/11-pagination/description-step-2.md, ai/tasks/11-pagination/implementation-log-step-2.md, ai/tasks/12-rename-shoppingloop/description-step-1.md, ai/tasks/12-rename-shoppingloop/implementation-log-step-1.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/description-step-2.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/14-account-screen/description-step-1.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/description-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/description-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-2.md, ai/tasks/19-remove-oneself/description-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/19-remove-oneself/description-step-3.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/description-step-2.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/description-step-5.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/23-list-limits/description-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/23-list-limits/description-step-2.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/description-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/25-account-deletion/implementation-log-step-2-locks.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, b78d16f, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, ai/tasks/26-apple-sign-in/implementation-log-step-4.md, b15d384, 42cd547]
+last_verified: 2026-10-07
+related: [suggestions-are-proposals, keyset-paging-in-the-order-shown, writes-retry-from-an-outbox, list-cache-holds-acknowledged-rows, list-data-scoped-by-rls, select-policy-gates-update-and-delete, refused-writes-return-zero-rows, server-stamps-done-at, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone, writes-can-land-on-a-tombstone, read-rooted-at-list-members, max-rows-is-a-silent-ceiling, supabase-local-stack, supabase-target-picked-at-runtime, otp-email-templates-carry-the-code, supabase-config-push-sends-the-whole-root, cloud-auth-mail-goes-through-resend, shoppingloop-is-the-visible-name-only, native-build-toolchain, google-native-signin-library-gaps, session-still-valid-guards-writes, signed-in-event-fires-on-restore-too, trigram-index-needs-three-characters, phone-is-the-product, theme-reaches-native-surfaces, theme-tokens-only, auto-theme-follows-the-time-zone, limit-checks-pass-an-applied-resend, ownership-changes-lock-the-list-row-first, delete-account-locks-then-removes-sole-owned-lists, apple-refresh-token-revoked-before-account-deletion, apple-revoke-leaves-an-email-less-returning-sheet]
 ---
 
-Scope is set one task step at a time, by the `ai/tasks/<n>/description-step-<n>.md` that opens the
-step — never by a document in `ai/suggestions/`, which is a proposal until a description promotes it
-([suggestions-are-proposals](suggestions-are-proposals.md)). What is in, as of task 25 step 3:
+Scope is set by each step's `ai/tasks/<n>/description-step-<n>.md` — never by `ai/suggestions/`, a
+proposal until a description promotes it ([suggestions-are-proposals](suggestions-are-proposals.md)). In, as of task 26 step 4:
 
 | | |
 |---|---|
@@ -39,6 +38,7 @@ step — never by a document in `ai/suggestions/`, which is a proposal until a d
 | task 24 step 2 | "Show deleted" switches either screen to its bin alone — newest deletion first and paged that way, no Create / Add bar, `The bin is empty` once emptied; the switch reads `Show deleted` with no count, and no row carries a `Deleted` tag. **The bin is never searched, sorted another way, or loaded in full** |
 | task 24 step 3 | search and sort of **live** rows. Search is the resting state of Lists and List detail. Sort is toggle buttons in fixed priority, `todo` → `az` → `date`, and `date` is never off; item sort is per list, the Lists sort global, both per device (`sort-preference` v1, above `SessionProvider` so it survives sign-out, non-default keys only, never pruned). A non-empty query or a non-default sort over a live stream with a non-null cursor completes that stream in the background, up to 2,000 rows held (`COMPLETION_CAP`), then says so (`Searched the first 2,000 items.`). A binned list shows no query; its stored item sort applies |
 | task 25 | deleting your own account, from Account: every list you solely own goes permanently — live or binned, shared or not — and every other list stays; the warning is general, with no per-list preview (the user's call). Only an `auth.users` delete that bypasses `delete_account` (dashboard, admin API) can still leave an ownerless list ([delete-account-locks-then-removes-sole-owned-lists](delete-account-locks-then-removes-sole-owned-lists.md)) |
+| task 26 | Sign in with Apple, native and **iOS only** (`AppleAuthenticationButton` only when `Platform.OS === 'ios'`); Android keeps the email code and Google, web the email code. Account shows the hidden-email sentence and `Share` for any `@privaterelay.appleid.com` address, on every platform. Every Apple sign-in stores Apple's refresh token server-side, and deleting an Apple-linked account revokes it first, on every platform, with no sheet ([apple-refresh-token-revoked-before-account-deletion](apple-refresh-token-revoked-before-account-deletion.md)) |
 
 **Still deliberately out: inviting someone with no account (`list_invites`), showing an owner how
 widely a list is shared without opening it, passwords, and conflict resolution beyond last-write-wins.**
@@ -50,9 +50,7 @@ policy shows you your own row, so a client-computed "shared with N" would read `
 **"The user can create a list" means *many* named lists**, settled against an ambiguous step-1
 description — hence two list screens (`Lists` → `ListDetail`). Do not "simplify" back to one list.
 
-## What a landed step did *not* land
-
-Each of these is easy to assume and wrong:
+## What a landed step did *not* land — each easy to assume and wrong
 
 - **step 4, offline** — no sync engine (PowerSync if this ever needs real convergence), no
   connectivity library, no conflict resolution beyond last-write-wins, no "wait for sync" on signing
@@ -61,9 +59,8 @@ Each of these is easy to assume and wrong:
 - **step 5, cloud** — no user-facing feature and no schema change ([supabase-local-stack](supabase-local-stack.md)).
 - **step 6, SMTP** — deliverability is unproven, and no physical-device sign-in has ever completed
   against production ([cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)).
-- **step 8, realtime** — no echo suppression (`x-client-id`) and no "just updated" `SyncBanner`; both
-  were offered to the user and declined. No presence and no per-field conflict UI either:
-  last-write-wins is made *visible* rather than replaced
+- **step 8, realtime** — no echo suppression (`x-client-id`) and no "just updated" `SyncBanner` (both
+  offered and declined), no presence, no per-field conflict UI: last-write-wins is made *visible*
   ([realtime-is-a-nudge-to-a-per-user-inbox](realtime-is-a-nudge-to-a-per-user-inbox.md)).
 - **step 9, deletion** — no policy change, no realtime migration, no restore of a list's items when
   the list itself is restored, and no happens-before: the rule is who you are, not whose change came
@@ -96,8 +93,8 @@ Each of these is easy to assume and wrong:
   do not lift it. Count-then-write races under READ COMMITTED, so writes at a limit at the same
   instant can both pass; do not add `for update`, advisory locks, counter columns or serializable
   isolation. No backfill: an account already past a limit keeps everything and cannot add more.
-  Ownership, not creation, is the cap, so handing a list over frees a slot. No item count or warning anywhere, and neither Restore nor the
-  role picker is pre-checked — the refusal speaks
+  Ownership, not creation, is the cap, so handing a list over frees a slot. No item count or warning
+  anywhere, and neither Restore nor the role picker is pre-checked — the refusal speaks
   ([limit-checks-pass-an-applied-resend](limit-checks-pass-an-applied-resend.md)). The counts the
   warning reads are approximate: they move with this device's creates and bins and with each full
   re-read, never with a nudge.
@@ -107,13 +104,16 @@ Each of these is easy to assume and wrong:
 - **task 24 step 3, search and sort** — no server change: both run on the client over the rows held,
   and nothing past the 2,000-row cap is searched or sorted. Bin mode gets no search, no sort, no
   coverage line and no header button. A sort is never synced to the account.
-- **task 25, account deletion** — no Edge Function, no Apple token revocation, and no cloud push of
-  step 3; nothing handles another device's 409 on a list create
+- **task 25, account deletion** — nothing handles another device's 409 on a list create
   ([session-still-valid-guards-writes](session-still-valid-guards-writes.md)).
+- **task 26, Sign in with Apple** — no Apple button on Android or web, no Apple sheet at deletion, and
+  nothing on cloud beyond Apple enabled in its auth: the `apple_tokens` migration, the three Edge
+  Functions and their secrets are local only. A revoke briefly leaves an email-less returning sheet
+  ([apple-revoke-leaves-an-email-less-returning-sheet](apple-revoke-leaves-an-email-less-returning-sheet.md)).
 
-**Cloud is ten migration files behind local** — every `supabase/migrations/*.sql` dated after
-`20260909000000` — and no client has ever connected to the cloud realtime socket. A pushed migration is schema-level proof, never
-behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
+**Cloud has every migration but task 26's `20261007000000_apple_tokens.sql`** (`migration list
+--linked`, 2026-10-06), and no client has ever connected to the cloud realtime socket. A pushed
+migration is schema-level proof, never behaviour-level ([supabase-local-stack](supabase-local-stack.md)).
 
 **What to do:** never add an out-of-scope item speculatively or flag its absence in a review. When a
 new task description lands, re-read and update this entry. No `verify:` — scope is a judgment fact.

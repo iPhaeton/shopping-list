@@ -8,6 +8,7 @@ sources: [ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/9-delet
 last_verified: 2026-10-02
 verify: test "$(grep -c '\.update(\|\.delete(' src/lib/listsApi.ts)" = "$(grep -A4 '\.update(\|\.delete(' src/lib/listsApi.ts | grep -c '\.select(')" && grep -q "if (!error) return { error: null, verdict: 'ok' };" src/lib/listsApi.ts && grep -q "rpc('rename_list'" src/lib/listsApi.ts
 related: [server-stamps-done-at, select-policy-gates-update-and-delete, writes-retry-from-an-outbox, list-data-scoped-by-rls, writes-can-land-on-a-tombstone, supabase-local-stack, insert-returning-races-membership-trigger]
+indexed: false
 ---
 
 A policy does not *reject* a client `UPDATE` or `DELETE` — it **filters it to zero rows**. Over

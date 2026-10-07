@@ -4,8 +4,8 @@ title: The product is the phone app — web is where flows are tested, never wha
 type: constraint
 status: current
 tags: [product, verification, web, ios, android, design]
-sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/25-account-deletion/implementation-log-step-1.md, d58a9cf, 962533c, a7416fd, 3ccf224]
-last_verified: 2026-10-05
+sources: [ai/tasks/20-ux/description-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/25-account-deletion/implementation-log-step-1.md, ai/tasks/26-apple-sign-in/implementation-log-step-1.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b4cafe0, b15d384, d58a9cf, 962533c, a7416fd, 3ccf224]
+last_verified: 2026-10-07
 verify: ! grep -q accessibilityState node_modules/react-native-web/dist/modules/createDOMProps/index.js && ! grep -qE 'accessibilityValue([^A-Za-z]|$)' node_modules/react-native-web/dist/modules/createDOMProps/index.js && grep -q "Platform.OS === 'web'" src/state/ThemeContext.tsx && ! grep -rq 'linking={' src --include='*.tsx' && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Band.tsx && grep -q 'stopColor={colors.bandRim} stopOpacity={0.2}' src/components/Horizon.tsx && grep -q 'color & 0x00ffffff | alpha << 24' node_modules/react-native-svg/lib/module/lib/extract/extractGradient.js && grep -q 'bandAt(colors, index)' src/components/ItemRow.tsx && grep -q "from '../../../src/theme.ts'" ai/ux/source/tokens.mjs
 related: [maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque, native-build-toolchain, theme-reaches-native-surfaces, supabase-local-stack, queries-go-through-a11y-labels, scope-boundaries, absolute-decoration-needs-pointer-events-on-its-wrapper, flatlist-footer-absent-when-list-is-empty, svg-percent-size-frozen-on-ios, screens-take-navigation-props, search-fold-fallbacks-ship]
 ---
@@ -66,27 +66,27 @@ its images differ, the images win; its constraints and done-when still govern.
   card, `Delete account`. **Account is `account-screen-delete*` now**; `-editing-` still draws the
   name editor, which is otherwise unchanged.
 
-Task 24 step 1 added nine stems for search, sort and the bin (`lists-screen-{search,
-search-resting,bin,bin-empty}`, `list-detail-screen-{search,search-resting,search-sorted,bin,
-bin-empty}`); task 25 step 1 four for deleting an account (`account-screen-delete{,-confirm,
--offline}`, `sign-in-screen-deleted`). Each log records its stems' state, copy, a11y labels, and
-the geometry to measure by.
+**Sign in differs by platform.** `sign-in-screen-apple*` is the current iOS Sign in;
+`sign-in-screen-quiet-horizon*` stays current for Android, which has no Apple button, and
+`sign-in-screen-deleted*` has no Apple version. `account-screen-hidden-email*` (a relay address) is
+a *state* of Account beside `account-screen-delete*`, not a replacement. Each task's step-1 log
+records its stems' state, copy, a11y labels, and the geometry to measure by.
 
 **Mockups are rendered, never hand-drawn.** The harness in `ai/ux/source/`
 ([README](../../../ai/ux/source/README.md)) imports `src/theme.ts` and `bandAt` directly, so the
 palettes are the real ones, and it is calibrated against simulator shots. Change a mockup by
 editing its scene and re-rendering, never by editing a PNG, and never overwrite one the user has
 not asked to change. It renders the set's 390×844 pt @3x, not the 18 Pro's size, and draws only
-Lists, List detail, Account and Sign in; another screen has to be ported into it first.
+Lists, List detail, Account and Sign in; another screen has to be ported into it first. Apple's
+button is native: Apple draws its inside, so only its frame is design, and the harness's
+`AppleButton` (`APPLE_INSIDE`) is calibrated to the 18 Pro simulator's, within 0.3 pt.
 
 **Task screenshots are records of their day, like the logs, not the current design.** The user
-can hand-tune a look after the shots are taken, in the same commit. **The band rim on Lists is the
-known case: faint on purpose.** Task 20 step 3's `screenshots/step-3/lists-*` show each band's top
-edge as a bright white highlight. The user then made it fainter by hand, committed in `d58a9cf`
-alongside those shots. Task 21 read the difference as an SDK 57 regression, and that was wrong: the
-build draws exactly the committed values. The rim no longer has to separate rows, because since
-`b66e076` adjacent rows never share a colour (`src/state/bands.ts`). **Do not "restore" the bright
-edge from those shots.** The rim's brightness is `stopOpacity={0.2}` → `0` in `Band.tsx` and in
+can hand-tune a look after the shots are taken. **The band rim on Lists is the known case: faint on
+purpose.** Task 20 step 3's `screenshots/step-3/lists-*` show a bright white top edge; the user made
+it fainter by hand in `d58a9cf`, and task 21 wrongly read that as an SDK 57 regression. Adjacent rows
+never share a colour (`src/state/bands.ts`), so the rim need not separate them. **Do not "restore"
+the bright edge from those shots.** The rim's brightness is `stopOpacity={0.2}` → `0` in `Band.tsx` and in
 `Horizon.tsx` (the first band). On native, react-native-svg replaces a stop colour's own alpha with
 `stopOpacity`, so the `bandRim` token's alpha (0.22 Day, 0.1 Night) changes nothing there. The
 `verify:` pins the 0.2, so a deliberate change to the rim should update this paragraph too.
@@ -107,9 +107,6 @@ edge from those shots.** The rim's brightness is `stopOpacity={0.2}` → `0` in 
   The `verify:` fails the day RNW maps the prop.
 - The page is blank white before the theme gate opens, even at Night.
 - The browser's own blue focus ring.
-
-**What to do:** check looks on the simulator, flows on web, and both before calling a step done.
-When the two disagree, the phone wins and web gets a fallback.
 
 **Checking the phone design on web catches its own bugs, not just fallback needs** — ones RNTL
 cannot see, found only by driving the browser DOM: a tap-eating layering bug

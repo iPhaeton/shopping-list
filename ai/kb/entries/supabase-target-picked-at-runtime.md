@@ -4,8 +4,8 @@ title: The Supabase environment is chosen at runtime by platform, not compiled i
 type: decision
 status: current
 tags: [supabase, environment, expo, config, architecture]
-sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example, ai/tasks/20-ux/implementation-log-step-6.md]
-last_verified: 2026-09-30
+sources: [ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, src/lib/supabaseTarget.ts, src/lib/supabase.ts, .env.example, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, ai/tasks/26-apple-sign-in/implementation-log-step-4.md, b15d384, 78f86a4]
+last_verified: 2026-10-07
 verify: grep -q "Platform.OS === 'web'" src/lib/supabaseTarget.ts && grep -q "Device.isDevice ? 'cloud' : 'local'" src/lib/supabaseTarget.ts && test "$(grep -c 'process\.env\.EXPO_PUBLIC_SUPABASE_\(URL\|ANON_KEY\)_\(LOCAL\|CLOUD\)' src/lib/supabaseTarget.ts)" = 4 && test "$(grep -rl 'process\.env\.EXPO_PUBLIC_SUPABASE' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.')" = src/lib/supabaseTarget.ts && grep -q "from './supabaseTarget'" src/lib/supabase.ts && grep -q "10.0.2.2" src/lib/supabaseTarget.ts
 related: [supabase-local-stack, supabase-client-module-boundary, native-build-toolchain, supabase-config-push-sends-the-whole-root, expo-crypto-undefined-under-jest]
 ---
@@ -31,6 +31,14 @@ link email", which says nothing about the target. Before a run that reads Mailpi
 `EXPO_PUBLIC_SUPABASE_TARGET=local npx expo start --dev-client --clear`. A shell value beats every
 `.env*` file today. That order has flipped once. Its mechanics, and the addresses and keys, are in
 [supabase-local-stack](supabase-local-stack.md).
+
+**A dev build takes its target from the Metro serving it, not from anything installed.** In task 26
+the user believed the iPhone 13 was on cloud while it was on local. To put a physical phone on the
+local stack, start Metro with both in the shell — `EXPO_PUBLIC_SUPABASE_TARGET=local
+EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://<the Mac's LAN IP>:54321`, `.env` untouched — since the
+phone's own `127.0.0.1` is not the Mac. The dev build's ATS allows it (`NSAllowsLocalNetworking:
+true`). A plain `npm start` afterwards sends the phone back to cloud. Before reading anything off a
+phone, ask which Metro it loaded from.
 
 **Decision: runtime, not build time.** One `expo start` serves the browser and the dev client from the
 same server and the same env — press `w` in an `npm start` session and both runtimes are live at once.
@@ -87,4 +95,5 @@ shell or a `.env*` file proves nothing until the bundle carries it. The `curl` r
 [supabase-local-stack](supabase-local-stack.md). Do not count on blanking a pair to force a failure:
 when step 8 tried it, a blank `.env*` value was dropped rather than set, and that has not been
 re-measured since. The client still throws on a *missing* pair, naming the target it chose. The
-simulator's and the browser's branches are confirmed; a physical phone has still never been run.
+simulator's and the browser's branches are confirmed, and a physical phone has run on local through
+the override above.

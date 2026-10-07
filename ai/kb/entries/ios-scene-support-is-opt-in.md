@@ -5,7 +5,7 @@ type: decision
 status: current
 tags: [expo, ios, native, config, scenes]
 sources: [ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, ai/tasks/20-ux/implementation-log-step-5.md]
-last_verified: 2026-09-29
+last_verified: 2026-10-07
 verify: node -e "const p=require('./app.json').expo.plugins.find(x=>Array.isArray(x)&&x[0]==='expo-build-properties'); process.exit(p&&p[1].ios&&p[1].ios.enableSceneSupport===true?0:1)" && grep -q '"expo": "~57' package.json && (! test -f ios/ShoppingLoop/Info.plist || grep -q 'EXExpoAppSceneDelegate' ios/ShoppingLoop/Info.plist) && (! test -f ios/ShoppingLoop/AppDelegate.swift || ! grep -q 'UIWindow(frame' ios/ShoppingLoop/AppDelegate.swift)
 related: [expo-sdk-version, native-build-toolchain, google-native-signin-library-gaps, maestro-drives-the-native-ui]
 ---

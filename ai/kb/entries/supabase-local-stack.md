@@ -5,12 +5,10 @@ type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
 sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, a572bd3]
-last_verified: 2026-10-03
+last_verified: 2026-10-07
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && grep -q 'is already defined and IS NOT overwritten' node_modules/@expo/env/build/index.js && grep -qF "mode !== 'test' && \`.env.local\`, \`.env.\${mode}\`, \`.env\`" node_modules/@expo/env/build/index.js
-related: [trigram-index-needs-three-characters, cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
+related: [edge-functions-local-dev-loop, trigram-index-needs-three-characters, cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
 ---
-
-**There are two Supabase environments since step 5.**
 
 | | where | what reaches it |
 |---|---|---|
@@ -50,11 +48,13 @@ Cloud *auth config* has no read-back at all, and config is a separate push with 
 symmetric pairs, `_LOCAL` and `_CLOUD`, and neither is a default. The local values are the stack's
 own defaults — that anon key derives from the JWT secret in `supabase/config.toml`, which is why it
 is safe to commit. **The cloud key is deliberately blank in the committed example** and the
-`verify:` command asserts it stays that way; fill it in your own `.env` from
+`verify:` command asserts it stays that way; fill it in from
 `npx supabase projects api-keys --project-ref gvosanjceygakbubjfkv`, taking the publishable
-`sb_publishable_…` key rather than the legacy anon JWT. That key is designed to ship inside a client
-bundle — RLS is the boundary, not the key ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)) —
-but `sb_secret_…` must never enter `src/` or `.env.example`.
+`sb_publishable_…` key, not the legacy anon JWT. It is built to ship in a client bundle — RLS is
+the boundary ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)) — but `sb_secret_…` must never
+enter `src/` or `.env.example`. `.env` also holds the un-prefixed Sign in with Apple key, which no
+bundle sees: `npx supabase start` hands it to the Edge Functions
+([edge-functions-local-dev-loop](edge-functions-local-dev-loop.md)).
 
 Three things bite here:
 

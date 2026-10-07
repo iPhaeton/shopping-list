@@ -4,9 +4,9 @@ title: A restored session must stay `loading` until a cache read or fetch actual
 type: gotcha
 status: current
 tags: [auth, state]
-sources: [ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, src/state/SessionContext.tsx, src/state/SessionContext.test.tsx]
-last_verified: 2026-10-05
-verify: test "$(awk '/^  function enterSignedIn/,/^  }/' src/state/SessionContext.tsx | grep -c 'setState(')" = 1 && grep -q "async function resolveRestoredSignIn" src/state/SessionContext.tsx && grep -q "never shows the full app for a restored session before a cache or fetch backs it up" src/state/SessionContext.test.tsx
+sources: [ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, src/state/SessionContext.tsx, src/state/SessionContext.test.tsx, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384]
+last_verified: 2026-10-07
+verify: test "$(awk '/^  function enterSignedIn/,/^  }/' src/state/SessionContext.tsx | grep -c 'setState(')" = 1 && grep -q "async function resolveRestoredSignIn" src/state/SessionContext.tsx && grep -q "never shows the full app for a restored session before a cache or fetch backs it up" src/state/SessionContext.test.tsx && awk '/^function withSameUser\(/,/^}/' src/state/SessionContext.tsx | grep -q 'session: prev.session' && grep -q "keeps a session updated while the live sign-in was still confirming its name" src/state/SessionContext.test.tsx
 related: [signed-in-event-fires-on-restore-too, first-fetch-replaces-list-state, theme-reaches-native-surfaces]
 ---
 
@@ -41,6 +41,17 @@ be locked out of cached lists over a name nobody has found missing) — never fr
 yet". A regression test in `SessionContext.test.tsx` asserts the transient state directly (a
 deliberately-held-open fetch, checking `status: loading` while it is pending, neither `signedIn` nor
 `nameRequired`) rather than only the eventual one, since the eventual state was never wrong.
+
+**A late read must not bring back an older session either.** The guards that apply a read's result
+— `withSameUser`, and `withSameUserOrLoading` for the restored path — drop it if the user changed or
+signed out meanwhile. For the *same* user, `withSameUser` keeps `prev.session` and takes only the
+status and name from the read: the session in state is never older than the one the read captured,
+and `onAuthStateChange` may have replaced it mid-read — Apple's name arriving as a `USER_UPDATED`
+after `signInWithIdToken` (which [SetNameScreen](../../../src/screens/SetNameScreen.tsx) then
+prefills from `full_name`), or a `TOKEN_REFRESHED`. Taking the read's session reverted both.
+`withSameUserOrLoading` still takes `next`'s session when leaving `loading`, since nothing was in
+state to keep. Regression test: "keeps a session updated while the live sign-in was still
+confirming its name".
 
 **What to do:** any new branch of `AuthState` gated on data that isn't known synchronously follows
 the same shape — hold `loading` (or whatever state precedes it) until a cache read or fetch actually
