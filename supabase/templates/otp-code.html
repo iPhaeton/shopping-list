@@ -1,12 +1,31 @@
-<!--
-  Supabase's stock template sends {{ .ConfirmationURL }} — a magic link, which verifyOtp has
-  nothing to accept. This one sends the code instead. Wired to both the magic_link and the
+{{/*
+  Supabase's stock template sends .ConfirmationURL — a magic link, which verifyOtp has nothing to
+  accept. This one sends .Token, the code, instead. Wired to both the magic_link and the
   confirmation templates in config.toml, since a brand-new user gets the latter.
--->
-<h2>Your sign-in code</h2>
+  A Go template comment, so it renders to nothing: an HTML comment went out in every email.
+*/ -}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Your ShoppingLoop sign-in code</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #ffffff; color: #1c1c1e; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <div style="max-width: 480px; margin: 0 auto; padding: 24px 16px;">
+      <h2 style="margin: 0 0 16px; font-size: 22px; line-height: 1.3;">Your ShoppingLoop sign-in code</h2>
 
-<p>Enter this code in ShoppingLoop:</p>
+      <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">We got a request to sign in to ShoppingLoop with {{ .Email }}. Enter this code in the app:</p>
 
-<p style="font-size: 32px; font-weight: bold; letter-spacing: 6px">{{ .Token }}</p>
+      <p style="margin: 0 0 16px; font-size: 32px; font-weight: bold; letter-spacing: 6px;">{{ .Token }}</p>
 
-<p>It expires in an hour. If you didn't ask for it, you can ignore this email.</p>
+      <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">The code expires in one hour.</p>
+
+      <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">If you didn't ask for it, you can ignore this email. No one can sign in without the code.</p>
+
+      <hr style="margin: 24px 0 16px; border: 0; border-top: 1px solid #e5e5ea;">
+
+      <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #6e6e73;">This email was sent by ShoppingLoop. Questions? Write to <a href="mailto:support@shopping-loop.com" style="color: #6e6e73; white-space: nowrap;">support@shopping-loop.com</a>.</p>
+    </div>
+  </body>
+</html>

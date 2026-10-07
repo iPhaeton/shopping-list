@@ -253,11 +253,11 @@ otp_expiry = 3600
 # one that renders {{ .Token }}: GoTrue picks `confirmation` for a brand-new user and `magic_link`
 # for a returning one, and signInWithOtp({ shouldCreateUser: true }) hits both paths.
 [auth.email.template.confirmation]
-subject = "Your sign-in code"
+subject = "Your ShoppingLoop sign-in code"
 content_path = "./supabase/templates/otp-code.html"
 
 [auth.email.template.magic_link]
-subject = "Your sign-in code"
+subject = "Your ShoppingLoop sign-in code"
 content_path = "./supabase/templates/otp-code.html"
 
 [auth.sms]

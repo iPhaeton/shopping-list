@@ -4,7 +4,7 @@ title: Production auth mail leaves through Resend from no-reply@mail.shopping-lo
 type: environment
 status: current
 tags: [supabase, auth, email, resend, deployment, cloud]
-sources: [ai/tasks/6-custom-smtp/plan-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, supabase/config.toml, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384]
+sources: [ai/tasks/6-custom-smtp/plan-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, supabase/config.toml, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384, ai/tasks/27-sign-in-email/implementation-log-step-1.md]
 last_verified: 2026-10-07
 verify: grep -q '^admin_email = "no-reply@mail.shopping-loop.com"$' supabase/config.toml && awk '/^\[remotes\.production\.auth\.email\.smtp\]/{f=1;next} /^\[/{f=0} f' supabase/config.toml | grep -q '^enabled = true$' && grep -q '^host = "smtp.resend.com"$' supabase/config.toml && grep -q '^pass = "env(RESEND_API_KEY)"' supabase/config.toml && ! grep -q 'resend\.dev' supabase/config.toml && ! grep -q '^RESEND_API_KEY=' .env.example && grep -qx '.env' .gitignore
 related: [supabase-local-stack, supabase-config-push-sends-the-whole-root, otp-email-templates-carry-the-code, shoppingloop-is-the-visible-name-only, scope-boundaries, support-address-and-mail-domains]
@@ -74,22 +74,25 @@ is the source, and the CNAME must be DNS-only (a proxied one answers as `A` reco
 Resend with the current From. It sends a real code to that address, and an existing user exercises
 only the `magic_link` template ([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)).
 
-**What is not proven, and only a human can:** the `confirmation` template with a **fresh** address
-(a plus-alias of the owner's Gmail is the cheap way; it creates a throwaway production user);
-delivery to another provider (Outlook, iCloud) and whether it lands in spam — a fresh domain with no
+**What is not proven, and only a human can:** what a **fresh** address receives on cloud — under
+autoconfirm it should be `magic_link` too, as it is locally
+([otp-email-templates-carry-the-code](otp-email-templates-carry-the-code.md)); a plus-alias of the
+owner's Gmail is the cheap test, and it creates a throwaway production user; delivery to another provider (Outlook, iCloud) and whether it lands in spam — a fresh domain with no
 reputation is exactly where mail goes quietly missing, and delivered-to-spam is indistinguishable
 from never-sent at the app; re-scoping the key to the domain (optional — the current key sends
 from any domain in the team). A DMARC record now exists: `_dmarc.shopping-loop.com` is
 `v=DMARC1; p=none;` with no `rua`, so no reports come back (checked with `dig`, 2026-10-06).
 
-**Spam is now observed, and it is not the setup.** In task 26 step 2 a cloud sign-in code reached
-the owner's real Gmail through Apple's Private Email Relay (an `@privaterelay.appleid.com` address
-from Sign in with Apple), but in spam: "This message is similar to messages that were identified as
-spam in the past", with SPF, DKIM and DMARC all `PASS`. It is the content and the domain's
-reputation. The template (`otp-code.html`, subject "Your sign-in code") has no brand in the subject,
-no footer, no link and no contact — fix there, not in DNS or this SMTP block. Whether
-`mail.shopping-loop.com` is registered with Apple's relay is unknown to the agent; only the owner
-can check it.
+**Spam: one hit, one inbox, neither proof.** In task 26 step 2 a cloud sign-in code reached the
+owner's Gmail through Apple's Private Email Relay (an `@privaterelay.appleid.com` address), but in
+spam: "similar to messages that were identified as spam in the past", with SPF, DKIM and DMARC all
+`PASS` — content and domain reputation, not this setup. Task 27 rewrote the template (brand in the
+subject and heading, the recipient's address, an expiry line, a `support@` footer) and the owner
+pushed it on 2026-10-07; the next cloud code **landed in the Gmail inbox**. That is one weak data
+point: the address type and whether it had ever received the old email were not stated, and that
+Gmail had been trained with "Not spam" on the old mail. If spam recurs, look at content and
+reputation, not DNS or this SMTP block. Whether `mail.shopping-loop.com` is registered with Apple's
+relay is unknown to the agent; only the owner can check it.
 `email_sent = 30`/hour is Supabase's floor for custom SMTP. Resend's free plan is 100 a day, and
 support replies sent from Gmail count against the same quota. It is a burst cap, not an allowance
 ([supabase-config-push-sends-the-whole-root](supabase-config-push-sends-the-whole-root.md)).

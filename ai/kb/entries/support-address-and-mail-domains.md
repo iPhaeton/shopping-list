@@ -4,14 +4,15 @@ title: support@shopping-loop.com is the one public contact address — Cloudflar
 type: environment
 status: current
 tags: [email, support, contact, dns, cloudflare, resend, gmail, release]
-last_verified: 2026-10-06
-related: [cloud-auth-mail-goes-through-resend]
+last_verified: 2026-10-07
+related: [cloud-auth-mail-goes-through-resend, otp-email-templates-carry-the-code]
 ---
 
 **`support@shopping-loop.com` is the project's one public contact address.** Anything a user,
 Apple or a regulator sees as "how to reach us" uses it: the App Store support contact; the address
 Apple publishes as the EU Digital Services Act trader contact on EU product pages; the contact on
-shopping-loop.com's Support page, Privacy Policy (the GDPR controller contact) and Terms; and, when
+shopping-loop.com's Support page, Privacy Policy (the GDPR controller contact) and Terms; the
+footer of the sign-in code email (a `mailto:` in `supabase/templates/otp-code.html`); and, when
 they land, in-app contact links (AccountScreen, the paywall). Not all of those exist yet — the
 address does. Never use `no-reply@mail.shopping-loop.com` (send-only), any `@inbox.shopping-loop.com`
 address (no human reads it), or the owner's personal address.

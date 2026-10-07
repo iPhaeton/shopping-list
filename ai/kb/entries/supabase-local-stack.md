@@ -4,7 +4,7 @@ title: A local Supabase stack in Docker plus a linked cloud project — the loca
 type: environment
 status: current
 tags: [supabase, auth, environment, verification, docker, cloud]
-sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, a572bd3]
+sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, README.md, .env.example, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, a572bd3, ai/tasks/27-sign-in-email/implementation-log-step-1.md]
 last_verified: 2026-10-07
 verify: grep -q '^EXPO_PUBLIC_SUPABASE_URL_LOCAL=http://127.0.0.1:54321$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_URL_CLOUD=https://gvosanjceygakbubjfkv.supabase.co$' .env.example && grep -q '^EXPO_PUBLIC_SUPABASE_ANON_KEY_CLOUD=$' .env.example && grep -qE '^\[local_smtp\]' supabase/config.toml && grep -qE '^port = 54324' supabase/config.toml && grep -q 'is already defined and IS NOT overwritten' node_modules/@expo/env/build/index.js && grep -qF "mode !== 'test' && \`.env.local\`, \`.env.\${mode}\`, \`.env\`" node_modules/@expo/env/build/index.js
 related: [edge-functions-local-dev-loop, trigram-index-needs-three-characters, cloud-auth-mail-goes-through-resend, phone-is-the-product, maestro-drives-the-native-ui, otp-email-templates-carry-the-code, supabase-target-picked-at-runtime, supabase-config-push-sends-the-whole-root, supabase-client-module-boundary, native-build-toolchain, list-data-scoped-by-rls, select-policy-gates-update-and-delete, supabase-default-grants-defeat-revokes, realtime-is-a-nudge-to-a-per-user-inbox, deletion-is-a-tombstone]
@@ -25,12 +25,10 @@ The branch is made at runtime, not at build — [supabase-target-picked-at-runti
 
 Start Docker Desktop, then `npx supabase start` — always `npx`: the CLI is a devDependency.
 
-**Why local is still the verification path:** the six-digit sign-in code is machine-readable in
-Mailpit, so the whole OTP flow can be driven end to end — by Playwright on web, by Maestro on a
-simulator. On cloud the code lands in a real inbox and a human has to relay it. Nothing local is
-ever sent to a real address; **cloud mail is real mail, sent through Resend from a verified domain
-to any address** — [cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md)
-has the block, the From constraint and what is still unproven about delivery.
+**Why local is still the verification path:** the sign-in code is machine-readable in Mailpit, so
+Playwright (web) and Maestro (simulator) drive OTP end to end; on cloud a human relays it from a real
+inbox. **Cloud mail is real mail, through Resend to any address** —
+[cloud-auth-mail-goes-through-resend](cloud-auth-mail-goes-through-resend.md).
 
 **The cloud schema is kept current with `npx supabase db push`, lags whenever a step adds a
 migration, and reads back from the CLI.** `npx supabase migration list --linked` and `npx supabase
@@ -72,10 +70,15 @@ Three things bite here:
   static check can see that. Read the bundle first.
 
 **A new migration: `npx supabase migration up --local`** applies only what is pending and keeps
-every row, the load-test users below included. **An edited migration or `supabase/config.toml`**
-needs more: `start` on running containers applies nothing, and auth does not reread the config while
-up. "My table isn't there" and "my template override did nothing" clear only with this, which
-**wipes every row**:
+every row, the load-test users below included. **An edited `supabase/config.toml` or email
+template: `npx supabase stop && npx supabase start`** — auth rereads neither while up, and this
+keeps every row too (1,000,039 users survived it, 2026-10-07). `otp-code.html` is bind-mounted into
+kong as a single file, which GoTrue fetches over HTTP; an editor that saves by replacing the file
+leaves the mount on the old copy until another `stop && start`, so check what is served:
+`docker exec supabase_kong_shopping-list cat /home/kong/templates/email/magic_link.html`.
+**Only an edited migration needs `db reset`**, since `start` applies nothing to running containers,
+and it **wipes every row** — `auth` included, so a tab holding an older session then fails its next
+refresh with a 400 on `/auth/v1/token`; clear the site's storage or sign in again:
 
 ```bash
 npx supabase stop && npx supabase start && npx supabase db reset
@@ -93,9 +96,6 @@ sharing test; the script's own cleanup line or a `db reset` removes them.
 lists are load-test `Seed list 43xx`, so **screenshots use `maya3@example.com`, which holds the
 mockups' set**. For paging and the 2,000-row completion cap: `t23lists` has 403 live lists, `Seed
 list 5` 1,000 extra items, and `Seed list 6` 2,100 (`Bulk 1…2100`), past the cap.
-
-**`db reset` wipes the `auth` schema too**: a tab holding an older session fails its next refresh
-with a 400 on `/auth/v1/token`. Nothing is broken — clear the site's storage, or sign in again.
 
 **To simulate being offline, abort requests to port 54321 — not `setOffline`**, which also blocks
 the Metro bundle, so the app never boots. Routing `**/127.0.0.1:54321/**` to `route.abort()` leaves
