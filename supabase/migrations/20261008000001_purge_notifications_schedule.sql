@@ -1,0 +1,11 @@
+-- The nightly job that calls `public.purge_notifications()` (D3).
+--
+-- Its own file for the reason 20260910000001_purge_schedule.sql gives: a migration is applied as one
+-- transaction, and a statement the target refuses rolls back only its own file. Kept apart, a refused
+-- schedule costs the schedule and nothing else, and the purge can still be run by hand. Remember the
+-- price that file names too: an unapplied migration wedges every later `db push`.
+--
+-- 03:35 GMT, five minutes after `purge-deleted`, so the two never compete for the same minute.
+-- Scheduling an existing job name upserts it, so this is safe to re-run. The job runs as `postgres`,
+-- which owns the function, so taking every client grant away cost it nothing.
+select cron.schedule('purge-notifications', '35 3 * * *', $$select public.purge_notifications()$$);
