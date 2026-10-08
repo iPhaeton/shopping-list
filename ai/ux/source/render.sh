@@ -4,7 +4,8 @@
 #   ai/ux/source/render.sh <out-dir> <scene>...
 #
 # Each scene lands as <out-dir>/<scene>-quiet-horizon.png and <scene>-quiet-horizon-moonlit.png, and
-# its fit report (sort-button faces that would clip) is printed. Scenes are the keys of SCENES in mock.js.
+# its fit report (sort-button faces and pill labels that would clip; labels cut to `…` on purpose, apart)
+# is printed. Scenes are the keys of SCENES in mock.js.
 # Env: W H INSET (390 844 47), PORT (8765), CHROME (default: Playwright's newest headless shell).
 set -e
 HERE=${0:A:h}
@@ -34,6 +35,6 @@ for scene in "$@"; do
     echo $file
   done
   report=$($CHROME --disable-gpu --virtual-time-budget=4000 --window-size=$W,$H --dump-dom \
-    "$base&scene=$scene&theme=day" 2>/dev/null | grep -o '"clipped":\[[^]]*\]')
+    "$base&scene=$scene&theme=day" 2>/dev/null | grep -o '"clipped":\[[^]]*\],"ellipsized":\[[^]]*\]')
   echo "  $scene $report"
 done

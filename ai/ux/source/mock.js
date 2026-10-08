@@ -46,6 +46,9 @@ const ICON = {
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke-width="2" stroke-linecap="round"/>',
   arrowUp: '<path d="M12 19V5M6.5 10.5L12 5l5.5 5.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   arrowDown: '<path d="M12 5v14M6.5 13.5L12 19l5.5-5.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  // New (task 28): BellIcon and PersonIcon, same style. Step 3 copies these paths into icons.tsx.
+  bell: '<path d="M6.5 10.5a5.5 5.5 0 0 1 11 0c0 4 1 6 2.5 7H4c1.5-1 2.5-3 2.5-7z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  person: '<circle cx="12" cy="7.5" r="3.5" stroke-width="2"/><path d="M5 20.5c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const icon = (name, color, size) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}">${ICON[name]}</svg>`;
@@ -57,11 +60,13 @@ const GOOGLE_G = `<svg width="20" height="20" viewBox="0 0 18 18">
   <path fill="#34a853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.84-2.2c-.76.53-1.78.9-3.12.9-2.38 0-4.4-1.57-5.12-3.74L.97 13.04C2.45 15.98 5.48 18 9 18z"/>
 </svg>`;
 
-// ---------- IconButton (36 round; fill / 1pt outline) ----------
-function IconButton({ fill, outline, glyph, dot }) {
+// ---------- IconButton (36 round; fill / 1pt outline; dot; disabled) ----------
+function IconButton({ fill, outline, glyph, dot, disabled }) {
   const style = { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' };
   if (fill) style.backgroundColor = fill;
   if (outline) style.border = `1px solid ${outline}`;
+  // Faded as a whole, glyph and circle together (IconButton's `disabled`): Sharing's sole owner.
+  if (disabled) style.opacity = 0.45;
   const d = dot
     ? V({ position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 999, backgroundColor: C.primary, border: `2px solid ${C.skyTop}` })
     : '';
@@ -71,9 +76,11 @@ function IconButton({ fill, outline, glyph, dot }) {
 // ---------- PillButton (sm 36 / md 46 / lg 52; outline, filled, danger; tone danger) ----------
 // Label, as PillButton.tsx's style cascade resolves it: sm 17 NS400, md 16 NS500, lg 17 NS500;
 // filled and danger NS600 at 16 (17 on lg). `style` is layout only — flex, margins, the sides of
-// Account's `snug`/`rest` confirm pills. `icon` is drawn before the label, 12 apart.
+// Account's `snug`/`rest` confirm pills. `icon` is drawn before the label, 12 apart. `ellipsis`: a label
+// that may hold a person's name, which has no length cap, ends in `…` as PillButton's `numberOfLines={1}`
+// cuts it on iOS; the boot reports it under `ellipsized`, not `clipped`.
 const PILL_H = { sm: 36, md: 46, lg: 52 };
-function PillButton({ label, variant = 'outline', tone = 'default', size = 'sm', disabled = false, icon: glyph = '', style = {} }) {
+function PillButton({ label, variant = 'outline', tone = 'default', size = 'sm', disabled = false, icon: glyph = '', ellipsis = false, style = {} }) {
   const filled = variant === 'filled', danger = variant === 'danger';
   const fill = filled ? (disabled ? C.primaryDisabled : C.primary) : danger ? C.error : 'transparent';
   const ring = filled || danger ? fill : C.outline;
@@ -84,8 +91,9 @@ function PillButton({ label, variant = 'outline', tone = 'default', size = 'sm',
   const pill = { height: PILL_H[size], paddingLeft: sides, paddingRight: sides, borderRadius: 999, border: `1px solid ${ring}`, backgroundColor: fill, alignItems: 'center', justifyContent: 'center' };
   if (glyph) pill.gap = 12;
   if (disabled && !filled) pill.opacity = 0.45;
+  const cut = ellipsis ? { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' } : {};
   return R({ ...pill, ...style },
-    glyph + T({ fontFamily: font, fontSize, color: ink, whiteSpace: 'nowrap' }, label).replace('class="t"', 'class="t ptxt"'), 'pill');
+    glyph + T({ fontFamily: font, fontSize, color: ink, whiteSpace: 'nowrap', ...cut }, label).replace('class="t"', `class="t ptxt${ellipsis ? ' ellip' : ''}"`), 'pill');
 }
 
 // ---------- New: AppleAuthenticationButton (expo-apple-authentication) ----------
@@ -313,6 +321,34 @@ function EmptyState({ title, hint, ink }) {
     T({ fontFamily: fontOf.sans, fontSize: 15, color: ink, textAlign: 'center' }, hint));
 }
 
+// ---------- New (task 28): Avatar (src/components/Avatar.tsx) ----------
+// The initial on a disc in one of the first three bands, picked by the account id's hash, so a
+// person keeps their colour everywhere. The harness has no real ids: a person's `id` is their name
+// unless the scene gives one, and `band` pins the colour outright (calibration copies the shot's).
+// 36 (NS500 15) on cards, 30 (NS500 13) in the invite suggestions.
+const AVATAR_BANDS = 3;
+// The colours task 20 step 6's Sharing shots give these three, kept for them on every screen.
+const PEOPLE_BAND = { Maya: 1, Sam: 2, Priya: 0 };
+function avatarHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+function Avatar({ name, id: key = name, band: pinned, size = 36, dot = false }) {
+  const b = band(pinned ?? PEOPLE_BAND[key] ?? avatarHash(key) % AVATAR_BANDS);
+  // The unread dot: IconButton's, 12 pt at the top right, its 2 pt ring in `surface`, the card's
+  // own colour under its `cardFill`, so it reads as cut out of the disc.
+  const d = dot ? V({ position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 999, backgroundColor: C.primary, border: `2px solid ${C.surface}` }).replace('class="v ', 'class="v unread ') : '';
+  return V({ width: size, height: size, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: b.color },
+    T({ fontFamily: fontOf.sansMedium, fontSize: size === 36 ? 15 : 13, color: b.ink }, name.trim().charAt(0).toUpperCase()) + d);
+}
+
+// ---------- New (task 28): ActivityIndicator, iOS's medium spinner ----------
+// 20 pt, eight round spokes fading round the dial, as UIActivityIndicatorView draws it at rest.
+function Spinner(color) {
+  const spokes = Array.from({ length: 8 }, (_, i) => {
+    const a = (i * Math.PI) / 4 - Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
+    return `<path d="M${(10 + 4.6 * c).toFixed(2)} ${(10 + 4.6 * s).toFixed(2)}L${(10 + 8.4 * c).toFixed(2)} ${(10 + 8.4 * s).toFixed(2)}" stroke="${color}" stroke-width="2.3" stroke-linecap="round" opacity="${[1, 0.25, 0.3, 0.35, 0.45, 0.55, 0.7, 0.85][i]}"/>`;
+  }).join('');
+  return `<svg class="spinner" width="20" height="20" viewBox="0 0 20 20" fill="none">${spokes}</svg>`;
+}
+
 // ---------- Status bar and home indicator, as the existing mockups draw them ----------
 function StatusBar() {
   const ink = C.text, faint = isDay ? 'rgba(44,47,78,0.4)' : 'rgba(238,240,250,0.4)';
@@ -320,11 +356,11 @@ function StatusBar() {
     .map(([x, y, h], i) => `<rect x="${x + (W - 390)}" y="${y}" width="3.3" height="${h}" rx="1" fill="${i < 2 ? ink : faint}"/>`).join('');
   const bx = 334.3 + (W - 390);
   const battery = `<rect x="${bx}" y="24.4" width="24.6" height="13" rx="4" fill="none" stroke="${ink}" stroke-width="1.3"/><rect x="${bx + 2.2}" y="26.6" width="20.2" height="8.6" rx="2.2" fill="${ink}"/><path d="M${bx + 25.8} 29.2 a2 2 0 0 1 0 4" fill="${faint}" stroke="${faint}" stroke-width="1.6"/>`;
-  return `<svg class="abs" style="left:0;top:0" width="${W}" height="${INSET}"><text x="34" y="40" font-family="-apple-system, 'SF Pro Text', system-ui" font-weight="600" font-size="18.5" fill="${ink}" letter-spacing="-0.2">9:41</text>${bars}${battery}</svg>`;
+  return `<svg class="abs" style="left:0;top:0;z-index:5" width="${W}" height="${INSET}"><text x="34" y="40" font-family="-apple-system, 'SF Pro Text', system-ui" font-weight="600" font-size="18.5" fill="${ink}" letter-spacing="-0.2">9:41</text>${bars}${battery}</svg>`;
 }
 // iOS picks the indicator's shade from what is under it: dark on the pale bands, light on the dark.
 function HomeIndicator() {
-  return V({ position: 'absolute', left: (W - 134) / 2, top: H - 13, width: 134, height: 5, borderRadius: 3, backgroundColor: 'var(--home)' }).replace('class="v ', 'class="v home ');
+  return V({ position: 'absolute', left: (W - 134) / 2, top: H - 13, width: 134, height: 5, borderRadius: 3, backgroundColor: 'var(--home)', zIndex: 5 }).replace('class="v ', 'class="v home ');
 }
 function shadeHomeIndicator(root) {
   const home = root.querySelector('.home');
@@ -382,10 +418,12 @@ function TextField({ value = '', placeholder, style = {} }) {
 }
 
 // ScreenHeader: Back at inset + HEADER_GAP 13, then the title, serif 40/52, 12 below. The same 1.33 pt
-// lift as List detail's title (iOS sets the glyph higher in a 52 pt line than CSS does).
-function ScreenHeader(title) {
+// lift as List detail's title (iOS sets the glyph higher in a 52 pt line than CSS does). New (task 28):
+// `right`, opposite Back in the same 36 pt row — Notifications' `Blocked people` pill.
+function ScreenHeader(title, right = '') {
+  const row = right ? { height: 36, paddingLeft: 20, paddingRight: 20, alignItems: 'center', justifyContent: 'space-between' } : { height: 36, paddingLeft: 20, paddingRight: 20 };
   return V({ paddingTop: INSET + 13 },
-    R({ height: 36, paddingLeft: 20, paddingRight: 20 }, IconButton({ outline: C.outline, glyph: icon('chevronLeft', C.text, 18) })) +
+    R(row, IconButton({ outline: C.outline, glyph: icon('chevronLeft', C.text, 18) }) + right) +
     T({ marginTop: 12, paddingLeft: 20, paddingRight: 20, fontFamily: fontOf.serif, fontSize: 40, lineHeight: '52px', top: -1.33, color: C.text, whiteSpace: 'nowrap' }, title));
 }
 
@@ -461,9 +499,14 @@ function ListsScreen(s) {
   const SKY_HEIGHT = 520;
   const rows = s.rows || [];
   const ground = band(Math.max(rows.length, 1) - 1);
-  const right = R({ alignItems: 'center', gap: 12 }, headerButton(s) + PillButton({ label: 'Account' }));
+  // Task 28 (D7): three round 36 pt buttons, 12 apart — the mode button, the bell (`unread` puts the
+  // dot on it), the person (Account). `header: 'pill'` keeps the Account pill for `calib-lists`, which
+  // reproduces task 20 step 5's shots.
+  const round = (glyph, dot) => IconButton({ outline: C.outline, glyph: icon(glyph, C.text, 18), dot });
+  const right = R({ alignItems: 'center', gap: 12 }, headerButton(s) +
+    (s.header === 'pill' ? PillButton({ label: 'Account' }) : round('bell', s.unread) + round('person')));
   const titleRow = R({ alignItems: 'center', justifyContent: 'space-between', paddingTop: INSET + 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 12 },
-    T({ fontFamily: fontOf.serif, fontSize: 40, color: C.text }, 'My Lists') + right);
+    T({ fontFamily: fontOf.serif, fontSize: 40, color: C.text }, 'My Lists').replace('class="t"', 'class="t title"') + right.replace('class="v row ', 'class="v row actions '));
   const header = V({},
     V({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }, Sky(SKY_HEIGHT)) +
     titleRow + slot(s) + (s.coverage ? CoverageLine(s.coverage) : '') +
@@ -549,16 +592,27 @@ function AccountScreen(s) {
     PillButton({ label: 'Sign out', size: 'lg' }) +
     (s.everywhere ? confirm('This signs every device out, not just this one.', 'Yes, sign out everywhere') : PillButton({ label: 'Sign out of all devices', size: 'lg', tone: 'danger' })));
   const deleteCard = del ? actionCard(del) : '';
+  // New (task 28): `blocked` adds the Blocked people card between Appearance and the sign-out card,
+  // one outline pill at the action cards' size.
+  const blockedCard = s.blocked ? actionCard(PillButton({ label: 'Blocked people', size: 'lg' })) : '';
 
+  return Framed(s, 'Account', '',
+    V({ marginTop: 12, paddingLeft: 20, paddingRight: 20, gap: 10 }, profile + appearance + blockedCard + signOut + deleteCard));
+}
+
+// Account's frame: the fixed ScreenSky, and one scroll view holding the header, `body`, the spacer
+// (flex 1, at least 64) and HorizonFooter. Scrolled (`scroll`, `reveal`, `end`), the sky's top slice is
+// redrawn over the status bar, as Backdrop does. `end` scrolls to the very bottom, as a paged screen
+// sits once its loaded page has been scrolled through. Notifications and Blocked people use it too.
+function Framed(s, title, right, body) {
   const content = V({ minHeight: H },
-    ScreenHeader('Account') +
-    V({ marginTop: 12, paddingLeft: 20, paddingRight: 20, gap: 10 }, profile + appearance + signOut + deleteCard) +
+    ScreenHeader(title, right) + body +
     V({ flex: '1 1 0', minHeight: 64 }) + HorizonFooter());
   const scroll = s.scroll || 0;
   return V({ width: W, height: H, overflow: 'hidden', backgroundColor: C.skyTop },
     V({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, ScreenSky()) +
     V({ position: 'absolute', top: -scroll, left: 0, right: 0 }, content, 'content') +
-    (scroll || s.reveal ? V({ position: 'absolute', top: 0, left: 0, right: 0, height: INSET, overflow: 'hidden' }, ScreenSky()) : '') +
+    (scroll || s.reveal || s.end ? V({ position: 'absolute', top: 0, left: 0, right: 0, height: INSET, overflow: 'hidden' }, ScreenSky()) : '') +
     StatusBar() + HomeIndicator());
 }
 
@@ -589,6 +643,141 @@ function SignInScreen(s) {
     V({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, Landscape()) +
     V({ position: 'absolute', top: 0, left: 0, right: 0 }, content, 'content') +
     StatusBar() + HomeIndicator());
+}
+
+// ---------- New (task 28): Notifications and Blocked people, on Account's frame ----------
+// Cards x 20–370, 10 apart, the first 12 under the title, padded 14/13 with a 36 avatar 13 from the
+// text, as Sharing's member cards are. While another page is on its way (`more`), the spinner sits
+// centred under the last card, 12 above and below it, as Lists draws its own under its last row; the
+// landscape follows, as on Account.
+const ROLE_ARTICLE = { reader: 'a reader', writer: 'a writer', owner: 'an owner' };
+const NextPage = () => V({ alignItems: 'center', paddingTop: 12, paddingBottom: 12 }, Spinner(C.text));
+// Sharing's confirm: the sentence (15/21 `textSecondary`), then Cancel and the danger pill, half each, 11 apart.
+function HalfConfirm(sentence, yes) {
+  return V({ marginTop: 10 },
+    T({ fontFamily: fontOf.sans, fontSize: 15, lineHeight: '21px', color: C.textSecondary }, sentence).replace('class="t"', 'class="t confirm"') +
+    R({ gap: 11, marginTop: 10 }, PillButton({ label: 'Cancel', size: 'md', style: { flex: '1 1 0' } }) + PillButton({ label: yes, variant: 'danger', size: 'md', style: { flex: '1 1 0' } })));
+}
+
+// One notification. `kind`: `invite` (to the invitee), `accepted` / `declined` (an answer, to the
+// inviter). An invite's `state`: `pending` (Decline, Accept, Block), `joined`, `declined`, `unavailable`.
+// The sentence is 16/22 with both names at 600 — all of it at 600 while `unread`, with the dot on the
+// avatar. Resolved and unavailable invitations are muted (`textSecondary`) and have no actions. A
+// card that opens its list (`You joined`, an accepted answer while the list is held) carries the
+// chevron, centred on its right edge, the whole card being the button.
+function NotificationCard(n) {
+  const resolved = n.kind === 'invite' && n.state !== 'pending';
+  const ink = resolved ? C.textSecondary : C.text;
+  const verb = { invite: ' invited you to ', accepted: ' accepted your invitation to ', declined: ' declined your invitation to ' }[n.kind];
+  const span = (t, bold) => `<span style="font-family:${bold || n.unread ? fontOf.sansSemiBold : fontOf.sans}">${esc(t)}</span>`;
+  const sentence = el('div', 't sentence', { fontFamily: fontOf.sans, fontSize: 16, lineHeight: '22px', color: ink }, span(n.actor, true) + span(verb, false) + span(n.list, true));
+  // The line under it: a pending invitation's role and age; a resolved one's outcome in the role's
+  // place (`You joined` at 600 in `text`, the rest `textSecondary`); an answer's age alone.
+  const STATUS = { joined: 'You joined', declined: 'Declined', unavailable: 'No longer available' };
+  const lead = resolved
+    ? `<span style="font-family:${n.state === 'joined' ? fontOf.sansSemiBold : fontOf.sans};color:${n.state === 'joined' ? C.text : C.textSecondary}">${STATUS[n.state]}</span> · `
+    : n.kind === 'invite' ? `as ${ROLE_ARTICLE[n.role]} · ` : '';
+  const meta = el('div', 't meta', { marginTop: 2, fontFamily: fontOf.sans, fontSize: 14, lineHeight: '19px', color: C.textSecondary }, lead + esc(n.age));
+  const link = (n.kind === 'invite' && n.state === 'joined') || (n.kind === 'accepted' && n.held !== false);
+  const row = R({ gap: 13, alignItems: 'flex-start' },
+    V({ marginTop: 2 }, Avatar({ name: n.actor, dot: n.unread })) +
+    V({ flex: '1 1 0' }, sentence + meta) +
+    (link ? V({ alignSelf: 'center' }, icon('chevronRight', C.text, 16)) : ''));
+  const actions = n.kind !== 'invite' || n.state !== 'pending' ? ''
+    : n.confirm
+      ? HalfConfirm(`${n.actor} will be told you declined, and you won't see invitations from them any more. Unblock them any time under Blocked people.`, 'Block')
+      : R({ gap: 11, marginTop: 12 }, PillButton({ label: 'Decline', size: 'md', style: { flex: '1 1 0' } }) + PillButton({ label: 'Accept', variant: 'filled', size: 'md', style: { flex: '1 1 0' } })) +
+        PillButton({ label: `Block ${n.actor}`, size: 'md', tone: 'danger', ellipsis: true, style: { marginTop: 10 } });
+  return Card({ paddingLeft: 14, paddingRight: 14, paddingTop: 13, paddingBottom: 13 }, row + actions);
+}
+
+function NotificationsScreen(s) {
+  const items = s.items || [];
+  // The way to Blocked people: a small outline pill opposite Back, there on every page and on the empty
+  // state, since a pill after the last card would wait on every page loading first.
+  const right = PillButton({ label: 'Blocked people' });
+  const body = items.length
+    ? V({ marginTop: 12, paddingLeft: 20, paddingRight: 20, gap: 10 }, items.map(NotificationCard).join('')) + (s.more ? NextPage() : '')
+    : EmptyState({ title: 'No notifications yet', hint: 'Invitations to shared lists show up here.', ink: C.text });
+  return Framed(s, 'Notifications', right, body);
+}
+
+// One blocked person: the avatar, the name (wrapping, never cut), and Unblock — one tap, no confirm,
+// since nothing is lost by it.
+function BlockedCard(p) {
+  return Card({ paddingLeft: 14, paddingRight: 14, paddingTop: 13, paddingBottom: 13 },
+    R({ gap: 13, alignItems: 'center' },
+      Avatar({ name: p.name }) +
+      T({ flex: '1 1 0', fontFamily: fontOf.sans, fontSize: 17, color: C.text }, p.name).replace('class="t"', 'class="t person"') +
+      PillButton({ label: p.pending ? 'Unblocking…' : 'Unblock' })));
+}
+
+function BlockedPeopleScreen(s) {
+  const people = s.people || [];
+  const body = people.length
+    ? V({ marginTop: 12, paddingLeft: 20, paddingRight: 20, gap: 10 }, people.map(BlockedCard).join('')) + (s.more ? NextPage() : '')
+    : EmptyState({ title: "You haven't blocked anyone", hint: 'People you block from Notifications show up here.', ink: C.text });
+  return Framed(s, 'Blocked people', '', body);
+}
+
+// ---------- New (task 28): SharingScreen (src/screens/SharingScreen.tsx) ----------
+// List detail's pinned header — Back, the title (serif 40/52), an owner's invite bar 14 under it —
+// over Hillside on band 0, then the roster on band 0's land: `People with access` (serif 24/32, 11
+// under the land's top), cards x 20–370 10 apart, padded 14/13; a 36 avatar, the name 13 after it,
+// the control on the right; an owner's role picker (compact) 10 below. The hint (15.5/22) 10 under the
+// cards, in `textSecondary` where that passes AA on band 0, else band 0's ink (tokens.mjs `landHint`).
+// Scene: `manageable` (an owner's view, default), `button` (the bar's, `Share` before task 28),
+// `members` ({ name, role, you, band }), `invited` ({ name, role, age, band }) — the Invited section.
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// The read-only role: a 28 pill in the `outline` ring, 15 sans, the node's `owner` capitalised.
+const Badge = (role) => R({ height: 28, paddingLeft: 13, paddingRight: 13, borderRadius: 999, border: `1px solid ${C.outline}`, alignItems: 'center', justifyContent: 'center' },
+  T({ fontFamily: fontOf.sans, fontSize: 15, color: C.text, whiteSpace: 'nowrap' }, cap(role)));
+function SharingScreen(s) {
+  const ground = band(0);
+  const manageable = s.manageable !== false;
+  const members = s.members || [];
+  const owners = members.filter((m) => m.role === 'owner');
+  const soleOwner = owners.length === 1 && owners[0].you;
+  const headerRow = R({ height: 36, alignItems: 'center', paddingLeft: 20, paddingRight: 20 }, IconButton({ outline: C.outline, glyph: icon('chevronLeft', C.text, 18) }));
+  const title = T({ marginTop: 10, paddingLeft: 20, paddingRight: 20, fontFamily: fontOf.serif, fontSize: 40, lineHeight: '52px', top: -1.33, color: C.text, whiteSpace: 'nowrap' }, 'Sharing');
+  const bar = manageable ? V({ marginTop: 14 }, AddBar({ placeholder: 'Start typing a name', button: s.button || 'Share', disabled: true })) : '';
+  // Raised over Hillside (`top`'s zIndex 1), so the bar's shadow falls on the strip below it.
+  const block = V({ paddingTop: INSET + 13, zIndex: 1 },
+    V({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, '<div class="skyfill"></div>') + headerRow + title + bar);
+  const header = V({ backgroundColor: C.skyHorizon }, block + Hillside({ ground: ground.color }));
+
+  const nameText = (t) => T({ flex: '1 1 0', fontFamily: fontOf.sans, fontSize: 17, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, t);
+  const card = (html) => Card({ paddingLeft: 14, paddingRight: 14, paddingTop: 13, paddingBottom: 13 }, html);
+  const memberCard = (m) => {
+    const locked = m.you && soleOwner;
+    const control = manageable
+      ? IconButton({ fill: C.controlFill, glyph: icon('trash', C.text, 16), disabled: locked })
+      : m.you ? PillButton({ label: 'Leave list', tone: 'danger' }) : Badge(m.role);
+    const picker = manageable
+      ? V({ marginTop: 10, opacity: locked ? 0.45 : 1 }, SegmentedPicker({ options: ['Reader', 'Writer', 'Owner'], checked: cap(m.role), size: 'compact' }))
+      : '';
+    return card(R({ alignItems: 'center', gap: 13 }, Avatar({ name: m.name, band: m.band }) + nameText(m.you ? `${m.name} (you)` : m.name) + control) + picker);
+  };
+  // New (task 28): an owner's Invited section — the avatar, the name over `Invited 2 d ago` (14/19
+  // `textSecondary`), the role badge, and the withdraw button: CloseIcon on `controlFill`, as Remove's
+  // trash is.
+  const invitedCard = (p) => card(R({ alignItems: 'center', gap: 13 },
+    Avatar({ name: p.name, band: p.band }) +
+    V({ flex: '1 1 0' }, T({ fontFamily: fontOf.sans, fontSize: 17, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, p.name) + T({ fontFamily: fontOf.sans, fontSize: 14, lineHeight: '19px', color: C.textSecondary }, `Invited ${p.age}`).replace('class="t"', 'class="t meta"')) +
+    Badge(p.role) + IconButton({ fill: C.controlFill, glyph: icon('close', C.text, 16) })));
+  const heading = (t, marginTop) => T({ marginTop, fontFamily: fontOf.serif, fontSize: 24, lineHeight: '32px', color: C.text }, t).replace('class="t"', 'class="t heading"');
+  const hint = (t) => T({ marginTop: 10, paddingLeft: 4, paddingRight: 4, fontFamily: fontOf.sans, fontSize: 15.5, lineHeight: '22px', color: C.landHint }, t);
+  const invited = manageable && s.invited && s.invited.length
+    ? heading('Invited', 24) + V({ marginTop: 10, gap: 10 }, s.invited.map(invitedCard).join(''))
+    : '';
+  const body = V({ paddingLeft: 20, paddingRight: 20 },
+    heading('People with access', 11) +
+    V({ marginTop: 10, gap: 10 }, members.map(memberCard).join('')) +
+    (manageable && soleOwner ? hint('A list must keep at least one owner.') : '') +
+    (manageable ? '' : hint('Only an owner can change who has access.')) +
+    invited);
+  return V({ width: W, height: H, overflow: 'hidden', backgroundColor: ground.color },
+    V({ paddingBottom: INSET_BOTTOM + 24 }, header + body) + StatusBar() + HomeIndicator());
 }
 
 function headerButton(s) {
@@ -625,10 +814,37 @@ const APPLE = { type: 'CONTINUE', order: 'first', day: 'BLACK', night: 'WHITE' }
 const RELAY = 'k2x9dqvmp7@privaterelay.appleid.com';
 const RELAY_NOTE = 'This address hides your real email. On another iPhone, use Sign in with Apple. On Android or the web, sign in with this address, and Apple forwards the code to your inbox.';
 
+// Task 28. Newest first; two unread. `Maya` and `Weekend BBQ` stand for any name and list.
+const N = (kind, actor, list, extra) => ({ kind, actor, list, ...extra });
+const NOTIFICATIONS = [
+  N('invite', 'Maya', 'Weekend BBQ', { role: 'writer', age: '2 min ago', state: 'pending', unread: true }),
+  N('accepted', 'Sam', 'Camping trip', { age: '1 h ago', unread: true }),
+  N('invite', 'Alex', 'Hardware store', { role: 'owner', age: '5 h ago', state: 'joined' }),
+  N('declined', 'Jordan', 'Pharmacy', { age: '1 d ago' }),
+  N('invite', 'Sam', 'Ski trip', { role: 'writer', age: '2 d ago', state: 'declined' }),
+  N('invite', 'Priya', 'Birthday party', { role: 'reader', age: '3 d ago', state: 'unavailable' }),
+  N('invite', 'Priya', 'Book club', { role: 'reader', age: '4 d ago', state: 'pending' }),
+];
+// No cap on a name's length (`set_name` checks only the 3-character minimum), nor on a list's.
+const LONG_NAME = 'Maximilian Alexander Fitzgerald-Montgomery';
+const LONG_LIST = "Grandma's 90th birthday garden party supplies";
+const OLDER_NOTIFICATIONS = [
+  N('invite', 'Riley', 'Moving house', { role: 'writer', age: '8 d ago', state: 'joined' }),
+  N('declined', 'Casey', 'Christmas dinner', { age: '10 d ago' }),
+  N('invite', 'Jordan', 'Groceries', { role: 'reader', age: '12 d ago', state: 'declined' }),
+  // An accepted answer for a list the inviter has since left: no chevron.
+  N('accepted', 'Priya', 'Pharmacy', { age: '14 d ago', held: false }),
+  N('invite', LONG_NAME, LONG_LIST, { role: 'writer', age: '19 d ago', state: 'pending' }),
+  N('declined', 'Alex', 'Garden centre', { age: '23 d ago' }),
+  N('invite', 'Sam', 'Old groceries', { role: 'writer', age: '27 d ago', state: 'unavailable' }),
+];
+const MANY_BLOCKED = ['Riley', 'Casey', 'Morgan', 'Taylor', 'Jamie', 'Quinn', 'Avery', LONG_NAME, 'Drew', 'Robin'].map((name) => ({ name }));
+
 const SCENES = {
   // Calibration: the app as task 20 step 5 shot it on the 17e.
   'calib-lists': {
     screen: 'lists',
+    header: 'pill',
     slot: { kind: 'add', placeholder: 'New list name', button: 'Create', disabled: true },
     toggle: { checked: false, label: 'Show 24 deleted' },
     rows: [L('Groceries'), L('Hardware store'), L('Pharmacy'), L('Weekend BBQ', 'writer'), L('Birthday party', 'reader'), L('Camping trip')],
@@ -726,6 +942,45 @@ const SCENES = {
   // A relay address (Hide My Email) with Share beside it, and how to sign in elsewhere under it.
   // Share leaves the address too little room for one line, so it wraps, between letters.
   'account-screen-hidden-email': { ...ACCOUNT, email: RELAY, appearance: AUTO, del: 'rest', relayNote: RELAY_NOTE, share: true },
+
+  // Task 28: invitations, notifications and blocking. The four `lists-screen-*` scenes above now draw
+  // the round header; this one adds the bell's dot to Lists at rest.
+  'lists-screen-unread': {
+    screen: 'lists',
+    button: PLUS,
+    unread: true,
+    slot: { kind: 'search', placeholder: 'Search lists', value: '', sorts: listSorts() },
+    toggle: { checked: false, label: 'Show deleted' },
+    rows: [L('Groceries'), L('Hardware store'), L('Pharmacy'), L('Weekend BBQ', 'writer'), L('Birthday party', 'reader'), L('Camping trip')],
+  },
+  'notifications-screen': { screen: 'notifications', items: NOTIFICATIONS },
+  // The end of the loaded page: older notifications, the long name and list, and the next page's spinner.
+  'notifications-screen-more': { screen: 'notifications', items: OLDER_NOTIFICATIONS, more: true, end: true },
+  'notifications-screen-block-confirm': { screen: 'notifications', items: [{ ...NOTIFICATIONS[0], confirm: true }, ...NOTIFICATIONS.slice(1)] },
+  'notifications-screen-empty': { screen: 'notifications', items: [] },
+  'blocked-people-screen': { screen: 'blocked', people: [{ name: 'Maya' }, { name: 'Jordan' }, { name: 'Alex' }] },
+  'blocked-people-screen-more': { screen: 'blocked', people: MANY_BLOCKED, more: true, end: true },
+  'blocked-people-screen-empty': { screen: 'blocked', people: [] },
+  'account-screen-blocked': { ...ACCOUNT, appearance: AUTO, del: 'rest', blocked: true },
+  // A check, not a mockup: the delete confirm's `reveal` with the extra card above it.
+  'check-account-blocked-delete-confirm': { ...ACCOUNT, appearance: AUTO, del: 'confirm', reveal: true, blocked: true },
+  'sharing-screen-invited': {
+    screen: 'sharing',
+    button: 'Invite',
+    members: [{ name: 'Maya', role: 'owner', you: true }, { name: 'Sam', role: 'writer' }],
+    invited: [{ name: 'Priya', role: 'reader', age: '5 h ago' }, { name: 'Jordan', role: 'writer', age: '2 d ago' }],
+  },
+
+  // Calibration: Sharing as task 20 step 6 shot it on the 18 Pro (render at w=402 h=874 inset=62).
+  'calib-sharing': {
+    screen: 'sharing',
+    members: [{ name: 'Maya', role: 'owner', you: true }, { name: 'Sam', role: 'writer' }, { name: 'Priya', role: 'reader' }],
+  },
+  'calib-sharing-member': {
+    screen: 'sharing',
+    manageable: false,
+    members: [{ name: 'Sam', role: 'owner' }, { name: 'Maya', role: 'writer', you: true }, { name: 'Priya', role: 'reader' }],
+  },
 };
 
 // ---------- Boot ----------
@@ -734,7 +989,7 @@ const SCENES = {
   C = tokens[THEME];
   const s = SCENES[SCENE];
   const root = document.getElementById('root');
-  root.innerHTML = { lists: ListsScreen, detail: ListDetailScreen, account: AccountScreen, signIn: SignInScreen }[s.screen](s);
+  root.innerHTML = { lists: ListsScreen, detail: ListDetailScreen, account: AccountScreen, signIn: SignInScreen, notifications: NotificationsScreen, blocked: BlockedPeopleScreen, sharing: SharingScreen }[s.screen](s);
   // SkyFill measures its region, as the component does.
   for (const holder of root.querySelectorAll('.skyfill')) {
     const box = holder.parentElement.getBoundingClientRect();
@@ -748,6 +1003,11 @@ const SCENES = {
     const over = cards[cards.length - 1].getBoundingClientRect().bottom - (H - INSET_BOTTOM);
     if (over > 0) { root.querySelector('.content').style.top = px(-over); shadeHomeIndicator(root); }
   }
+  if (s.end) {
+    const content = root.querySelector('.content');
+    content.style.top = px(-(content.getBoundingClientRect().height - H));
+    shadeHomeIndicator(root);
+  }
   // Report any segment title that does not fit its segment.
   const fit = [...root.querySelectorAll('.sortbtn')].map((b) => {
     const t = b.querySelector('.seg'), need = t.scrollWidth + (b.querySelector('svg') ? 20 : 0);
@@ -759,7 +1019,10 @@ const SCENES = {
     const need = t.scrollWidth + (svg ? svg.getBoundingClientRect().width + 12 : 0);
     return [t.textContent, need, p.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)];
   });
-  const clipped = [...fit, ...pillFit].filter(([, need, room]) => need > room + 0.5).map(([f]) => f);
+  const over = ([, need, room]) => need > room + 0.5;
+  // A label ending in `…` on purpose (`ellipsis`) is reported apart: iOS cuts it the same way.
+  const ellipsized = pillFit.filter((f, i) => over(f) && [...root.querySelectorAll('.pill')][i].querySelector('.ellip')).map(([f]) => f);
+  const clipped = [...fit, ...pillFit].filter(over).map(([f]) => f).filter((f) => !ellipsized.includes(f));
   const top = (txt) => { const e = [...root.querySelectorAll('.t')].find((t) => t.textContent === txt); return e ? +e.closest('.row').getBoundingClientRect().top.toFixed(1) : null; };
   const rect = (e) => e ? [+e.getBoundingClientRect().top.toFixed(1), +e.getBoundingClientRect().bottom.toFixed(1)] : null;
   // A text's line count, and its widest line's width against the width it has.
@@ -770,7 +1033,19 @@ const SCENES = {
     return { rect: rect(e), lines: Math.round(e.getBoundingClientRect().height / lineHeight), need: +range.getBoundingClientRect().width.toFixed(1), room: e.clientWidth };
   };
   const framed = s.screen === 'account' || s.screen === 'signIn';
-  const m = !q.get('measure') ? undefined : framed ? {
+  // A text node's own extent: its glyphs, not its box.
+  const ink = (e) => { if (!e) return null; const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect(); return [+b.left.toFixed(1), +b.right.toFixed(1)]; };
+  const cardsOf = () => [...root.querySelectorAll('.card')].map(rect);
+  const m = !q.get('measure') ? undefined : ['notifications', 'blocked', 'sharing'].includes(s.screen) ? {
+    cards: cardsOf(),
+    sentences: [...root.querySelectorAll('.sentence')].map((e) => lines(e, 22)),
+    people: [...root.querySelectorAll('.person')].map((e) => lines(e, 23)),
+    confirms: [...root.querySelectorAll('.confirm')].map((e) => ({ rect: rect(e), lines: Math.round(e.getBoundingClientRect().height / 21) })),
+    headings: [...root.querySelectorAll('.heading')].map((e) => [e.textContent, rect(e)]),
+    pills: pillFit.map(([f, need, room]) => [f, +need.toFixed(1), +room.toFixed(1)]),
+    spinner: rect(root.querySelector('.spinner')),
+    content: root.querySelector('.content') ? +root.querySelector('.content').getBoundingClientRect().height.toFixed(1) : null,
+  } : framed ? {
     cards: [...root.querySelectorAll('.card')].map(rect),
     confirms: [...root.querySelectorAll('.confirm')].map((e) => ({ rect: rect(e), lines: Math.round(e.getBoundingClientRect().height / 21) })),
     pills: pillFit.map(([f, need, room]) => [f, +need.toFixed(1), +room.toFixed(1)]),
@@ -785,6 +1060,11 @@ const SCENES = {
     sorts: rect(root.querySelector('.sortbtn')),
     toggle: s.toggle ? top(s.toggle.label) : null,
     firstRow: s.rows && s.rows.length ? rect([...root.querySelectorAll('.t')].find((t) => t.textContent === (s.rows[0].name || s.rows[0].title)).closest('.row').parentElement) : null,
+    // Lists' header fit (task 28): the title's last glyph, the buttons' extent, and the gap between.
+    ...(s.screen === 'lists' ? (() => {
+      const t = ink(root.querySelector('.title')), a = root.querySelector('.actions').getBoundingClientRect();
+      return { title: t, actions: [+a.left.toFixed(1), +a.right.toFixed(1)], gap: +(a.left - t[1]).toFixed(1) };
+    })() : {}),
   };
-  document.title = JSON.stringify({ ready: true, clipped, segs: fit, m });
+  document.title = JSON.stringify({ ready: true, clipped, ellipsized, segs: fit, m });
 })();

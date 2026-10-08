@@ -1,8 +1,11 @@
 # Mockup harness
 
 Draws the PNGs in `ai/ux/primary/` from the app's own tokens, fonts and component geometry: Lists and List detail since
-task 24 step 1, Account and Sign in since task 25 step 1, Apple's sign-in button since task 26 step 1. Task 20 step 6's harness for the Sharing mockups was lost, which
-is why this one lives in the repo. Change a mockup by editing a scene and re-rendering, never by hand-editing a PNG.
+task 24 step 1, Account and Sign in since task 25 step 1, Apple's sign-in button since task 26 step 1, and Sharing,
+Notifications and Blocked people since task 28 step 2. Task 20 step 6's harness for the Sharing mockups was lost, which
+is why this one lives in the repo; Sharing was ported back from `SharingScreen.tsx` and calibrated (below). The
+`sharing-screen-*` mockups the lost harness drew are not re-rendered from this one. Change a mockup by editing a scene and
+re-rendering, never by hand-editing a PNG.
 
 ## Render
 
@@ -14,6 +17,8 @@ ai/ux/source/render.sh <out-dir> <scene>...     # e.g. render.sh /tmp/m lists-sc
   = 390×844 pt @3x. Copy the ones you mean into `ai/ux/primary/`. Never overwrite a mockup the user has not asked to
   change.
 - The script prints, per scene, `"clipped":[…]`: sort-button faces and pill labels that would not fit. It should be empty.
+  Then `"ellipsized":[…]`: labels cut to `…` on purpose (`PillButton`'s `ellipsis`, for a label holding a person's
+  name, which has no length cap), as `numberOfLines={1}` cuts them on iOS.
 - Needs Node ≥ 23.6 (type stripping), `python3`, and Playwright's `chrome-headless-shell`
   (`npx playwright install chromium-headless-shell`, or set `CHROME`). Env: `W H INSET` (390 844 47), `PORT` (8765).
 - It regenerates `tokens.json` (git-ignored) from `src/theme.ts` and `src/state/bands.ts`, then serves the repo root,
@@ -24,31 +29,47 @@ ai/ux/source/render.sh <out-dir> <scene>...     # e.g. render.sh /tmp/m lists-sc
 | file | what |
 |---|---|
 | `mock.html` | `@font-face` for Nunito Sans 400/500/600 and Source Serif 4 400; `.v` = React Native's View defaults (flex column, `border-box`, no shrink) |
-| `mock.js` | the components (`Sky`, `ScreenSky`, `Horizon`, `Hillside`, `HorizonFooter`, `Landscape`, `SkyFill`, `Band`, `ListRow`, `ItemRow`, `AddBar`, `PillButton` (sm/md/lg; outline, filled, danger; tone danger), `IconButton`, `SegmentedPicker` (regular/compact/small; card/surface track), `Card`, `TextField`, `ScreenHeader`, `ErrorBanner`, toggle, `EmptyState`, search field, sort buttons, coverage line, the Google G, `AppleButton`, status bar, home indicator), four screens, and `SCENES` |
-| `tokens.mjs` | writes `tokens.json`: both palettes plus `bandList` = `bandAt(palette, 0..63)` |
+| `mock.js` | the components (`Sky`, `ScreenSky`, `Horizon`, `Hillside`, `HorizonFooter`, `Landscape`, `SkyFill`, `Band`, `ListRow`, `ItemRow`, `AddBar`, `PillButton` (sm/md/lg; outline, filled, danger; tone danger; `ellipsis`), `IconButton` (`dot`, `disabled`), `SegmentedPicker` (regular/compact/small; card/surface track), `Card`, `TextField`, `ScreenHeader` (an optional element opposite Back), `ErrorBanner`, toggle, `EmptyState`, search field, sort buttons, coverage line, the Google G, `AppleButton`, `Avatar` (with the unread dot), `Spinner` (iOS's medium `ActivityIndicator`), Sharing's role `Badge` and half-width confirm, `NotificationCard`, `BlockedCard`, status bar, home indicator), seven screens, `Framed` (Account's frame, shared by Notifications and Blocked people), and `SCENES`. Glyphs in `ICON`, `bell` and `person` among them |
+| `tokens.mjs` | writes `tokens.json`: both palettes plus `bandList` = `bandAt(palette, 0..63)` and `landHint` (SharingScreen's hint colour on band 0, by the app's `contrastRatio`) |
 | `render.sh` | the export above |
 | `offsets.py` | calibration: best (dx, dy) per region between a render and a simulator shot |
 
 Page parameters: `scene`, `theme` (`day`/`night`), `w`, `h`, `inset`, `insetBottom`, and `measure=1`, which adds rects
-(pt) to `document.title`. Lists and List detail report the field, sort row, toggle and first row. Account and Sign in
-report each card, each confirm sentence with its line count, every pill's label width against its room, Apple's button,
-the email address and the hidden-email sentence (each with its line count and widest line against its room), the content
-height, the scroll, and the safe area's bottom. Read the title with `chrome-headless-shell --dump-dom`.
+(pt) to `document.title`. Lists and List detail report the field, sort row, toggle and first row; Lists also the title's
+glyph extent, the header buttons' extent and the `gap` between them. Account and Sign in report each card, each confirm
+sentence with its line count, every pill's label width against its room, Apple's button, the email address and the
+hidden-email sentence (each with its line count and widest line against its room), the content height, the scroll, and
+the safe area's bottom. Notifications, Blocked people and Sharing report each card, each notification sentence and
+blocked name with its line count, the confirm, the section headings, every pill's label against its room, the spinner and
+the content height. Read the title with `chrome-headless-shell --dump-dom`.
 
 A scene is a plain object, keyed by `screen`:
 
 - `lists`/`detail`: `button` (header button glyph and dot), `slot` (`add` / `sentence` / `search`), `coverage`,
-  `toggle`, `rows`, `empty`.
-- `account`: `email`, `name`, `appearance` (`checked`, or `'theme'` for the theme's own value; `next` per theme),
+  `toggle`, `rows`, `empty`. Lists' header is three round buttons since task 28 (the mode button, the bell, the person);
+  `unread` puts the dot on the bell, and `header: 'pill'` keeps the old Account pill, set only in `calib-lists`.
+- `account`: `blocked` (the Blocked people card between Appearance and the sign-out card), `email`, `name`, `appearance` (`checked`, or `'theme'` for the theme's own value; `next` per theme),
   `editing`, `everywhere`, `del` (`rest`/`confirm`), `delError`, `scroll`, and `reveal`, which scrolls just far enough
   that the last card ends at the safe area's bottom, as opening the delete confirm does. `relayNote` puts the
   hidden-email sentence under the address, and `share` a `Share` pill beside it. An address too long for its line
   breaks between characters, as iOS breaks a word with no break opportunity.
 - `signIn`: the email phase; `notice` adds the notice above the title, and `apple` Apple's button (`type`; `order`,
   `first` or `last`, beside Google; `day` and `night`, its `buttonStyle` per theme).
+- `notifications`: `items`, newest first, each `{ kind, actor, list, role, age, state, unread, held, confirm }` — `kind`
+  `invite` (to the invitee; `state` `pending`, `joined`, `declined` or `unavailable`) or `accepted`/`declined` (an answer,
+  to the inviter; `held: false` drops the chevron of a list no longer held); `confirm` opens the Block confirm. `more`
+  draws the next page's spinner under the last card; `end` scrolls to the bottom, as a paged screen sits at the end of
+  its loaded page. No items: the empty state.
+- `blocked`: `people` (`{ name }`), `more`, `end`.
+- `sharing`: `manageable` (an owner's view, the default), `button` (the bar's: `Share` before task 28, `Invite` after),
+  `members` (`{ name, role, you, band }`), `invited` (`{ name, role, age, band }`, the Invited section).
+- An avatar's colour is its id's hash over the first three bands, as in the app; the harness has no ids, so the name
+  stands in, and `PEOPLE_BAND` pins Maya, Sam and Priya to the colours the Sharing shots give them. `check-*` scenes are
+  measurements, not mockups: never copy them into `ai/ux/primary/`.
 
 Phone sizes, for `measure` (`w h inset insetBottom`): 17e 390 844 47 34 (the canvas); 18 Pro 402 874 62 34 (inset
-measured off task 24 step 3's shots); 13 mini 375 812 50 34; SE 375 667 20 0.
+measured off task 24 step 3's shots, and again off task 20 step 6's: Back's top at 75 pt); 13 mini 375 812 50 34; SE 375
+667 20 0.
 
 ## Calibration
 
@@ -68,6 +89,16 @@ measured off task 24 step 3's shots); 13 mini 375 812 50 34; SE 375 667 20 0.
     (30/38) −1.33.
   - Cards blur what is behind them with `backdrop-filter` (15 px), which the headless shell honours. Card fills come
     within 4 levels of the simulator's in both themes.
+- The `calib-sharing` and `calib-sharing-member` scenes reproduce task 20 step 6's 18 Pro shots
+  (`ai/tasks/20-ux/screenshots/step-6/sharing-{day,night}.png`, `sharing-member-{day,night}.png`), rendered at
+  `W=402 H=874 INSET=62` (task 28 step 2).
+  - Every region is within 0.33 pt, day and night: Back, title, the invite bar, its placeholder and `Share`, the sun, the
+    land's edge, `People with access`, each card, avatar, name, trash, role picker, badge, `Leave list`, and the hint.
+    The heading sits 0.33 pt lower than iOS sets it (serif 24 in a 32 line), left uncorrected at the noise floor.
+  - Colours: band 0's land, the sky, avatars and the checked segment exact; card fills within 1 level by day and 4 by
+    night, as Account's.
+  - SharingScreen raises its header block over `Hillside` (`zIndex: 1`), so the invite bar's shadow falls on the strip;
+    the status bar and home indicator are drawn at `zIndex` 5 to stay over it.
 - **`AppleButton`'s inside is calibrated against the iPhone 18 Pro simulator** (task 26 step 2). Apple draws the
   native button's inside (logo, words, font, colours); only its frame is design. `APPLE_INSIDE` sizes the title (SF Pro
   Medium, `-apple-system`) at 38.7% of the height and the logo (the system font's U+F8FF) at 36.5%, 6.7 pt apart: at
