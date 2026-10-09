@@ -63,7 +63,8 @@ type Answer = 'accept' | 'decline' | 'block';
  *
  * **Block (D5) is a confirm on the card, then a reload.** The database drops every card from that
  * person, so the reload takes them off every loaded page. **A return to this screen reloads too**:
- * from Blocked people, an unblock brings that person's cards back, and nothing nudges about it.
+ * from Blocked people, an unblock brings that person's cards back, and only their restored
+ * invitations nudge about it.
  * Only a focus after a blur counts — the focus that comes with the push itself finds the mount's
  * read already on its way.
  *

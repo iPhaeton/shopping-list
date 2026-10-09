@@ -20,10 +20,11 @@ so that one pass sees the task's end state.
 
 ## Inputs
 
-- **The logs:** `implementation-log-step-1.md`, `-2.md`, `-3.md` and `-4.md`, each ending in its
-  **KB candidates** section.
+- **The logs:** `implementation-log-step-1.md`, `-2.md`, `-3.md`, `-4.md` and `-4-unblock.md`, each
+  ending in its **KB candidates** section.
   - Where they disagree, the log of the step that landed later wins, because it records the later
-    state.
+    state. `-4-unblock.md` is a follow-up to step 4 and landed last: on what an unblock restores,
+    it overrides steps 1 and 4.
   - Steps 1 and 2 may land in either order, so check which came first.
 - **The base:** the parent of the task's first step commit. Find it with `git log --oneline`. Task
   commits are named like `27-sign-in-email-1`.
@@ -34,7 +35,7 @@ so that one pass sees the task's end state.
 
 - Run `/librarian deposit 28`.
 - **Change one thing in the command's step 1.** The command is written for a single step's log.
-  Hand the planner all four log paths and the base, and tell it they are one task's deposit. Hand
+  Hand the planner all five log paths and the base, and tell it they are one task's deposit. Hand
   it nothing else.
 - Everything else is as the command says:
   1. save the plan on `Mode: groups`;
@@ -50,9 +51,9 @@ the planner decides each one under the admission test in [CHARTER.md](../../kb/C
 
 | entry | from |
 |---|---|
-| scope-boundaries | steps 3 and 4, as one rewrite. **In:** invitations between existing accounts — Sharing invites, nobody joins without accepting, the inviter hears accept and decline, an owner may withdraw, and everything expires after 30 days. **In:** an in-app Notifications screen, paged 100 at a time, with no push or badge (D6). **In:** blocking, for invitations only (D5) — invisible to the blocked person except as one decline; unblocking does not revive suppressed invitations. **Still out:** the stranger invite (`list_invites`), and a wider block. The entry's "`share_list` takes only a resolved user id" becomes `invite_to_list` |
+| scope-boundaries | steps 3 and 4, as one rewrite. **In:** invitations between existing accounts — Sharing invites, nobody joins without accepting, the inviter hears accept and decline, an owner may withdraw, and everything expires after 30 days. **In:** an in-app Notifications screen, paged 100 at a time, with no push or badge (D6). **In:** blocking, for invitations only (D5) — invisible to the blocked person except as one decline; unblocking restores every suppressed invitation still pending, as an unread notification dated when it was sent (the step 4 follow-up). **Still out:** the stranger invite (`list_invites`), and a wider block. The entry's "`share_list` takes only a resolved user id" becomes `invite_to_list` |
 | session-still-valid-guards-writes | steps 1 and 3: seven new guarded RPCs, and `share_list` dropped, so eighteen. The `verify:`'s awk takes each function's latest `create` and does not see `drop function`, so it still lists `share_list` |
-| realtime-is-a-nudge-to-a-per-user-inbox | steps 1 and 3: a second event on the same topic (`notifications/changed`, from `notify_recipient`); `notify_list_members` on a fourth table, `list_invitations`; the app side — `onNotifications` on the same channel, `lastNotificationsNudge`, and `NotificationsContext`'s debounced count |
+| realtime-is-a-nudge-to-a-per-user-inbox | steps 1 and 3: a second event on the same topic (`notifications/changed`, from `notify_recipient`); `notify_list_members` on a fourth table, `list_invitations`; the app side — `onNotifications` on the same channel, `lastNotificationsNudge`, and `NotificationsContext`'s debounced count. From the step 4 follow-up: an unblock nudges the unblocker once per restored invitation, and never for the notifications that were only hidden |
 | list-data-scoped-by-rls | step 1: three RPC-only tables, with no policy and no grant. The invitation RPCs keep the list-then-rows lock order |
 | deletion-is-a-tombstone | step 1: `purge_notifications`, a second nightly hard delete, for rows that are never tombstoned |
 | limit-checks-pass-an-applied-resend | step 1: `accept_invitation` checks membership before inserting, because the limit trigger fires ahead of `on conflict` |

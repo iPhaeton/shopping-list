@@ -40,8 +40,8 @@ const NONE: BlockedUser[] = [];
  * **Unblock is one tap, with no confirm** — nothing is lost by it. The row goes from the screen and
  * the cursor stays as it was: the next page continues from the cursor's values, not from its row,
  * so a dropped row never makes it skip one. The bell's count is re-read, because that person's
- * unread notifications count again and no nudge says so. Unblocks are independent, so each pill
- * waits only on its own.
+ * unread notifications count again, and only their restored invitations nudge about it. Unblocks
+ * are independent, so each pill waits only on its own.
  *
  * Laid out on Account's frame, as Notifications is.
  */

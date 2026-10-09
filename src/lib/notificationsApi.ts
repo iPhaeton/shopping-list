@@ -183,8 +183,8 @@ export async function declineInvitation(invitationId: string): Promise<Result> {
 /**
  * Declines the invitation, as `declineInvitation` does, and blocks the inviter (D2, D5). Takes the
  * invitation, never a user id: blocking is only offered on one. The inviter hears an ordinary
- * decline and nothing more; their other pending invitations to this account go quiet, and every
- * notification from them is hidden while the block stands.
+ * decline and nothing more; their other pending invitations to this account go quiet until an
+ * unblock, and every notification from them is hidden while the block stands.
  */
 export async function blockInviter(invitationId: string): Promise<Result> {
   const { error, status } = await supabase.rpc('block_inviter', { p_invitation_id: invitationId });
@@ -192,8 +192,9 @@ export async function blockInviter(invitationId: string): Promise<Result> {
 }
 
 /**
- * Lifts a block. Their notifications show again; the invitations suppressed meanwhile stay
- * suppressed. No nudge follows — no notification row changes — so the caller re-reads the count.
+ * Lifts a block. Their notifications show again, and each of their invitations still pending comes
+ * back as an unread notification dated when it was sent. Those nudge this account; the ones that
+ * were only hidden come back with no nudge, so the caller re-reads the count.
  */
 export async function unblockUser(userId: string): Promise<Result> {
   const { error, status } = await supabase.rpc('unblock_user', { p_user_id: userId });
