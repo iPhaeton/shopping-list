@@ -27,10 +27,11 @@ function stubChannel() {
   return channel;
 }
 
-/** The broadcast handler the module registered, as Realtime would call it. */
-function deliver(channel: ReturnType<typeof stubChannel>, payload?: unknown) {
-  const handler = channel.on.mock.calls[0][2] as (message: unknown) => void;
-  handler({ event: 'list/changed', payload });
+/** The broadcast handler the module registered for `event`, as Realtime would call it. */
+function deliver(channel: ReturnType<typeof stubChannel>, payload?: unknown, event = 'list/changed') {
+  const call = channel.on.mock.calls.find(([, filter]) => (filter as { event: string }).event === event);
+  const handler = call?.[2] as (message: unknown) => void;
+  handler({ event, payload });
 }
 
 /** The status callback the module passed to `subscribe`. */
@@ -46,17 +47,55 @@ beforeEach(() => {
 it('joins the private inbox topic for the account', async () => {
   const channel = stubChannel();
 
-  subscribeToChanges(USER, jest.fn(), jest.fn());
+  subscribeToChanges(USER, jest.fn(), jest.fn(), jest.fn());
 
   expect(supabase.channel).toHaveBeenCalledWith(`user:${USER}`, { config: { private: true } });
   expect(channel.on).toHaveBeenCalledWith('broadcast', { event: 'list/changed' }, expect.any(Function));
+});
+
+/** One topic, one channel: the notifications event rides on the same subscription (task 28). */
+it('listens for notification changes on the same channel', async () => {
+  const channel = stubChannel();
+
+  subscribeToChanges(USER, jest.fn(), jest.fn(), jest.fn());
+
+  expect(supabase.channel).toHaveBeenCalledTimes(1);
+  expect(channel.on).toHaveBeenCalledWith(
+    'broadcast',
+    { event: 'notifications/changed' },
+    expect.any(Function)
+  );
+});
+
+it('hands a notifications nudge to its own handler, and not to the lists one', async () => {
+  const channel = stubChannel();
+  const onChange = jest.fn();
+  const onNotifications = jest.fn();
+
+  subscribeToChanges(USER, onChange, jest.fn(), onNotifications);
+  deliver(channel, { source: 'notifications', op: 'INSERT' }, 'notifications/changed');
+
+  expect(onNotifications).toHaveBeenCalledTimes(1);
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+it('hands a list nudge to its own handler, and not to the notifications one', async () => {
+  const channel = stubChannel();
+  const onChange = jest.fn();
+  const onNotifications = jest.fn();
+
+  subscribeToChanges(USER, onChange, jest.fn(), onNotifications);
+  deliver(channel, { listId: 'l1' });
+
+  expect(onChange).toHaveBeenCalledWith('l1');
+  expect(onNotifications).not.toHaveBeenCalled();
 });
 
 it('decodes the list id from the payload', async () => {
   const channel = stubChannel();
   const onChange = jest.fn();
 
-  subscribeToChanges(USER, onChange, jest.fn());
+  subscribeToChanges(USER, onChange, jest.fn(), jest.fn());
   deliver(channel, { listId: 'l1' });
 
   expect(onChange).toHaveBeenCalledTimes(1);
@@ -73,7 +112,7 @@ it.each([
   const channel = stubChannel();
   const onChange = jest.fn();
 
-  subscribeToChanges(USER, onChange, jest.fn());
+  subscribeToChanges(USER, onChange, jest.fn(), jest.fn());
   deliver(channel, payload);
 
   expect(onChange).toHaveBeenCalledWith(undefined);
@@ -84,7 +123,7 @@ it('does not treat the first connection as a resubscribe', async () => {
   const channel = stubChannel();
   const onResubscribe = jest.fn();
 
-  subscribeToChanges(USER, jest.fn(), onResubscribe);
+  subscribeToChanges(USER, jest.fn(), onResubscribe, jest.fn());
 
   report(channel, 'CLOSED');
   report(channel, 'CHANNEL_ERROR');
@@ -97,7 +136,7 @@ it('reports a reconnect, and nothing else', async () => {
   const channel = stubChannel();
   const onResubscribe = jest.fn();
 
-  subscribeToChanges(USER, jest.fn(), onResubscribe);
+  subscribeToChanges(USER, jest.fn(), onResubscribe, jest.fn());
 
   report(channel, 'SUBSCRIBED');
   expect(onResubscribe).not.toHaveBeenCalled();
@@ -110,7 +149,7 @@ it('reports a reconnect, and nothing else', async () => {
 it('closes the channel when its caller is done with it', async () => {
   const channel = stubChannel();
 
-  subscribeToChanges(USER, jest.fn(), jest.fn())();
+  subscribeToChanges(USER, jest.fn(), jest.fn(), jest.fn())();
 
   expect(supabase.removeChannel).toHaveBeenCalledWith(channel);
 });

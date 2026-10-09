@@ -424,9 +424,11 @@ export async function setItemDone(itemId: string, done: boolean): Promise<Result
 }
 
 /**
- * Shared with `membersApi.ts`, the sharing/roster RPCs' seam: those calls are answered while the
- * user is still looking at the screen that caused them, so they keep the database's own words
- * rather than the rewritten sentences `writeResult` below gives the seven outbox writes.
+ * Shared with `membersApi.ts` and `notificationsApi.ts`, the online-only RPCs' seams: those calls
+ * are answered while the user is still looking at the screen that caused them, so they keep the
+ * database's own words rather than the rewritten sentences `writeResult` below gives the seven
+ * outbox writes — all but a limit refusal at `acceptInvitation`, which is about the person holding
+ * the phone and is rephrased there.
  */
 export function resultFor(error: Failure, status: number): Result {
   if (!error) return { error: null, verdict: 'ok' };
@@ -446,8 +448,8 @@ const SESSION_REVOKED_MESSAGE = 'this device has been signed out';
  * that caused them.
  *
  * **Only these are rephrased.** The membership RPCs keep the database's own words and must: they are
- * answered while the user is still looking at the screen that caused them, and `share_list`'s "that
- * account no longer exists" is already the right sentence at the right moment. Rewriting those
+ * answered while the user is still looking at the screen that caused them, and `invite_to_list`'s
+ * "that account no longer exists" is already the right sentence at the right moment. Rewriting those
  * would replace a specific, useful message with a vague one.
  */
 function writeResult(error: Failure, status: number, data?: unknown): Result {
@@ -479,9 +481,9 @@ function humanize(error: NonNullable<Failure>): string {
     case '23514':
       return 'That change is no longer valid.';
 
-    // The three limits. The database's words are about somebody else — they are written for the
-    // Sharing screen, which shows them as they are — so a list you created or restored, or an item
-    // you added, is told about in the second person instead.
+    // The three limits. The database's words are about somebody else — they are written for an
+    // owner promoting a member on the Sharing screen, which shows them as they are — so a list you
+    // created or restored, or an item you added, is told about in the second person instead.
     case LIMIT_CODES.ownedLists:
       return OWNED_LISTS_FULL;
     case LIMIT_CODES.lists:
@@ -510,9 +512,9 @@ function verdictFor(code: string, status: number): Exclude<Verdict, 'ok'> {
   if (code === '23505') return 'applied';
 
   // PostgREST answers `P0002` with 500 — measured, 2026-09-08 — and a 500 otherwise means "the
-  // server is having a moment, send it again". The sharing RPCs raise it for "no account with that
-  // email yet", which is the most likely thing to go wrong on the share screen and will never
-  // succeed on a retry. As with 23505, the code decides and the status does not.
+  // server is having a moment, send it again". The invitation RPCs raise it for "that account no
+  // longer exists" and "this invitation is no longer open", neither of which will ever succeed on
+  // a retry. As with 23505, the code decides and the status does not.
   if (code === 'P0002') return 'permanent';
 
   // A limit. These do arrive as 400 — measured, 2026-10-01 — but they are named rather than left to

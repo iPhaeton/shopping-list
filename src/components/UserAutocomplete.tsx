@@ -22,14 +22,19 @@ type Props = {
   /** What the parent currently holds selected — gates the search and hides the suggestion list once
    * something is picked, without this component duplicating state the parent already owns. */
   selected: UserSuggestion | null;
-  /** Whether `Share` is live — the parent's call: somebody picked, and nothing in flight. */
-  canShare: boolean;
-  onShare: () => void;
+  /** Whether `Invite` is live — the parent's call: somebody picked, and nothing in flight. */
+  canInvite: boolean;
+  onInvite: () => void;
+  /**
+   * The list being shared. An owner is then not offered its members, nor anyone already invited to
+   * it — the database filters them before picking five (task 28; backlog #23).
+   */
+  listId?: string;
   disabled?: boolean;
 };
 
 /**
- * Sharing's invite bar: `AddBar`'s pill — the name field with `Share` inside it, as Lists and List
+ * Sharing's invite bar: `AddBar`'s pill — the name field with `Invite` inside it, as Lists and List
  * detail put their Create and Add — suggesting at most 5 other accounts as you type, debounced so
  * every keystroke doesn't fire a query.
  *
@@ -46,8 +51,9 @@ export function UserAutocomplete({
   onChangeText,
   onSelect,
   selected,
-  canShare,
-  onShare,
+  canInvite,
+  onInvite,
+  listId,
   disabled = false,
 }: Props) {
   const styles = useStyles();
@@ -68,7 +74,7 @@ export function UserAutocomplete({
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
-        const { users } = await searchUsers(trimmed);
+        const { users } = await searchUsers(trimmed, listId);
         if (!cancelled) setSuggestions(users ?? []);
       })();
     }, DEBOUNCE_MS);
@@ -77,7 +83,7 @@ export function UserAutocomplete({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [value, selected]);
+  }, [value, selected, listId]);
 
   return (
     <View>
@@ -87,9 +93,9 @@ export function UserAutocomplete({
         placeholder="Start typing a name"
         accessibilityLabel="Name"
         autoCapitalize="words"
-        buttonLabel="Share"
-        canSubmit={canShare}
-        onSubmit={onShare}
+        buttonLabel="Invite"
+        canSubmit={canInvite}
+        onSubmit={onInvite}
       />
       {suggestions.length > 0 ? (
         <Card style={styles.suggestions}>
@@ -97,7 +103,7 @@ export function UserAutocomplete({
             <Pressable
               key={user.userId}
               accessibilityRole="button"
-              accessibilityLabel={`Share with ${user.name}`}
+              accessibilityLabel={`Invite ${user.name}`}
               accessibilityState={{ disabled }}
               disabled={disabled}
               onPress={() => onSelect(user)}

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text } from 'react-native';
 
 import { writeCachedLists } from '../lib/listCache';
@@ -124,6 +124,7 @@ const unsubscribe = jest.fn();
 /** Captured so a test can deliver a nudge, or a reconnect, the way the database would. */
 let nudge: (listId?: string) => void;
 let resubscribe: () => void;
+let notificationsNudge: () => void;
 
 const USER = 'u1';
 
@@ -177,9 +178,10 @@ beforeEach(async () => {
   api.setListDeleted.mockResolvedValue(OK);
   api.setItemDeleted.mockResolvedValue(OK);
 
-  jest.mocked(subscribeToChanges).mockImplementation((_userId, onChange, onResubscribe) => {
+  jest.mocked(subscribeToChanges).mockImplementation((_userId, onChange, onResubscribe, onNotifications) => {
     nudge = onChange;
     resubscribe = onResubscribe;
+    notificationsNudge = onNotifications;
     return unsubscribe;
   });
 });
@@ -199,6 +201,7 @@ function Probe() {
     pending,
     blocked,
     lastNudge,
+    lastNotificationsNudge,
     createList,
     renameList,
     addItem,
@@ -217,6 +220,11 @@ function Probe() {
   } = useLists();
   // The last completion's outcome, and the way to stop the one running.
   const [completion, setCompletion] = useState('none');
+  // How many times `lastNotificationsNudge` has moved — it carries nothing but its own identity.
+  const [notificationsNudges, setNotificationsNudges] = useState(0);
+  useEffect(() => {
+    if (lastNotificationsNudge) setNotificationsNudges((n) => n + 1);
+  }, [lastNotificationsNudge]);
   const stop = useRef(new AbortController());
   const completeWith = (run: (signal: AbortSignal) => Promise<string>) => {
     stop.current = new AbortController();
@@ -230,6 +238,7 @@ function Probe() {
       <Text>{`pending: ${pending}`}</Text>
       <Text>{`blocked: ${blocked ? blocked.op.type : 'none'}`}</Text>
       <Text>{`lastNudge: ${lastNudge ? (lastNudge.listId ?? 'all') : 'none'}`}</Text>
+      <Text>{`notifications nudges: ${notificationsNudges}`}</Text>
       <Text>{`list cursors: ${listCursors.live?.id ?? 'end'}, ${listCursors.bin?.id ?? 'end'}`}</Text>
       <Text>{`list counts: ${listCounts.owned} owned, ${listCounts.total} in total`}</Text>
       <Text>{`read epoch: ${readEpoch}`}</Text>
@@ -842,6 +851,33 @@ it('records a nudge with no list as "all", the same case a resubscribe is', asyn
 
   await act(async () => resubscribe());
 
+  expect(screen.getByText('lastNudge: all')).toBeOnTheScreen();
+});
+
+/**
+ * `lastNotificationsNudge` is for `NotificationsContext` and the Notifications screen (task 28): a
+ * fresh object per `notifications/changed`, so each one moves it, and a lists nudge does not.
+ */
+it('moves the notifications nudge on each notifications event, and only on those', async () => {
+  await renderProbe();
+  expect(screen.getByText('notifications nudges: 0')).toBeOnTheScreen();
+
+  await act(async () => notificationsNudge());
+  await act(async () => notificationsNudge());
+  expect(screen.getByText('notifications nudges: 2')).toBeOnTheScreen();
+
+  await act(async () => nudge('l1'));
+  expect(screen.getByText('notifications nudges: 2')).toBeOnTheScreen();
+  expect(screen.getByText('lastNudge: l1')).toBeOnTheScreen();
+});
+
+/** A reconnect may have missed either kind of nudge, so it moves both. */
+it('moves both nudges on a resubscribe', async () => {
+  await renderProbe();
+
+  await act(async () => resubscribe());
+
+  expect(screen.getByText('notifications nudges: 1')).toBeOnTheScreen();
   expect(screen.getByText('lastNudge: all')).toBeOnTheScreen();
 });
 

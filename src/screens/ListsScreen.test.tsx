@@ -7,6 +7,7 @@ import { fetchListCounts, fetchLists, insertList, setListDeleted } from '../lib/
 import { subscribeToChanges } from '../lib/listsChannel';
 import type { ListsScreenProps } from '../navigation/types';
 import { ListsProvider } from '../state/ListsContext';
+import { useNotifications } from '../state/NotificationsContext';
 import { SortProvider } from '../state/SortContext';
 import type { BinCursor, Cursor, List } from '../state/types';
 import { ListsScreen } from './ListsScreen';
@@ -39,11 +40,18 @@ jest.mock('../lib/listsApi', () => ({
 /** The provider opens a realtime channel once it is ready; stubbed so no websocket is involved. */
 jest.mock('../lib/listsChannel', () => ({ subscribeToChanges: jest.fn(() => () => {}) }));
 
+/**
+ * The bell reads only the unread count, so the count's provider is stood in for at its hook — its
+ * own suite covers how the count is read.
+ */
+jest.mock('../state/NotificationsContext', () => ({ useNotifications: jest.fn() }));
+
 // The provider queues writes on disk now; without this each test inherits the last one's outbox.
 // The served lists too: a test that serves none means an empty account, not the last test's.
 beforeEach(async () => {
   await AsyncStorage.clear();
   serveLists([]);
+  jest.mocked(useNotifications).mockReturnValue({ unread: 0, refreshUnread: jest.fn() });
 });
 
 /** What `App.tsx` mounts above the screens: the remembered sorts, then the signed-in lists. */
@@ -221,7 +229,8 @@ it('navigates to the list when a row is pressed', async () => {
 /**
  * The title row's Account button replaced the native header's since task 20 step 3 — drawn inside
  * the screen itself, as part of the sky/horizon composition, and reached with `navigation` as a
- * prop like everything else here, never a hook.
+ * prop like everything else here, never a hook. Since task 28 it is a glyph, the person, and its
+ * label is all it says: still `Account`.
  */
 it('opens Account when the Account button is pressed', async () => {
   const { navigation } = await renderScreen();
@@ -229,6 +238,34 @@ it('opens Account when the Account button is pressed', async () => {
   await fireEvent.press(screen.getByLabelText('Account'));
 
   expect(navigation.navigate).toHaveBeenCalledWith('Account');
+});
+
+// --- Notifications (task 28) --------------------------------------------------------------------
+
+it('opens Notifications from the bell', async () => {
+  const { navigation } = await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Notifications'));
+
+  expect(navigation.navigate).toHaveBeenCalledWith('Notifications');
+});
+
+/** The dot is for the eye; a screen reader hears how many, after the label. */
+it('says how many notifications are unread', async () => {
+  jest.mocked(useNotifications).mockReturnValue({ unread: 2, refreshUnread: jest.fn() });
+
+  await renderScreen();
+
+  expect(screen.getByLabelText('Notifications')).toHaveAccessibilityValue({ text: '2 unread' });
+});
+
+/** `null` is a count not yet read — a cold start offline — which shows no dot rather than a guess. */
+it.each([0, null])('says nothing more about the bell when the count is %p', async (unread) => {
+  jest.mocked(useNotifications).mockReturnValue({ unread, refreshUnread: jest.fn() });
+
+  await renderScreen();
+
+  expect(screen.getByLabelText('Notifications')).not.toHaveAccessibilityValue({ text: expect.anything() });
 });
 
 // --- The bin ------------------------------------------------------------------------------------

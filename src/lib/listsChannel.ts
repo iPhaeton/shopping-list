@@ -2,7 +2,9 @@ import { supabase } from './supabase';
 
 /**
  * The one live connection: your own inbox topic, where the database drops a nudge whenever a list you
- * belong to changes.
+ * belong to changes (`list/changed`), and whenever one of your notifications is added, answered,
+ * read or withdrawn (`notifications/changed`, task 28). Two events, one channel: the topic is the
+ * account, and a second channel on the same topic would be a second subscription to the same inbox.
  *
  * A module beside `listsApi` rather than inside it, because a subscription is not a query — it has a
  * lifetime, and that module's promise is "every read and write of list data". The seam is the same
@@ -12,7 +14,8 @@ import { supabase } from './supabase';
  * **The message is a nudge, and answering it is the caller's business.** The payload carries a list
  * id and nothing about *what* changed, so `onChange` decodes only that much: it means "re-read this
  * list", which is a code path the app already has. See the migration for why the rest of the payload
- * is deliberately left undecoded.
+ * is deliberately left undecoded. `onNotifications` decodes nothing at all: it means "re-read your
+ * notifications".
  *
  * `private: true` is what makes the server evaluate the `realtime.messages` select policy at join —
  * without it the channel is a public room anyone could listen to. supabase-js re-authenticates the
@@ -31,7 +34,8 @@ export function subscribeToChanges(
    * nothing could have been missed before the channel existed, and the caller's own mount fetch
    * already has current truth.
    */
-  onResubscribe: () => void
+  onResubscribe: () => void,
+  onNotifications: () => void
 ): () => void {
   // Sees only whether this channel has ever reached `SUBSCRIBED` before, not whether it is currently
   // connected — a second `SUBSCRIBED` on the same instance is a reconnect by definition, since the
@@ -44,6 +48,7 @@ export function subscribeToChanges(
       const { listId } = message.payload ?? {};
       onChange(typeof listId === 'string' ? listId : undefined);
     })
+    .on('broadcast', { event: 'notifications/changed' }, () => onNotifications())
     .subscribe((status) => {
       if (status !== 'SUBSCRIBED') return;
       if (connected) onResubscribe();

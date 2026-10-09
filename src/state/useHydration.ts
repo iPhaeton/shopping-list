@@ -171,8 +171,9 @@ export function useHydration({
    * matching a failed nudge-triggered `hydrate`: silent.
    *
    * No counts are read, and none are dispatched, so the ones in state stand: a few named lists say
-   * nothing about the rest, and the counts already carry this device's own writes. Somebody else's
-   * share or removal reaches them at the next full `hydrate` — approximate, by design.
+   * nothing about the rest, and the counts already carry this device's own writes. A removal by
+   * somebody else, or an invitation accepted on another device, reaches them at the next full
+   * `hydrate` — approximate, by design.
    *
    * The list cursors are read **at the same moment as `previous`** and dispatched unchanged. Read
    * later, a scroll page that landed mid-fetch would be dropped from `lists` by the replace while

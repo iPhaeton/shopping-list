@@ -11,9 +11,10 @@ import { CoverageLine } from '../components/CoverageLine';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Horizon } from '../components/Horizon';
+import { IconButton } from '../components/IconButton';
+import { BellIcon, PersonIcon } from '../components/icons';
 import { ListRow } from '../components/ListRow';
 import { ModeButton } from '../components/ModeButton';
-import { PillButton } from '../components/PillButton';
 import { SearchField } from '../components/SearchField';
 import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { Sky } from '../components/Sky';
@@ -25,6 +26,7 @@ import type { ListsScreenProps } from '../navigation/types';
 import { arrangeLists, isDefaultSort, nextSort, type SortKey } from '../state/arrange';
 import { bandAt } from '../state/bands';
 import { useLists } from '../state/ListsContext';
+import { useNotifications } from '../state/NotificationsContext';
 import { binLists, inDeletionOrder, liveLists } from '../state/listsReducer';
 import { canManageList } from '../state/roles';
 import { useSorts } from '../state/SortContext';
@@ -68,6 +70,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
     readEpoch,
   } = useLists();
   const { listSort, setListSort } = useSorts();
+  const { unread } = useNotifications();
 
   // Local, and deliberately not remembered: the bin is somewhere you go on purpose, so arriving
   // here should always show the live lists.
@@ -121,7 +124,8 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
 
   // At either list limit the Create bar gives way to the sentence saying so, rather than letting a
   // list appear and vanish a moment later when the database refuses it. The counts are approximate
-  // — another member's share moves them unseen — so this is a warning, never the enforcement.
+  // — another member's removal, or an invitation accepted on another device, moves them unseen — so
+  // this is a warning, never the enforcement.
   const full = listLimitSentence(listCounts);
 
   // Whether a scroll to the end has anything to fetch — in the stream on screen only, so live mode
@@ -145,6 +149,9 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
     [navigation]
   );
   const openAccount = useCallback(() => navigation.navigate('Account'), [navigation]);
+  const openNotifications = useCallback(() => navigation.navigate('Notifications'), [navigation]);
+  // `null` until the count is first read: no dot and no value, rather than a guess.
+  const anyUnread = unread !== null && unread > 0;
 
   const switchMode = () => {
     if (shownMode === 'search') setFocusCreate(true);
@@ -227,9 +234,21 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
         <Text accessibilityRole="header" style={styles.title}>
           My Lists
         </Text>
+        {/* Three round 36pt buttons (task 28, D7): the mode button, the bell, and the person. Glyphs
+            only, so each says what it is through its label alone — `Account` kept from the pill. */}
         <View style={styles.titleActions}>
           {modeButton}
-          <PillButton label="Account" onPress={openAccount} />
+          <IconButton
+            label="Notifications"
+            value={anyUnread ? `${unread} unread` : undefined}
+            outline={colors.outline}
+            dot={anyUnread}
+            onPress={openNotifications}>
+            <BellIcon color={colors.text} />
+          </IconButton>
+          <IconButton label="Account" outline={colors.outline} onPress={openAccount}>
+            <PersonIcon color={colors.text} />
+          </IconButton>
         </View>
       </View>
       {loading ? (

@@ -71,6 +71,8 @@ function as(session) {
       body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
   }
 
   return {
@@ -87,6 +89,17 @@ function as(session) {
       return { id, items };
     },
   };
+}
+
+// Nobody joins a list without accepting (task 28): `from` invites, and `to` accepts the invitation
+// its newest notifications carry.
+async function share(from, to, listId, role) {
+  await from.rpc('invite_to_list', { p_list_id: listId, p_user_id: to.userId, p_role: role });
+  const notifications = await to.rpc('my_notifications', { p_limit: 100 });
+  const invitation = notifications.find(
+    (row) => row.kind === 'list_invitation' && row.list_id === listId && row.status === 'pending'
+  );
+  await to.rpc('accept_invitation', { p_invitation_id: invitation.invitation_id });
 }
 
 const [ownerEmail = 'maya@example.com', memberEmail = 'sam@example.com'] = process.argv.slice(2);
@@ -109,20 +122,20 @@ for (const title of ['Sourdough bread', 'Olive oil', 'Bananas']) {
 await owner.rpc('set_item_deleted', { p_item_id: groceries.items['Paper towels'], p_deleted: true });
 await owner.list('Hardware store', []);
 await owner.list('Pharmacy', []);
-await owner.rpc('share_list', { p_list_id: groceries.id, p_user_id: member.userId, p_role: 'writer' });
+await share(owner, member, groceries.id, 'writer');
 
 // Shared with the owner: one they can edit, one read-only.
 const bbq = await member.list('Weekend BBQ', ['Charcoal', 'Sausages', 'Corn on the cob', 'Lemonade']);
 const party = await member.list('Birthday party', ['Candles', 'Balloons', 'Cake', 'Napkins']);
-await member.rpc('share_list', { p_list_id: bbq.id, p_user_id: owner.userId, p_role: 'writer' });
-await member.rpc('share_list', { p_list_id: party.id, p_user_id: owner.userId, p_role: 'reader' });
+await share(member, owner, bbq.id, 'writer');
+await share(member, owner, party.id, 'reader');
 
 // The Sharing mockups' people (ai/ux/primary/sharing-screen-*): Priya reads Groceries and the
 // member's Birthday party, and three names starting "Jor" answer the invite field's suggestions.
 const priya = as(await signIn('priya@example.com'));
 await priya.rpc('set_name', { p_name: 'Priya' });
-await owner.rpc('share_list', { p_list_id: groceries.id, p_user_id: priya.userId, p_role: 'reader' });
-await member.rpc('share_list', { p_list_id: party.id, p_user_id: priya.userId, p_role: 'reader' });
+await share(owner, priya, groceries.id, 'reader');
+await share(member, priya, party.id, 'reader');
 for (const name of ['Jordan', 'Jorge', 'Jorja']) {
   await as(await signIn(`${name.toLowerCase()}@example.com`)).rpc('set_name', { p_name: name });
 }

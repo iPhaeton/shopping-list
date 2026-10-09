@@ -35,11 +35,11 @@ appId: com.shoppingloop.app
 - waitForAnimationToEnd
 - inputText: Jor
 - extendedWaitUntil:
-    visible: "Share with .*"
+    visible: "Invite .*"
     timeout: 15000
 - takeScreenshot: sharing-suggestions-${THEME}
-# Picked: the role picker shows in the header's strip and Share goes live. Nothing is shared.
-- tapOn: "Share with .*"
+# Picked: the role picker shows in the header's strip and Invite goes live. Nobody is invited.
+- tapOn: "Invite .*"
 - takeScreenshot: sharing-picked-${THEME}
 # The keyboard stays up — `hideKeyboard` on iOS swipes the content — and covers nothing tapped next:
 # the header, Back included, is pinned at the top.

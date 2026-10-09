@@ -60,6 +60,13 @@ type ListsContextValue = {
    * same listId twice in a row, so an effect keyed on it always re-fires. */
   lastNudge: { listId: string | undefined } | null;
   /**
+   * The most recent `notifications/changed` nudge — one of this account's notifications was added,
+   * answered, read or withdrawn — for `NotificationsContext`'s unread count and the Notifications
+   * screen, which hold their state outside this reducer. Like `lastNudge`, a fresh object every time,
+   * and bumped on a resubscribe too, since anything sent while the socket was down is gone.
+   */
+  lastNotificationsNudge: object | null;
+  /**
    * How many reads of the database have succeeded since mount. There is no connectivity library, so
    * a read that succeeds is how the app learns it is back online: a screen whose completion of a
    * stream failed restarts it when this moves. Bumped by every full re-read that dispatched, and by
@@ -156,6 +163,7 @@ export function ListsProvider({
   const [pending, setPending] = useState(0);
   const [blocked, setBlocked] = useState<Blocked | null>(null);
   const [lastNudge, setLastNudge] = useState<{ listId: string | undefined } | null>(null);
+  const [lastNotificationsNudge, setLastNotificationsNudge] = useState<object | null>(null);
 
   // The outbox in memory, and the flush loop's own bookkeeping. Refs rather than state because the
   // loop reads them between awaits and has to see what was enqueued while it was waiting.
@@ -367,13 +375,20 @@ export function ListsProvider({
    * Gated on `'ready'` because a fetch before the mount hydration has settled would race it, and
    * `lists/loaded` replaces list state wholesale.
    */
+  //
+  // A resubscribe may have missed either kind of nudge, so it stands for both.
   useEffect(() => {
     if (status !== 'ready') return;
     const onNudge = (listId?: string) => {
       refreshSoon(listId);
       setLastNudge({ listId });
     };
-    return subscribeToChanges(userId, onNudge, onNudge);
+    const onNotifications = () => setLastNotificationsNudge({});
+    const onResubscribe = () => {
+      onNudge();
+      onNotifications();
+    };
+    return subscribeToChanges(userId, onNudge, onResubscribe, onNotifications);
   }, [userId, status, refreshSoon]);
 
   const value = useMemo(
@@ -387,6 +402,7 @@ export function ListsProvider({
       pending,
       blocked,
       lastNudge,
+      lastNotificationsNudge,
       readEpoch,
       createList,
       renameList,
@@ -415,6 +431,7 @@ export function ListsProvider({
       pending,
       blocked,
       lastNudge,
+      lastNotificationsNudge,
       readEpoch,
       createList,
       renameList,

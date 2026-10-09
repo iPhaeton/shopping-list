@@ -11,6 +11,8 @@ export type RootStackParamList = {
   /** Who else has access. Reachable by every member, not only by an owner. */
   Sharing: { listId: string };
   Account: undefined;
+  /** Invitations to you and answers to yours (task 28), paged newest first. */
+  Notifications: undefined;
 };
 
 export type SignInScreenProps = NativeStackScreenProps<RootStackParamList, 'SignIn'>;
@@ -19,3 +21,4 @@ export type ListsScreenProps = NativeStackScreenProps<RootStackParamList, 'Lists
 export type ListDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'ListDetail'>;
 export type SharingScreenProps = NativeStackScreenProps<RootStackParamList, 'Sharing'>;
 export type AccountScreenProps = NativeStackScreenProps<RootStackParamList, 'Account'>;
+export type NotificationsScreenProps = NativeStackScreenProps<RootStackParamList, 'Notifications'>;

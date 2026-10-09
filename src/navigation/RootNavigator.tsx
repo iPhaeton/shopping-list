@@ -7,6 +7,7 @@ import { ScreenSky } from '../components/Sky';
 import { AccountScreen } from '../screens/AccountScreen';
 import { ListDetailScreen } from '../screens/ListDetailScreen';
 import { ListsScreen } from '../screens/ListsScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { SetNameScreen } from '../screens/SetNameScreen';
 import { SharingScreen } from '../screens/SharingScreen';
 import { SignInScreen } from '../screens/SignInScreen';
@@ -120,8 +121,8 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
       return (
         <>
           {/*
-            No native header on any screen: each draws its own — Lists its title row and Account
-            pill, the others a round Back and a serif title. `title` stays for the web page title.
+            No native header on any screen: each draws its own — Lists its title row and round
+            buttons, the others a round Back and a serif title. `title` stays for the web page title.
             Back still works without the native button: the edge swipe on iOS and the hardware back
             on Android belong to the stack, not the header.
           */}
@@ -137,6 +138,11 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
             name="Account"
             component={AccountScreen}
             options={{ title: 'Account', headerShown: false }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ title: 'Notifications', headerShown: false }}
           />
         </>
       );

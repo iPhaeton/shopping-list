@@ -1,7 +1,4 @@
-import { View } from 'react-native';
-
-import { themedStyles, useTheme } from '../state/ThemeContext';
-import { radius } from '../theme';
+import { useTheme } from '../state/ThemeContext';
 import { IconButton } from './IconButton';
 import { PlusIcon, SearchIcon } from './icons';
 
@@ -28,7 +25,6 @@ export function ModeButton({
   summary?: string;
   onPress: () => void;
 }) {
-  const styles = useStyles();
   const { colors } = useTheme();
 
   if (mode === 'search') {
@@ -40,24 +36,8 @@ export function ModeButton({
   }
 
   return (
-    <IconButton label="Search and sort" value={summary} outline={colors.outline} onPress={onPress}>
+    <IconButton label="Search and sort" value={summary} outline={colors.outline} dot={dot} onPress={onPress}>
       <SearchIcon color={colors.text} size={18} />
-      {dot ? <View style={styles.dot} /> : null}
     </IconButton>
   );
 }
-
-const useStyles = themedStyles((colors) => ({
-  // 12pt overall, its ring in `skyTop` so it reads as cut out of the outline it sits on.
-  dot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: colors.skyTop,
-    backgroundColor: colors.primary,
-  },
-}));

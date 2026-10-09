@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ListsProvider } from './src/state/ListsContext';
+import { NotificationsProvider } from './src/state/NotificationsContext';
 import { SessionProvider, useSession } from './src/state/SessionContext';
 import { SortProvider } from './src/state/SortContext';
 import { ThemeProvider, useTheme } from './src/state/ThemeContext';
@@ -51,6 +52,8 @@ function ThemedStatusBar() {
  *
  * The same id also goes in as a prop, because the outbox and the cached rows are stored per user
  * and two accounts share one device's disk.
+ *
+ * The unread count lives inside it for the same reason, and hears the database through its channel.
  */
 function ListsForSignedInUser({ children }: { children: ReactNode }) {
   const { state, signOut } = useSession();
@@ -60,7 +63,7 @@ function ListsForSignedInUser({ children }: { children: ReactNode }) {
   const userId = state.session.user.id;
   return (
     <ListsProvider key={userId} userId={userId} onSessionRevoked={() => void signOut('revoked')}>
-      {children}
+      <NotificationsProvider>{children}</NotificationsProvider>
     </ListsProvider>
   );
 }

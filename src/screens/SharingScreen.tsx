@@ -14,21 +14,25 @@ import { Card } from '../components/Card';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Hillside } from '../components/Hillside';
-import { ChevronIcon, TrashIcon } from '../components/icons';
+import { ChevronIcon, CloseIcon, TrashIcon } from '../components/icons';
 import { IconButton } from '../components/IconButton';
 import { PillButton } from '../components/PillButton';
 import { RolePicker } from '../components/RolePicker';
 import { HEADER_GAP } from '../components/ScreenHeader';
 import { SkyFill } from '../components/Sky';
 import { UserAutocomplete } from '../components/UserAutocomplete';
+import { ago } from '../lib/ago';
 import type { Result } from '../lib/listsApi';
 import {
+  fetchInvitations,
   fetchMembers,
+  inviteToList,
   leaveList,
   removeMember,
   setMemberRole,
-  shareList,
+  withdrawInvitation,
   type Member,
+  type PendingInvitation,
   type UserSuggestion,
 } from '../lib/membersApi';
 import type { SharingScreenProps } from '../navigation/types';
@@ -53,14 +57,18 @@ function displayNameFor(member: Member): string {
 }
 
 /**
- * Who else has access, and — for an owner — how to change it.
+ * Who else has access, and — for an owner — how to change it: invite somebody, withdraw an
+ * invitation, change a role, remove a member.
  *
- * **The only online-only screen in the app.** The roster comes from an RPC, it is not in `State`, and
- * it is not cached, so there is nothing to show offline and nothing to queue. Its state is local
- * `useState` the way `SignInScreen` holds its phases, and its writes go straight to `listsApi`
- * rather than through the outbox: `shareList` takes an id `UserAutocomplete` already resolved via a
- * search result, so there is nothing left to look up, and the roster it changes has to stay live
- * rather than queued.
+ * **Online-only, like Notifications.** The roster and the open invitations come from RPCs, they are
+ * not in `State`, and they are not cached, so there is nothing to show offline and nothing to queue.
+ * Their state is local `useState` the way `SignInScreen` holds its phases, and the writes go straight
+ * to `membersApi` rather than through the outbox: `inviteToList` takes an id `UserAutocomplete`
+ * already resolved via a search result, so there is nothing left to look up, and what it changes has
+ * to stay live rather than queued.
+ *
+ * **Inviting adds nobody** (task 28, D1). The person shows under Invited until they accept — then
+ * the roster — or decline, or an owner withdraws, or it expires; a nudge on this list re-reads both.
  *
  * **Laid out as List detail is:** a header pinned over the roster — Back, the title, an owner's
  * invite bar, and the `Hillside` whose hill the roster's land starts from — so inviting is always
@@ -76,6 +84,8 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const list = lists.find((candidate) => candidate.id === listId);
 
   const [members, setMembers] = useState<Member[] | null>(null);
+  // An owner's view only: the database answers anyone else with an empty list.
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [query, setQuery] = useState('');
@@ -83,17 +93,23 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const [inviteRole, setInviteRole] = useState<Role>('writer');
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [confirmingRemoveUserId, setConfirmingRemoveUserId] = useState<string | null>(null);
+  const [confirmingWithdrawId, setConfirmingWithdrawId] = useState<string | null>(null);
   // How tall the header's sky is, so the status-bar strip draws the same slice of it.
   const [skyHeight, setSkyHeight] = useState(224);
 
+  // The roster and the invitations, read together, since one change can move somebody from one to
+  // the other. Resolves to the roster, which `run` checks for your own row.
   const load = useCallback(async () => {
-    const { members: rows, error: failure } = await fetchMembers(listId);
-    if (rows) {
-      setMembers(rows);
-      return rows;
+    const [roster, invited] = await Promise.all([fetchMembers(listId), fetchInvitations(listId)]);
+    if (invited.invitations) setInvitations(invited.invitations);
+
+    if (roster.members) {
+      setMembers(roster.members);
+      if (!invited.invitations) setError(invited.error);
+      return roster.members;
     }
 
-    setError(failure);
+    setError(roster.error);
     return null;
   }, [listId]);
 
@@ -101,10 +117,11 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
     void load();
   }, [load]);
 
-  // A realtime nudge for this list — someone else joined, left, or changed role — reaches the
-  // roster this way rather than through `ListsContext`'s own reducer state, which this screen
-  // deliberately isn't part of. `listId === undefined` is a resubscribe or malformed payload, the
-  // same "not sure what changed, re-check" case `refreshSoon` treats as `dirty = 'all'`.
+  // A realtime nudge for this list — someone joined, left, changed role, or was invited, or an
+  // invitation was answered or withdrawn — reaches the roster and the invitations this way rather
+  // than through `ListsContext`'s own reducer state, which this screen deliberately isn't part of.
+  // `listId === undefined` is a resubscribe or malformed payload, the same "not sure what changed,
+  // re-check" case `refreshSoon` treats as `dirty = 'all'`.
   useEffect(() => {
     if (!lastNudge) return;
     if (lastNudge.listId !== undefined && lastNudge.listId !== listId) return;
@@ -157,11 +174,15 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   }
 
   const canInvite = selected !== null && !pending;
+  // When `Invited …` is measured from. The ages move on at the next read, not by the minute.
+  const now = Date.now();
 
-  function share() {
+  // A refusal — they are already a member, or already invited — is shown in the database's words,
+  // through `run`.
+  function invite() {
     if (!selected) return;
     void run(async () => {
-      const result = await shareList(listId, selected.userId, inviteRole);
+      const result = await inviteToList(listId, selected.userId, inviteRole);
       if (!result.error) {
         setQuery('');
         setSelected(null);
@@ -240,9 +261,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
           Sharing
         </Text>
 
-        {/* Where List detail puts its Add bar. Re-sharing someone who is already a member is an
-            upsert in `share_list`, so this bar doubles as a promote and there is nothing extra to
-            build for it. */}
+        {/* Where List detail puts its Add bar. */}
         {manageable ? (
           <View style={styles.slot}>
             <UserAutocomplete
@@ -256,8 +275,9 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                 setQuery(user.name);
               }}
               selected={selected}
-              canShare={canInvite}
-              onShare={share}
+              canInvite={canInvite}
+              onInvite={invite}
+              listId={listId}
               disabled={pending}
             />
           </View>
@@ -272,7 +292,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
           <View style={styles.invitePicker}>
             <RolePicker
               value={inviteRole}
-              labelFor={(role) => `Share as ${role}`}
+              labelFor={(role) => `Invite as ${role}`}
               disabled={pending}
               track="surface"
               size="small"
@@ -366,8 +386,8 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                           confirmingRemove ? (
                             confirm(
                               you
-                                ? "You'll lose access to this list until someone shares it with you again."
-                                : `${name} will lose access to this list until someone shares it with them again.`,
+                                ? "You'll lose access to this list until someone invites you again."
+                                : `${name} will lose access to this list until someone invites them again.`,
                               `Confirm remove ${displayNameFor(member)}`,
                               pending ? 'Removing…' : 'Remove',
                               () => {
@@ -394,7 +414,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                           )
                         ) : you && confirmingLeave ? (
                           confirm(
-                            "You'll lose access to this list until someone shares it with you again.",
+                            "You'll lose access to this list until someone invites you again.",
                             'Confirm leave list',
                             pending ? 'Leaving…' : 'Leave list',
                             () => {
@@ -419,6 +439,64 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                   Only an owner can change who has access.
                 </Text>
               )}
+
+              {/* Owners only, and only while somebody is invited. Withdrawing opens the same confirm
+                  as removing, in place of the button. */}
+              {manageable && invitations.length > 0 ? (
+                <>
+                  <Text accessibilityRole="header" style={[styles.heading, styles.invitedHeading]}>
+                    Invited
+                  </Text>
+                  <View style={styles.members}>
+                    {invitations.map((invitation) => {
+                      const confirmingWithdraw = confirmingWithdrawId === invitation.invitationId;
+
+                      return (
+                        <Card key={invitation.invitationId} style={styles.member}>
+                          <View style={styles.memberRow}>
+                            <Avatar id={invitation.userId} name={invitation.name} />
+                            <View style={styles.invitedText}>
+                              <Text style={styles.invitedName} numberOfLines={1}>
+                                {invitation.name}
+                              </Text>
+                              <Text style={styles.invitedAge}>
+                                {`Invited ${ago(invitation.createdAt, now)}`}
+                              </Text>
+                            </View>
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{invitation.role}</Text>
+                            </View>
+                            {confirmingWithdraw ? null : (
+                              <IconButton
+                                label={`Withdraw ${invitation.name}'s invitation`}
+                                fill={colors.controlFill}
+                                disabled={pending}
+                                onPress={() => setConfirmingWithdrawId(invitation.invitationId)}>
+                                <CloseIcon color={colors.text} size={16} />
+                              </IconButton>
+                            )}
+                          </View>
+
+                          {confirmingWithdraw
+                            ? confirm(
+                                `${invitation.name}'s invitation will be withdrawn.`,
+                                `Confirm withdraw ${invitation.name}'s invitation`,
+                                pending ? 'Withdrawing…' : 'Withdraw',
+                                () => {
+                                  // Cleared either way, as a removal's confirm is.
+                                  void run(() => withdrawInvitation(invitation.invitationId)).then(() => {
+                                    setConfirmingWithdrawId(null);
+                                  });
+                                },
+                                () => setConfirmingWithdrawId(null)
+                              )
+                            : null}
+                        </Card>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
             </View>
           )}
         </ScrollView>
@@ -558,6 +636,25 @@ const useStyles = themedStyles((colors) => ({
   },
   memberPicker: {
     marginTop: 10,
+  },
+  // The Invited section, 24 under the hint or the last card, as the step-2 mockup draws it.
+  invitedHeading: {
+    marginTop: 24,
+  },
+  invitedText: {
+    flex: 1,
+  },
+  // No `flex`, unlike `name`: in this column a basis of 0 would be a height of 0.
+  invitedName: {
+    fontFamily: fonts.sans,
+    fontSize: 17,
+    color: colors.text,
+  },
+  invitedAge: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 19,
+    color: colors.textSecondary,
   },
   // Its colour is the screen's: `hintColor`, picked against the land.
   hint: {

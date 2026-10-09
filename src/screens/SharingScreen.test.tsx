@@ -4,13 +4,16 @@ import type { ReactNode } from 'react';
 
 import { fetchLists } from '../lib/listsApi';
 import {
+  fetchInvitations,
   fetchMembers,
+  inviteToList,
   leaveList,
   removeMember,
   searchUsers,
   setMemberRole,
-  shareList,
+  withdrawInvitation,
   type Member,
+  type PendingInvitation,
   type UserSuggestion,
 } from '../lib/membersApi';
 import { subscribeToChanges } from '../lib/listsChannel';
@@ -25,9 +28,9 @@ import { SharingScreen } from './SharingScreen';
 /**
  * `src/lib/listsApi.ts` is mocked at the module boundary, as every list suite does — the provider
  * still reads and writes through it. `src/lib/membersApi.ts` is this screen's own seam: it calls
- * those four directly rather than through the provider, since the roster is not in `State`, it is
- * not cached, and its writes deliberately skip the outbox, so what is worth asserting is which
- * function was called with what — and what the screen does with the answer.
+ * the roster and invitation RPCs directly rather than through the provider, since neither is in
+ * `State`, neither is cached, and their writes deliberately skip the outbox, so what is worth
+ * asserting is which function was called with what — and what the screen does with the answer.
  */
 jest.mock('../lib/listsApi', () => ({
   fetchLists: jest.fn(async () => ({ lists: [], next: null, error: null })),
@@ -45,8 +48,10 @@ jest.mock('../lib/listsApi', () => ({
 
 jest.mock('../lib/membersApi', () => ({
   fetchMembers: jest.fn(),
+  fetchInvitations: jest.fn(),
   searchUsers: jest.fn(),
-  shareList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  inviteToList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
+  withdrawInvitation: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   setMemberRole: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   removeMember: jest.fn(async () => ({ error: null, verdict: 'ok' })),
   leaveList: jest.fn(async () => ({ error: null, verdict: 'ok' })),
@@ -126,7 +131,9 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
 
-  jest.mocked(shareList).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(inviteToList).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(withdrawInvitation).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [], error: null });
   jest.mocked(setMemberRole).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(removeMember).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(leaveList).mockResolvedValue({ error: null, verdict: 'ok' });
@@ -176,7 +183,7 @@ async function pickSuggestion(user: UserSuggestion) {
   await act(async () => {
     jest.advanceTimersByTime(300);
   });
-  await fireEvent.press(await screen.findByLabelText(`Share with ${user.name}`));
+  await fireEvent.press(await screen.findByLabelText(`Invite ${user.name}`));
 }
 
 it('shows everyone with access, and which one is you', async () => {
@@ -325,37 +332,39 @@ describe('somebody who is not an owner', () => {
 });
 
 describe('an owner', () => {
-  it('shares the list with the account and role that were picked', async () => {
+  it('invites the account picked, with the role picked', async () => {
     jest.useFakeTimers();
     await renderScreen();
 
     await pickSuggestion({ userId: 'u3', name: 'Carol' });
-    await fireEvent.press(screen.getByLabelText('Share as owner'));
-    await fireEvent.press(screen.getByLabelText('Share'));
+    await fireEvent.press(screen.getByLabelText('Invite as owner'));
+    await fireEvent.press(screen.getByLabelText('Invite'));
 
-    expect(shareList).toHaveBeenCalledWith('l1', 'u3', 'owner');
-    // The roster is re-read rather than patched in memory: the database is what decides.
+    expect(inviteToList).toHaveBeenCalledWith('l1', 'u3', 'owner');
+    // The roster and the invitations are re-read rather than patched in memory: the database is
+    // what decides.
     expect(fetchMembers).toHaveBeenCalledTimes(2);
+    expect(fetchInvitations).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps Share in the bar, disabled, and offers a role only once somebody is picked', async () => {
+  it('keeps Invite in the bar, disabled, and offers a role only once somebody is picked', async () => {
     jest.useFakeTimers();
     await renderScreen();
 
-    expect(screen.getByLabelText('Share')).toBeDisabled();
-    expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Invite')).toBeDisabled();
+    expect(screen.queryByLabelText('Invite as writer')).not.toBeOnTheScreen();
 
     await fireEvent.changeText(screen.getByLabelText('Name'), 'Car');
-    expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Invite as writer')).not.toBeOnTheScreen();
 
     await pickSuggestion({ userId: 'u3', name: 'Carol' });
-    expect(screen.getByLabelText('Share as writer')).toBeChecked();
-    expect(screen.getByLabelText('Share')).not.toBeDisabled();
+    expect(screen.getByLabelText('Invite as writer')).toBeChecked();
+    expect(screen.getByLabelText('Invite')).not.toBeDisabled();
 
     // Editing the name drops the pick, and the role goes with it.
     await fireEvent.changeText(screen.getByLabelText('Name'), 'Caro');
-    expect(screen.queryByLabelText('Share as writer')).not.toBeOnTheScreen();
-    expect(screen.getByLabelText('Share')).toBeDisabled();
+    expect(screen.queryByLabelText('Invite as writer')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Invite')).toBeDisabled();
   });
 
   it('keeps the picked role while the pick is dropped and made again', async () => {
@@ -363,29 +372,29 @@ describe('an owner', () => {
     await renderScreen();
 
     await pickSuggestion({ userId: 'u3', name: 'Carol' });
-    await fireEvent.press(screen.getByLabelText('Share as owner'));
+    await fireEvent.press(screen.getByLabelText('Invite as owner'));
     await fireEvent.changeText(screen.getByLabelText('Name'), '');
     await pickSuggestion({ userId: 'u3', name: 'Carol' });
 
-    expect(screen.getByLabelText('Share as owner')).toBeChecked();
+    expect(screen.getByLabelText('Invite as owner')).toBeChecked();
   });
 
-  it('will not share without picking a suggestion', async () => {
+  it('will not invite without picking a suggestion', async () => {
     await renderScreen();
 
     await fireEvent.changeText(screen.getByLabelText('Name'), 'Carol');
-    expect(screen.getByLabelText('Share')).toBeDisabled();
+    expect(screen.getByLabelText('Invite')).toBeDisabled();
 
-    await fireEvent.press(screen.getByLabelText('Share'));
-    expect(shareList).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Invite'));
+    expect(inviteToList).not.toHaveBeenCalled();
   });
 
-  it('clears the invite field once the share lands', async () => {
+  it('clears the invite field once the invitation is sent', async () => {
     jest.useFakeTimers();
     await renderScreen();
 
     await pickSuggestion({ userId: 'u3', name: 'Carol' });
-    await fireEvent.press(screen.getByLabelText('Share'));
+    await fireEvent.press(screen.getByLabelText('Invite'));
 
     expect(screen.getByLabelText('Name')).toHaveDisplayValue('');
   });
@@ -428,9 +437,9 @@ describe('an owner', () => {
     await fireEvent.press(screen.getByLabelText('Confirm remove bob@example.com'));
 
     await pickSuggestion({ userId: 'u2', name: 'Bob' });
-    await fireEvent.press(screen.getByLabelText('Share'));
+    await fireEvent.press(screen.getByLabelText('Invite'));
 
-    expect(shareList).toHaveBeenCalledWith('l1', 'u2', 'writer');
+    expect(inviteToList).toHaveBeenCalledWith('l1', 'u2', 'writer');
     expect(await screen.findByLabelText('Remove bob@example.com')).toBeOnTheScreen();
     expect(screen.queryByLabelText('Confirm remove bob@example.com')).not.toBeOnTheScreen();
   });
@@ -478,6 +487,140 @@ describe('an owner', () => {
   });
 });
 
+// --- Invitations (task 28) ----------------------------------------------------------------------
+
+/** Carol, invited as a reader two days before `NOW`. */
+const NOW = Date.parse('2026-10-09T12:00:00Z');
+const CAROL: PendingInvitation = {
+  invitationId: 'inv1',
+  userId: 'u3',
+  name: 'Carol',
+  role: 'reader',
+  createdAt: '2026-10-07T11:00:00Z',
+};
+
+describe('the Invited section', () => {
+  // Fake timers for the clock the ages are measured from, and for `pickSuggestion`'s debounce.
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW });
+    jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [CAROL], error: null });
+  });
+
+  it('lists who an owner has invited, with the role and how long ago', async () => {
+    await renderScreen();
+
+    expect(await screen.findByText('Carol')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Invited' })).toBeOnTheScreen();
+    expect(screen.getByText('reader')).toBeOnTheScreen();
+    expect(screen.getByText('Invited 2 d ago')).toBeOnTheScreen();
+    expect(fetchInvitations).toHaveBeenCalledWith('l1');
+  });
+
+  /** The database gives a non-owner an empty list anyway; the screen does not draw one either way. */
+  it('is not shown to somebody who is not an owner', async () => {
+    await renderScreen('writer');
+
+    expect(screen.queryByRole('header', { name: 'Invited' })).not.toBeOnTheScreen();
+    expect(screen.queryByText('Carol')).not.toBeOnTheScreen();
+  });
+
+  it('is not shown while nobody is invited', async () => {
+    jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [], error: null });
+
+    await renderScreen();
+
+    expect(screen.queryByRole('header', { name: 'Invited' })).not.toBeOnTheScreen();
+  });
+
+  it('withdraws an invitation, after confirming', async () => {
+    await renderScreen();
+    await screen.findByText('Carol');
+
+    await fireEvent.press(screen.getByLabelText("Withdraw Carol's invitation"));
+    expect(withdrawInvitation).not.toHaveBeenCalled();
+    expect(screen.getByText("Carol's invitation will be withdrawn.")).toBeOnTheScreen();
+    expect(screen.queryByLabelText("Withdraw Carol's invitation")).not.toBeOnTheScreen();
+
+    jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [], error: null });
+    await fireEvent.press(screen.getByLabelText("Confirm withdraw Carol's invitation"));
+
+    expect(withdrawInvitation).toHaveBeenCalledWith('inv1');
+    expect(screen.queryByText('Carol')).not.toBeOnTheScreen();
+  });
+
+  it('cancels out of the withdraw confirm without withdrawing', async () => {
+    await renderScreen();
+    await screen.findByText('Carol');
+
+    await fireEvent.press(screen.getByLabelText("Withdraw Carol's invitation"));
+    await fireEvent.press(screen.getByLabelText('Cancel'));
+
+    expect(withdrawInvitation).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Withdraw Carol's invitation")).toBeOnTheScreen();
+  });
+
+  it('shows why a withdrawal was refused', async () => {
+    jest
+      .mocked(withdrawInvitation)
+      .mockResolvedValue({ error: 'this invitation is no longer open', verdict: 'permanent' });
+
+    await renderScreen();
+    await screen.findByText('Carol');
+    await fireEvent.press(screen.getByLabelText("Withdraw Carol's invitation"));
+    await fireEvent.press(screen.getByLabelText("Confirm withdraw Carol's invitation"));
+
+    expect(await screen.findByText('this invitation is no longer open')).toBeOnTheScreen();
+    expect(screen.getByLabelText("Withdraw Carol's invitation")).toBeOnTheScreen();
+  });
+
+  /** An invitation adds nobody: the person waits under Invited, never on the roster, until they accept. */
+  it('shows somebody just invited under Invited, not with access', async () => {
+    jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [], error: null });
+    await renderScreen();
+
+    jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [CAROL], error: null });
+    await pickSuggestion({ userId: 'u3', name: 'Carol' });
+    await fireEvent.press(screen.getByLabelText('Invite'));
+
+    expect(await screen.findByText('Invited 2 d ago')).toBeOnTheScreen();
+    expect(screen.getAllByText('Carol')).toHaveLength(1);
+  });
+});
+
+describe('the warnings before losing access', () => {
+  it('says somebody removed can come back only by invitation', async () => {
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Remove bob@example.com'));
+
+    expect(
+      screen.getByText('bob@example.com will lose access to this list until someone invites them again.')
+    ).toBeOnTheScreen();
+  });
+
+  it('says the same to an owner removing themselves', async () => {
+    jest.mocked(fetchMembers).mockResolvedValue({ members: [ALICE, { ...BOB, role: 'owner' }], error: null });
+    await renderScreen();
+
+    await fireEvent.press(screen.getByLabelText('Remove alice@example.com'));
+
+    expect(
+      screen.getByText("You'll lose access to this list until someone invites you again.")
+    ).toBeOnTheScreen();
+  });
+
+  it('says the same to somebody leaving', async () => {
+    jest.mocked(fetchMembers).mockResolvedValue({ members: [{ ...ALICE, role: 'writer' }, BOB], error: null });
+    await renderScreen('writer');
+
+    await fireEvent.press(screen.getByLabelText('Leave list'));
+
+    expect(
+      screen.getByText("You'll lose access to this list until someone invites you again.")
+    ).toBeOnTheScreen();
+  });
+});
+
 // --- When it goes wrong -------------------------------------------------------------------------
 
 /**
@@ -489,13 +632,13 @@ describe('an owner', () => {
  */
 it('renders the database refusal for a suggestion whose account is gone', async () => {
   jest
-    .mocked(shareList)
+    .mocked(inviteToList)
     .mockResolvedValue({ error: 'that account no longer exists', verdict: 'permanent' });
 
   jest.useFakeTimers();
   await renderScreen();
   await pickSuggestion({ userId: 'u3', name: 'Carol' });
-  await fireEvent.press(screen.getByLabelText('Share'));
+  await fireEvent.press(screen.getByLabelText('Invite'));
 
   expect(await screen.findByText('that account no longer exists')).toBeOnTheScreen();
   // The name stays in the field, since `run()` never clears it on failure.
@@ -505,19 +648,33 @@ it('renders the database refusal for a suggestion whose account is gone', async 
 /**
  * The list limits (task 23 step 2) reach this screen in the database's own words — an owner reading
  * about somebody else — never as the second-person sentence the Lists screen and the red banner use
- * for your own lists.
+ * for your own lists. Since task 28 only a promotion meets them here: an invitation is checked when
+ * it is accepted, by the invitee. A promotion checks the total first, so a member on 1,000 lists
+ * cannot be made an owner either.
  */
-it('renders the database refusal for somebody already on 1,000 lists', async () => {
+it('renders the database refusal for promoting somebody already on 1,000 lists', async () => {
   jest
-    .mocked(shareList)
+    .mocked(setMemberRole)
     .mockResolvedValue({ error: 'they are already on 1,000 lists', verdict: 'permanent' });
+
+  await renderScreen();
+  await fireEvent.press(screen.getByLabelText('Set bob@example.com to owner'));
+
+  expect(await screen.findByText('they are already on 1,000 lists')).toBeOnTheScreen();
+});
+
+/** An "already" refusal is `22023` and permanent, shown as the database words it. */
+it('renders the database refusal for somebody already invited', async () => {
+  jest
+    .mocked(inviteToList)
+    .mockResolvedValue({ error: 'they have already been invited', verdict: 'permanent' });
 
   jest.useFakeTimers();
   await renderScreen();
   await pickSuggestion({ userId: 'u3', name: 'Carol' });
-  await fireEvent.press(screen.getByLabelText('Share'));
+  await fireEvent.press(screen.getByLabelText('Invite'));
 
-  expect(await screen.findByText('they are already on 1,000 lists')).toBeOnTheScreen();
+  expect(await screen.findByText('they have already been invited')).toBeOnTheScreen();
 });
 
 it('renders the database refusal for promoting somebody who already owns 100 lists', async () => {
@@ -556,13 +713,13 @@ it('signs out this device instead of showing a refusal for a revoked session', a
 /** The one screen in the app that cannot work offline, so it says so rather than queueing. */
 it('says a connection is needed when the request never arrives', async () => {
   jest
-    .mocked(shareList)
+    .mocked(inviteToList)
     .mockResolvedValue({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
 
   jest.useFakeTimers();
   await renderScreen();
   await pickSuggestion({ userId: 'u3', name: 'Carol' });
-  await fireEvent.press(screen.getByLabelText('Share'));
+  await fireEvent.press(screen.getByLabelText('Invite'));
 
   expect(
     await screen.findByText('You need a connection to change who has access.')
@@ -671,6 +828,23 @@ it('re-reads the roster when a nudge names this list', async () => {
 
   expect(fetchMembers).toHaveBeenCalledTimes(2);
   expect(await screen.findByText('carol@example.com')).toBeOnTheScreen();
+});
+
+/** An accept moves somebody from Invited to the roster; a decline or a withdrawal drops them. */
+it('re-reads the invitations with the roster on a nudge', async () => {
+  jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [CAROL], error: null });
+  await renderScreen();
+  expect(await screen.findByText('Carol')).toBeOnTheScreen();
+
+  jest.mocked(fetchInvitations).mockResolvedValue({ invitations: [], error: null });
+  jest
+    .mocked(fetchMembers)
+    .mockResolvedValue({ members: [ALICE, BOB, { ...BOB, userId: 'u3', email: 'carol@example.com', name: 'Carol' }], error: null });
+  await act(async () => nudge('l1'));
+
+  expect(fetchInvitations).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole('header', { name: 'Invited' })).not.toBeOnTheScreen();
+  expect(screen.getByText('Carol')).toBeOnTheScreen();
 });
 
 it('ignores a nudge naming a different list', async () => {

@@ -82,6 +82,38 @@ export function CloseIcon({ color, size = 18 }: IconProps) {
   );
 }
 
+/** A bell: the Lists header's way to Notifications. */
+export function BellIcon({ color, size = 18 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6.5 10.5a5.5 5.5 0 0 1 11 0c0 4 1 6 2.5 7H4c1.5-1 2.5-3 2.5-7z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M10 20.5a2 2 0 0 0 4 0" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** A head and shoulders: the Lists header's way to Account. */
+export function PersonIcon({ color, size = 18 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={7.5} r={3.5} stroke={color} strokeWidth={2} />
+      <Path
+        d="M5 20.5c0-3.6 3.1-6 7-6s7 2.4 7 6"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** An arrow pointing up: oldest first. */
 export function ArrowUpIcon({ color, size = 16 }: IconProps) {
   return (

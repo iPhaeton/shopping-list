@@ -27,9 +27,12 @@ export function grouped(n: number): string {
 }
 
 /**
- * What the person holding the phone reads — on the Lists screen before the tap, and in the red
- * banner when a queued write is refused. The database's own words are for the Sharing screen,
- * where they are about somebody else ("they already own 100 lists").
+ * What the person holding the phone reads — on the Lists screen before the tap, in the red banner
+ * when a queued write is refused, and on Notifications when accepting an invitation would take them
+ * past a limit (`acceptInvitation` rephrases the refusal). The database's own words are about
+ * somebody else ("they already own 100 lists") and reach only the Sharing screen, when an owner
+ * promotes a member who is at a limit — an invitation no longer meets the limits when it is sent,
+ * only when it is accepted.
  */
 export const OWNED_LISTS_FULL = `You own ${grouped(MAX_OWNED_LISTS)} lists. Delete one or hand one over to make room.`;
 export const LISTS_FULL = `You're on ${grouped(MAX_LISTS)} lists. Delete or leave one to make room.`;

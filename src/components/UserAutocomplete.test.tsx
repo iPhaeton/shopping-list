@@ -17,11 +17,11 @@ beforeEach(() => {
 
 /**
  * Reproduces exactly what `SharingScreen` does around this component: mirror `value`/`selected` in
- * local state, clear `selected` on every edit, set both on a pick, and let `Share` go live once
- * somebody is picked. Driving the real prop contract this way, rather than a synthetic harness, is
- * what proves the contract works end to end.
+ * local state, clear `selected` on every edit, set both on a pick, let `Invite` go live once
+ * somebody is picked, and name the list being shared. Driving the real prop contract this way,
+ * rather than a synthetic harness, is what proves the contract works end to end.
  */
-function Harness({ onShare = () => {} }: { onShare?: () => void }) {
+function Harness({ onInvite = () => {} }: { onInvite?: () => void }) {
   const [value, setValue] = useState('');
   const [selected, setSelected] = useState<UserSuggestion | null>(null);
 
@@ -37,8 +37,9 @@ function Harness({ onShare = () => {} }: { onShare?: () => void }) {
         setValue(user.name);
       }}
       selected={selected}
-      canShare={selected !== null}
-      onShare={onShare}
+      canInvite={selected !== null}
+      onInvite={onInvite}
+      listId="l1"
     />
   );
 }
@@ -70,7 +71,7 @@ it('collapses a burst of keystrokes into one debounced search', async () => {
   await advanceDebounce();
 
   expect(searchUsers).toHaveBeenCalledTimes(1);
-  expect(searchUsers).toHaveBeenCalledWith('ali');
+  expect(searchUsers).toHaveBeenCalledWith('ali', 'l1');
 });
 
 it('searches once the debounce settles at 3 or more characters', async () => {
@@ -80,7 +81,21 @@ it('searches once the debounce settles at 3 or more characters', async () => {
   await fireEvent.changeText(screen.getByLabelText('Name'), 'ali');
   await advanceDebounce();
 
-  expect(searchUsers).toHaveBeenCalledWith('ali');
+  expect(searchUsers).toHaveBeenCalledWith('ali', 'l1');
+});
+
+/**
+ * The list goes with every search: an owner is not offered its members or anyone already invited to
+ * it — the database's filter, before it picks five (task 28).
+ */
+it('names the list being shared in every search', async () => {
+  jest.useFakeTimers();
+  await render(<Harness />);
+
+  await fireEvent.changeText(screen.getByLabelText('Name'), 'ali');
+  await advanceDebounce();
+
+  expect(jest.mocked(searchUsers).mock.calls).toEqual([['ali', 'l1']]);
 });
 
 it('renders whatever the server returns, up to 5, as labelled rows', async () => {
@@ -101,11 +116,11 @@ it('renders whatever the server returns, up to 5, as labelled rows', async () =>
   await fireEvent.changeText(screen.getByLabelText('Name'), 'ali');
   await advanceDebounce();
 
-  expect(await screen.findByLabelText('Share with Alice')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Share with Alicia')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Share with Alison')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Share with Allison')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Share with Ally')).toBeOnTheScreen();
+  expect(await screen.findByLabelText('Invite Alice')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Invite Alicia')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Invite Alison')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Invite Allison')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Invite Ally')).toBeOnTheScreen();
 });
 
 it('selecting calls onSelect and clears the suggestion list', async () => {
@@ -120,10 +135,10 @@ it('selecting calls onSelect and clears the suggestion list', async () => {
   await fireEvent.changeText(screen.getByLabelText('Name'), 'car');
   await advanceDebounce();
 
-  await fireEvent.press(await screen.findByLabelText('Share with Carol'));
+  await fireEvent.press(await screen.findByLabelText('Invite Carol'));
 
   expect(screen.getByLabelText('Name')).toHaveDisplayValue('Carol');
-  expect(screen.queryByLabelText('Share with Carol')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Invite Carol')).not.toBeOnTheScreen();
 });
 
 it('editing after a selection clears it and searches again', async () => {
@@ -137,7 +152,7 @@ it('editing after a selection clears it and searches again', async () => {
 
   await fireEvent.changeText(screen.getByLabelText('Name'), 'car');
   await advanceDebounce();
-  await fireEvent.press(await screen.findByLabelText('Share with Carol'));
+  await fireEvent.press(await screen.findByLabelText('Invite Carol'));
 
   jest.mocked(searchUsers).mockClear();
   jest.mocked(searchUsers).mockResolvedValue({
@@ -148,30 +163,30 @@ it('editing after a selection clears it and searches again', async () => {
   await fireEvent.changeText(screen.getByLabelText('Name'), 'Caro');
   await advanceDebounce();
 
-  expect(searchUsers).toHaveBeenCalledWith('Caro');
-  expect(await screen.findByLabelText('Share with Caroline')).toBeOnTheScreen();
+  expect(searchUsers).toHaveBeenCalledWith('Caro', 'l1');
+  expect(await screen.findByLabelText('Invite Caroline')).toBeOnTheScreen();
 });
 
-it('keeps Share inside the bar, live only once the caller says so', async () => {
+it('keeps Invite inside the bar, live only once the caller says so', async () => {
   jest.mocked(searchUsers).mockResolvedValue({
     users: [{ userId: 'u1', name: 'Carol' }],
     error: null,
   });
-  const onShare = jest.fn();
+  const onInvite = jest.fn();
 
   jest.useFakeTimers();
-  await render(<Harness onShare={onShare} />);
+  await render(<Harness onInvite={onInvite} />);
 
-  expect(screen.getByLabelText('Share')).toBeDisabled();
+  expect(screen.getByLabelText('Invite')).toBeDisabled();
   await fireEvent.changeText(screen.getByLabelText('Name'), 'car');
   await advanceDebounce();
-  expect(screen.getByLabelText('Share')).toBeDisabled();
+  expect(screen.getByLabelText('Invite')).toBeDisabled();
 
-  await fireEvent.press(await screen.findByLabelText('Share with Carol'));
-  expect(screen.getByLabelText('Share')).not.toBeDisabled();
+  await fireEvent.press(await screen.findByLabelText('Invite Carol'));
+  expect(screen.getByLabelText('Invite')).not.toBeDisabled();
 
-  await fireEvent.press(screen.getByLabelText('Share'));
-  expect(onShare).toHaveBeenCalledTimes(1);
-  // The caller clears the field once the share lands; the bar does not do it for them.
+  await fireEvent.press(screen.getByLabelText('Invite'));
+  expect(onInvite).toHaveBeenCalledTimes(1);
+  // The caller clears the field once the invitation lands; the bar does not do it for them.
   expect(screen.getByLabelText('Name')).toHaveDisplayValue('Carol');
 });
