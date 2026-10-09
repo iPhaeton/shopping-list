@@ -4,9 +4,9 @@ title: Maestro drives the native app — installed by hand at ~/.maestro, not on
 type: environment
 status: current
 tags: [environment, verification, maestro, ios, android, simulator, keyboard]
-sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384]
-last_verified: 2026-10-07
-verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Back$' .maestro/flows/set-theme.yaml && ! grep -rqE '^- tapOn: "?(My Lists|Navigate up)"?$' .maestro/flows && ! grep -rq '^- hideKeyboard' .maestro/flows && grep -q '^- pressKey: Enter$' .maestro/flows/tour-search-and-sort.yaml
+sources: [ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384, ai/tasks/28-invitations/implementation-log-step-3.md, 5ab9b85, ai/tasks/28-invitations/implementation-log-step-4.md, 0508f98]
+last_verified: 2026-10-09
+verify: test -x ~/.maestro/bin/maestro && ls ~/.maestro/lib | grep -q '^maestro-cli-2\.' && test -x /opt/homebrew/opt/openjdk/bin/java && grep -q '^appId: com.shoppingloop.app$' .maestro/flows/open-app.yaml && grep -q 'exp+shopping-list://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081' .maestro/flows/open-app.yaml && grep -q '/auth/v1/otp' .maestro/seed.mjs && grep -q "rpc('invite_to_list'" .maestro/seed.mjs && grep -q "rpc('my_notifications'" .maestro/seed.mjs && grep -q "rpc('accept_invitation'" .maestro/seed.mjs && ! grep -q "'share_list'" .maestro/seed.mjs && grep -q '^- tapOn: "Invite \.\*"$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Remove Sam$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Back$' .maestro/flows/tour-signed-in.yaml && grep -q '^- tapOn: Back$' .maestro/flows/set-theme.yaml && ! grep -rqE '^- tapOn: "?(My Lists|Navigate up)"?$' .maestro/flows && ! grep -rq '^- hideKeyboard' .maestro/flows && grep -q '^- pressKey: Enter$' .maestro/flows/tour-search-and-sort.yaml
 related: [phone-is-the-product, list-headers-are-pinned-and-opaque, native-build-toolchain, dev-client-draws-over-the-app, supabase-local-stack, session-still-valid-guards-writes, queries-go-through-a11y-labels, metro-inspector-reads-live-app-state, auto-theme-follows-the-time-zone, screens-take-navigation-props]
 ---
 
@@ -20,8 +20,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk ~/.maestro/bin/maestro test --test-output-di
   .maestro/flows/<flow>.yaml -e THEME=Night
 ```
 
-Not on PATH on purpose: the install script edits `~/.zshrc`, so the release zip was unpacked by
-hand. A new simulator's first run installs the XCTest driver (~1m45s); later runs pay ~20–40 s.
+Not on PATH on purpose (the install script edits `~/.zshrc`). A new simulator's first run installs the XCTest driver (~1m45s); later runs pay ~20–40 s.
 **On iOS 27 the driver sometimes fails to start** ("iOS driver not ready in time"); a second attempt
 worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the environment helps.
 
@@ -41,8 +40,7 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   `SmartDashesEnabled` set to `NO` in `com.apple.Preferences`.
 - **While DeviceHub runs, no software keyboard appears.** Xcode 27's simulator UI, which
   `expo run:ios` opens, attaches the Mac's keyboard as hardware; the number pad showed only a "Go"
-  pill. **`killall DeviceHub`** brings it back, and the device stays booted. Clearing
-  `HardwareKeyboardLastSeen` did not help; `osascript` cannot send Cmd+Shift+K (no permission).
+  pill. **`killall DeviceHub`** brings it back, and the device stays booted.
 - **iOS 27's one-time "Speed up your typing by sliding your finger…" tip** eats the next tap; dismiss
   it with `tapOn: Continue`.
 
@@ -86,9 +84,7 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
 - **iOS simulator**, per launch: `xcrun simctl terminate booted com.shoppingloop.app`, then
   `SIMCTL_CHILD_TZ=<zone> xcrun simctl launch booted com.shoppingloop.app` (a Release build too),
   then `xcrun simctl openurl booted` with `open-app.yaml`'s deep link — not `open-app.yaml` itself,
-  whose `stopApp` ends the process carrying the variable. Hermes's `Intl` and `Date` both follow
-  `TZ`. `openurl` can time out (`NSPOSIXErrorDomain 60`) after a fresh boot or mid-reload, and the
-  link still arrives.
+  whose `stopApp` ends the process carrying the variable. Hermes's `Intl` and `Date` follow `TZ`.
 - **Android emulator**: `adb shell cmd time_zone_detector set_time_zone_state_for_tests --zone_id
   <zone> --user_should_confirm_id false`, Home before and resume after; restore `Europe/Warsaw`
   and `set_auto_detection_enabled true` afterwards.
@@ -96,9 +92,8 @@ worked each time, and `MAESTRO_DRIVER_STARTUP_TIMEOUT=180000` (ms) in the enviro
   a throwaway jest file. The `status_bar` override keeps showing 9:41, never the time under test;
   read what the app believes through [metro-inspector-reads-live-app-state](metro-inspector-reads-live-app-state.md).
 
-**Android** (no flow run since task 20 step 5): `adb reverse tcp:8081 tcp:8081` first. The first driver install leaves the app stopped:
-start with `open-app`, and wait for the list (`extendedWaitUntil`) before the first gesture — a fast
-swipe straight after it became a tap. On "System UI isn't responding" after a boot, tap Wait.
+**Android** (no flow run since task 20 step 5): `adb reverse tcp:8081 tcp:8081` first; the first
+driver install leaves the app stopped, so start with `open-app` and wait for the list before a gesture.
 
 **What lives in `.maestro/`** (kept in the repo, for task 20 and after), against the local stack.
 If sign-in fails with "Error sending magic link email", the app is on cloud:
@@ -115,6 +110,11 @@ If sign-in fails with "Error sending magic link email", the app is on cloud:
   ([phone-is-the-product](phone-is-the-product.md)).
 - `seed.mjs [owner] [member]` — the tour data, made **through the API** (OTP via Mailpit, then the
   app's RPCs; a psql role switch fails every write RPC's `auth.sessions` check —
-  [session-still-valid-guards-writes](session-still-valid-guards-writes.md)). Once per stack, as
-  names are unique; on a stack holding the load-test users its "Jor" search finds generated names
+  [session-still-valid-guards-writes](session-still-valid-guards-writes.md)). Every share is an
+  invite the recipient accepts, found through `my_notifications`. Once per stack, as names are
+  unique; on a stack holding the load-test users its "Jor" search finds generated names
   ([supabase-local-stack](supabase-local-stack.md)).
+- **`tour-signed-in` hardcodes `Sam`, and display names are unique (`users_name_lower_unique`)**,
+  so it runs only as the seed's own owner — on this stack `maya@`, which is off limits. A throwaway
+  run needs the member's name as a flow parameter first. Its suggestion rows are `"Invite .*"`
+  since task 28, and that version has **not yet run on a device**.

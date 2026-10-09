@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, postgrest, network, offline, paging]
 sources: [ai/tasks/24-search-and-sort/implementation-log-step-3.md, src/lib/listsApi.ts]
-last_verified: 2026-10-03
+last_verified: 2026-10-09
 verify: grep -q '"version": "2\.112\.' node_modules/@supabase/postgrest-js/package.json && grep -q '^const DEFAULT_MAX_RETRIES = 3;$' node_modules/@supabase/postgrest-js/dist/index.mjs && grep -qF 'Math.min(1e3 * 2 ** attemptIndex, 3e4)' node_modules/@supabase/postgrest-js/dist/index.mjs && grep -qF 'const RETRYABLE_STATUS_CODES = [520, 503];' node_modules/@supabase/postgrest-js/dist/index.mjs && ! grep -rqF '.retry(false)' src
 related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, supabase-local-stack, supabase-client-module-boundary]
 indexed: false

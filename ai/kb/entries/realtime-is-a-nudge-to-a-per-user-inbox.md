@@ -3,79 +3,87 @@ id: realtime-is-a-nudge-to-a-per-user-inbox
 title: Realtime is a nudge fanned out to each member's per-user inbox topic, answered by the fetch that already existed
 type: decision
 status: current
-tags: [supabase, realtime, rls, security, state, architecture]
-sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-5.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/useHydration.ts]
-last_verified: 2026-10-03
-verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'refreshSoon(listId);' src/state/ListsContext.tsx && grep -q 'return subscribeToChanges(userId, onNudge, onNudge);' src/state/ListsContext.tsx && grep -q 'let connected = false;' src/lib/listsChannel.ts && grep -q 'if (connected) onResubscribe();' src/lib/listsChannel.ts && grep -q 'return list.deletedAt > cursor.deletedAt;' src/state/useHydration.ts && grep -q 'return list.id >= cursor.id;' src/state/useHydration.ts
-related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, deletion-is-a-tombstone, supabase-local-stack, scope-boundaries, realtime-channel-shared-per-topic]
+tags: [supabase, realtime, rls, security, state, architecture, notifications]
+sources: [ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/9-deletion/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-3.md, ai/tasks/11-pagination/implementation-log-step-5.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/28-invitations/implementation-log-step-1.md, ai/tasks/28-invitations/implementation-log-step-3.md, ai/tasks/28-invitations/implementation-log-step-4.md, ai/tasks/28-invitations/implementation-log-step-4-unblock.md, 47965d5, 5ab9b85, 0508f98, 2916e6e, ai/suggestions/realtime-sync.md, supabase/migrations/20260909000000_realtime.sql, supabase/migrations/20261008000000_invitations.sql, supabase/migrations/20261009100000_unblock_restores_invitations.sql, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/NotificationsContext.tsx, src/state/useHydration.ts]
+last_verified: 2026-10-09
+verify: grep -q "realtime.topic() = 'user:' || (select auth.uid())::text" supabase/migrations/20260909000000_realtime.sql && test "$(grep -c 'create policy' supabase/migrations/20260909000000_realtime.sql)" = 1 && ! grep -qi 'create policy' supabase/migrations/20261008000000_invitations.sql supabase/migrations/20261009100000_unblock_restores_invitations.sql && grep -q 'from public.list_members m where m.list_id = target_list' supabase/migrations/20260909000000_realtime.sql && grep -q '^  after update on public.lists$' supabase/migrations/20260909000000_realtime.sql && grep -q "'user:' || r.recipient_id::text" supabase/migrations/20261008000000_invitations.sql && grep -A1 'after insert or update or delete on public.notifications' supabase/migrations/20261008000000_invitations.sql | grep -q 'public.notify_recipient()' && grep -A1 'after insert or update or delete on public.list_invitations' supabase/migrations/20261008000000_invitations.sql | grep -q 'public.notify_list_members()' && ! grep -rq "'postgres_changes'" src && grep -q '{ config: { private: true } }' src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'list/changed' }" src/lib/listsChannel.ts && grep -q "'broadcast', { event: 'notifications/changed' }, () => onNotifications()" src/lib/listsChannel.ts && grep -q "onChange(typeof listId === 'string' ? listId : undefined);" src/lib/listsChannel.ts && grep -q 'refreshSoon(listId);' src/state/ListsContext.tsx && grep -q 'return subscribeToChanges(userId, onNudge, onResubscribe, onNotifications);' src/state/ListsContext.tsx && grep -A3 'const onResubscribe = () => {' src/state/ListsContext.tsx | grep -q 'onNotifications();' && grep -q 'const NUDGE_DEBOUNCE_MS = 300;' src/state/NotificationsContext.tsx && grep -q 'void refreshUnread();' src/screens/BlockedPeopleScreen.tsx && grep -q 'let connected = false;' src/lib/listsChannel.ts && grep -q 'if (connected) onResubscribe();' src/lib/listsChannel.ts && grep -q 'return list.deletedAt > cursor.deletedAt;' src/state/useHydration.ts && grep -q 'return list.id >= cursor.id;' src/state/useHydration.ts
+related: [first-fetch-replaces-list-state, writes-retry-from-an-outbox, read-rooted-at-list-members, list-data-scoped-by-rls, server-stamps-done-at, supabase-client-module-boundary, deletion-is-a-tombstone, supabase-local-stack, scope-boundaries, realtime-channel-shared-per-topic, keyset-paging-in-the-order-shown]
 ---
 
-Step 8 made a change by one member reach every other member in about a second, with neither app
-backgrounded. **The database fans a *nudge* out to each member's private inbox topic; the client
-answers a nudge with the fetch it already had.** There is no new way for data to enter the app.
+A change by one member reaches every other member in about a second. **The database fans a *nudge*
+out to each member's private inbox topic; the client answers a nudge with the fetch it already had.**
+There is no new way for data to enter the app.
 
 | piece | where |
 |---|---|
-| receive policy, `notify_list_members`, three triggers | [supabase/migrations/20260909000000_realtime.sql](../../../supabase/migrations/20260909000000_realtime.sql) |
-| `subscribeToChanges(userId, onChange, onResubscribe)` | [src/lib/listsChannel.ts](../../../src/lib/listsChannel.ts) |
+| receive policy, `notify_list_members`, the list triggers | [supabase/migrations/20260909000000_realtime.sql](../../../supabase/migrations/20260909000000_realtime.sql) |
+| `notify_recipient`, the `notifications` and `list_invitations` triggers | [supabase/migrations/20261008000000_invitations.sql](../../../supabase/migrations/20261008000000_invitations.sql) |
+| `subscribeToChanges(userId, onChange, onResubscribe, onNotifications)` | [src/lib/listsChannel.ts](../../../src/lib/listsChannel.ts) |
 | `refreshSoon` (300 ms trailing debounce), `dirty` | [src/state/useHydration.ts](../../../src/state/useHydration.ts) |
-| the subscription effect | [src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx) |
+| the subscription effect, `lastNudge`, `lastNotificationsNudge` | [src/state/ListsContext.tsx](../../../src/state/ListsContext.tsx) |
+| the unread count's 300 ms nudge debounce | [src/state/NotificationsContext.tsx](../../../src/state/NotificationsContext.tsx) |
 
 **Decision 1: one topic per *user* (`user:<uid>`), not per list, and not Postgres Changes.** The
 measurement that settles it: **channel authorization is evaluated once, at join, and cached for the
-life of the connection** — a client with no membership is refused with `CHANNEL_ERROR` at join rather
-than merely receiving nothing. So any topic whose audience can change mid-connection leaks: `list:<id>`
-would keep delivering to somebody whose access was revoked until they happened to reconnect, and could
-say nothing about a list you were *just* given access to, because you are not on its topic and do not
-know it exists. With a per-user topic the **sender** picks the audience per write, so a revoke takes
-effect on the same live socket, with no reconnect and no cache to invalidate. The receive policy
-touches no table at all, which is what keeps joining flat as an account grows. Postgres Changes was
-rejected outright: it makes Realtime evaluate the `lists`/`items` RLS policies per subscriber per
-changed row — the per-row cost [read-rooted-at-list-members](read-rooted-at-list-members.md) spent a
-migration avoiding, moved onto the write path — and its filters are one `eq`, so twenty lists would
-need twenty subscriptions.
+life of the connection** — a client with no membership is refused with `CHANNEL_ERROR` at join. So any
+topic whose audience can change mid-connection leaks: `list:<id>` would keep delivering to somebody
+whose access was revoked until they reconnected, and could say nothing about a list you were *just*
+given. With a per-user topic the **sender** picks the audience per write, so a revoke takes effect on
+the same live socket. The receive policy touches no table at all, which keeps joining flat as an
+account grows. Postgres Changes was rejected: it evaluates the `lists`/`items` RLS policies per
+subscriber per changed row — the cost [read-rooted-at-list-members](read-rooted-at-list-members.md)
+spent a migration avoiding, moved onto the write path — and its filters are one `eq`.
 
-**`realtime.messages` has RLS enabled and, until this migration, zero policies.** That means no
-authenticated client could receive anything on a private channel. The receive policy is not plumbing
-around the feature, it *is* the switch. There is no insert policy and there must not be: clients never
-broadcast, the database does. `private: true` on the client channel is what makes the server evaluate
-the policy at all — without it the topic is a public room.
+**`realtime.messages` has RLS enabled and exactly one policy, the receive one.** Without it no client
+could receive anything on a private channel; it *is* the switch. There is no insert policy and there
+must not be: clients never broadcast, the database does. `private: true` on the client channel is
+what makes the server evaluate the policy at all — without it the topic is a public room.
+
+**Two events share the one topic (task 28).** `list/changed` (`{listId, source, op}`) comes from
+`notify_list_members`, now on four tables — `lists`, `items`, `list_members` and `list_invitations`.
+`notifications/changed` (`{source: 'notifications', op}`) comes from `notify_recipient()` on every
+insert, update and delete of `notifications`, addressed to `user:<recipient_id>`. The receive policy
+did not change. Measured: one invite = 1 `notifications/changed` to the invitee + 1 `list/changed` per
+list member; `mark_notifications_read` of n unread rows = **n** nudges, already-read rows = 0; accept
+and decline always nudge the invitee (the `coalesce` update); a block nudges the blocker through its
+decline's notification update. `unblock_user` nudges the unblocker once per restored invitation
+(`notify_recipient` on the insert) and each restored list's members via `notify_list_members` — but
+the blocked person's *other* notifications reappear through `my_notifications`' filter with **no
+nudge**, so `BlockedPeopleScreen` re-reads the bell's count itself after an unblock. Because one mark
+sends n nudges, **every notifications reload is debounced 300 ms**, the screen's and the count's.
+`onNotifications` decodes nothing; it is bound on the same channel, never a second one
+([realtime-channel-shared-per-topic](realtime-channel-shared-per-topic.md)).
 
 **Decision 2: the message is a nudge, and decoding one field of it is not "enriching" it.** The
-payload is `{listId, source, op}`. Since step 11-3 the client decodes `listId` — used only to pick
-*which list to re-read*, via `refreshSoon(listId)` — and still discards `source`/`op` entirely; a
-missing or unparseable `listId` (a malformed payload, or `onResubscribe`, which can never know what it
-missed) falls back to re-reading everything, exactly as every nudge did before this existed. `listId`
-is never dispatched to the reducer and never trusted as the *value* of anything — it selects an input
-to a fetch, not a fact about state. Four reasons the payload otherwise stays this thin, of which the
-first two would be enough: [replay](../../../src/state/replay.ts) stays the one place that knows how
-server truth and pending writes combine; a dropped message costs staleness where a mis-applied delta
-would cost divergence; `done_at` arrives correct because it is read rather than serialised by a trigger
-([server-stamps-done-at](server-stamps-done-at.md)); and the receive policy is **topic-only**, so
-whatever is in a payload reaches everyone on that topic with no row-level check — a value used only to
-choose what to re-fetch is safe under that policy precisely because the fetch itself is still
-RLS-checked; a value trusted as the truth would not be. Do not add a field whose contents the client
-would trust rather than merely re-read.
+client decodes `listId` — used only to pick *which list to re-read*, via `refreshSoon(listId)` — and
+discards `source`/`op` entirely; a missing or unparseable `listId` (a malformed payload, or a
+resubscribe, which cannot know what it missed) falls back to re-reading everything. `listId` is never
+dispatched to the reducer and never trusted as the *value* of anything. Four reasons the payload
+otherwise stays this thin, the first two enough on their own: [replay](../../../src/state/replay.ts)
+stays the one place that knows how server truth and pending writes combine; a dropped message costs
+staleness where a mis-applied delta would cost divergence; `done_at` arrives correct because it is
+read rather than serialised by a trigger ([server-stamps-done-at](server-stamps-done-at.md)); and the
+receive policy is **topic-only**, so whatever is in a payload reaches everyone on that topic with no
+row-level check — a value used only to choose what to re-fetch is safe because the fetch itself is
+still RLS-checked. Do not add a field whose contents the client would trust rather than re-read.
 
 **Delivery is at-most-once, measured.** Anything sent while a socket was down is gone: no queue, no
 ack, no redelivery (Realtime decodes `realtime.messages` through a *temporary* replication slot that
-dies with its connection). Hence two callbacks rather than one — `onResubscribe` fires only on a
-**reconnect** (a `SUBSCRIBED` after the channel's first one, step 11-5), never on the initial connect,
-since nothing could have been missed before the channel existed and the caller's own mount fetch
-already has current truth. A re-read is the repair; it never carries a list id, since it cannot know
-what it missed. `broadcast: { replay: { since, limit } }` exists and works, but redelivers
-duplicates and is bounded by a limit and by three days of retention; one fetch is unbounded and already
-written. **`realtime.send` also swallows its own failures**, so a nudge that cannot be written never
-aborts the user's write — one more reason a message is a hint, never the thing that makes a change
-real.
+dies with its connection). Hence `onResubscribe`, which fires only on a **reconnect** (a `SUBSCRIBED`
+after the channel's first), never on the initial connect — the mount fetch already has current truth.
+It may have missed either kind of nudge, so `ListsContext` makes it stand for **both**: a full list
+re-read and a `lastNotificationsNudge` bump. `broadcast: { replay: { since, limit } }` exists, but
+redelivers duplicates and is bounded by a limit and three days of retention; one fetch is unbounded.
+**`realtime.send` also swallows its own failures**, so a nudge that cannot be written never aborts the
+user's write.
 
-**Realtime is an optimisation over a path that already works, and the foreground re-fetch stays exactly
-as it was.** A socket that never connects costs latency, not correctness. Do not delete the
-`AppState`/`visibilitychange` effect as now-redundant
-([first-fetch-replaces-list-state](first-fetch-replaces-list-state.md)); it is the belt to this
-feature's braces, and it closes gaps this cannot.
+**Realtime is an optimisation over a path that already works, and the foreground re-fetch stays.** A
+socket that never connects costs latency, not correctness. Do not delete the
+`AppState`/`visibilitychange` effects — `ListsContext`'s
+([first-fetch-replaces-list-state](first-fetch-replaces-list-state.md)) or `NotificationsContext`'s
+twin — as now-redundant; they close gaps this cannot.
 
-**Three details in the migration that look tidyable and are not.**
+**Three details in the realtime migration that look tidyable and are not.**
 
 - **`after update on public.lists`, never `after insert or update`.** Trigger name order would run
   `notify_on_list_create` before `on_list_created`, and at that instant the creator has no
@@ -87,34 +95,25 @@ feature's braces, and it closes gaps this cannot.
   `(user_id, created_at)` index the read path was built around.
 
 **Deletion needed no realtime change — measured.** A soft delete is an `UPDATE`
-([deletion-is-a-tombstone](deletion-is-a-tombstone.md)) the existing update triggers already fan out,
-and `list_members` rows survive it. One artifact to recognise rather than debug: the nightly purge's
-cascade to `list_members` fires the `departed` arm, nudging members at 03:30 about a list that left
-their fetch 30 days ago — harmless, since delivery is at-most-once and sockets are almost surely down.
+([deletion-is-a-tombstone](deletion-is-a-tombstone.md)) the update triggers already fan out. The
+nightly purge's cascade to `list_members` fires the `departed` arm, nudging members at 03:30 about a
+list that left their fetch 30 days ago — harmless, an artifact to recognise rather than debug.
 
 **What it does not solve.** Last-write-wins is unchanged — realtime makes it *visible*, not different.
-One gap survives by design: socket up, a single message dropped in flight, nothing else changes that
-list, app never backgrounded — the screen stays stale until a resubscribe or foreground. Echo
-suppression and a "just updated" affordance were offered and declined; your own write nudges you back
-in ~30 ms and that echo is the cheapest correct way to pick up server-stamped values. And since task 23
-a nudged list shows only if it sorts inside the pages loaded so far, in its own stream's order
-(`withinLoadedRange`): one newly shared with you joins the end of your live stream, so past a page it
-waits for the scroll that reaches it ([scope-boundaries](scope-boundaries.md)); one binned elsewhere
-heads the bin, which is `(deletedAt, id)` **descending**, and shows at once. That is paging, not a lost
-message. Flip the bin's comparison and the only symptom is a newly binned list missing until a scroll.
+Socket up, a single message dropped, nothing else changes that list, app never backgrounded — the
+screen stays stale until a resubscribe or foreground. Echo suppression was declined; your own write
+nudges you back in ~30 ms, the cheapest correct way to pick up server-stamped values. And a nudged
+list shows only if it sorts inside the pages loaded so far (`withinLoadedRange`): one newly shared
+joins the end of your live stream, so past a page it waits for a scroll
+([scope-boundaries](scope-boundaries.md)); one binned elsewhere heads the bin, which is
+`(deletedAt, id)` **descending**, and shows at once. Flip the bin's comparison and the only symptom is
+a newly binned list missing until a scroll.
 
-**Schema-level proof on cloud, not delivery proof.** The migration was pushed and confirmed on
-2026-09-10 (`npx supabase db dump --linked -s realtime` shows the receive policy, the `public` dump
-the triggers — read back, not inferred from the push exiting 0: [supabase-local-stack](supabase-local-stack.md)).
-No client has connected to the cloud realtime socket and no two-device run has happened; the ~1s
-latency is a local-stack figure. Read the push as "nothing in the schema is left to stop it", never
-as "realtime works on cloud".
+**Cloud has schema-level proof only, for the 2026-09-10 realtime migration** — the receive policy and
+triggers read back from `npx supabase db dump --linked`
+([supabase-local-stack](supabase-local-stack.md)). No client has connected to the cloud socket; ~1 s
+is a local figure. **If you re-run the security probe, tag every message with its recipient** — with
+one shared collector the writer's own echo counts as a message a removed member received.
 
-**If you re-run the security probe, tag every message with its recipient.** A probe whose subjects
-share one collector cannot answer "who received this" — the writer's own echo will count as a message
-a removed member received, and the check will "fail" on a false positive.
-
-The `verify:` asserts the topic-only receive policy, exactly **one** policy on `realtime.messages`,
-membership read at write time, an update-only `lists` trigger, no `'postgres_changes'` in `src`, a
-`private` channel, `listId` decoded the same way, both callbacks on `refreshSoon`, `onResubscribe`
-gated on the `connected` flag, and the bin compared newest first.
+The `verify:` pins the one topic-only policy, the triggers and topics above, a `private` channel
+binding both events, the four-callback subscription, both debounces' consumers, and the bin order.

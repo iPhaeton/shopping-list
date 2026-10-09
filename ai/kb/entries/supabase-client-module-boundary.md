@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [supabase, auth, testing, architecture]
 sources: [ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/8-realtime/implementation-log-step-1.md, ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/23-list-limits/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/26-apple-sign-in/implementation-log-step-3.md, 9421c3c, src/lib/supabase.ts, src/lib/limits.ts, src/state/SessionContext.test.tsx, src/lib/listsApi.test.ts, src/lib/listsChannel.ts, src/lib/membersApi.ts, src/lib/profileApi.ts]
-last_verified: 2026-10-07
+last_verified: 2026-10-09
 verify: test -z "$(grep -rn "from '@supabase/supabase-js'" src --include='*.ts' --include='*.tsx' | grep -v '^src/lib/supabase.ts:' | grep -v 'import type')" && for f in $(grep -rl '<ListsProvider' src --include='*.test.tsx'); do grep -q "jest.mock('../lib/listsChannel'" "$f" || exit 1; done && for f in src/state/SessionContext.test.tsx src/screens/AccountScreen.test.tsx src/screens/SharingScreen.test.tsx src/screens/SetNameScreen.test.tsx; do grep -q "jest.mock('../lib/profileApi'" "$f" || exit 1; done && grep -q "import { supabase } from './supabase';" src/lib/profileApi.ts && grep -q "error.name !== 'FunctionsHttpError'" src/lib/profileApi.ts && grep -q "from '../lib/membersApi'" src/components/UserAutocomplete.tsx && for f in $(ls src/components/*.ts src/components/*.tsx | grep -v 'UserAutocomplete' | grep -v '\.test\.'); do ! grep -q "from '../lib/" "$f" || exit 1; done && grep -q "import { listLimitSentence } from '../lib/limits';" src/screens/ListsScreen.tsx && ! grep -qE "from '\./(listsApi|supabase)'" src/lib/limits.ts && test -z "$(grep -H "from '../lib/listsApi'" src/screens/*.tsx | grep -v '\.test\.tsx:' | grep -v ':import type ')"
 related: [writes-retry-from-an-outbox, supabase-local-stack, supabase-target-picked-at-runtime, realtime-is-a-nudge-to-a-per-user-inbox, rntl-14-api-changes, component-suite-earned-by-owned-logic]
 ---
@@ -34,7 +34,7 @@ faking PostgREST's chained builder (`.from().select().order()`) is far more work
 [src/lib/membersApi.ts](../../../src/lib/membersApi.ts) imports `supabase` from here directly and
 `resultFor`/`type Result` from `listsApi.ts` rather than redefining them, so it is built *on top of*
 `listsApi.ts`, which keeps the list/item functions and the shared result-classification helpers.
-A suite rendering a screen that touches both mocks `../lib/listsApi` and `../lib/membersApi` as two
+`notificationsApi.ts` (task 28) takes `resultFor` from `listsApi.ts` the same way. A suite rendering a screen that touches both mocks `../lib/listsApi` and `../lib/membersApi` as two
 separate `jest.mock(...)` calls, never one file standing in for the other.
 
 **[src/lib/listsChannel.ts](../../../src/lib/listsChannel.ts) sits at the seam too, and is not a
@@ -45,15 +45,15 @@ query module.** It holds `subscribeToChanges`, the client side of the realtime s
 **The consequence every list suite pays: a suite that renders `ListsProvider` must
 `jest.mock('../lib/listsChannel', …)`, or the provider opens a websocket under jest.** The `verify:`
 asserts every `ListsProvider`-rendering suite has one, so a new one that forgets fails the check. In
-`ListsContext.test.tsx` the mock is also the *handle*: it captures the two callbacks so a test can
+`ListsContext.test.tsx` the mock is also the *handle*: it captures the callbacks so a test can
 deliver a nudge or a reconnect by hand, wrapped in `act` because it is an external update
 ([rntl-14-api-changes](rntl-14-api-changes.md)).
 
-**A screen may call the query module directly, and one does.** `SharingScreen` calls `fetchMembers`
-/ `shareList` / `setMemberRole` / `removeMember` / `leaveList` itself rather than going through `ListsContext`,
-because the roster is not in `State`, is not cached, and has nothing for `replay` to fold. The seam
-is unchanged by that — the screen still imports a query module, never `supabase` — it is just
-`membersApi.ts` for all five, plus `type Result` from `listsApi.ts`; its suite mocks both. The
+**A screen may call the query module directly, and one does.** `SharingScreen` calls `membersApi`'s
+roster and invitation functions (`fetchMembers`, `fetchInvitations`, `inviteToList`, ...) itself
+rather than going through `ListsContext`, because neither is in `State`, is cached, or has anything
+for `replay` to fold. The seam is unchanged by that — the screen still imports a query module, never
+`supabase` — plus `type Result` from `listsApi.ts`; its suite mocks both. The
 rule to carry: state that the reducer owns goes through the provider; state that only one screen has
 goes in that screen's `useState`, calling the query module directly.
 
@@ -111,10 +111,10 @@ mocks `../lib/listsApi` with a factory, and `supabase.ts` throws at import witho
 the factory's copy, and a test asserting it would assert the mock against itself. So the limits
 (`MAX_OWNED_LISTS`, `MAX_LISTS`, `MAX_ITEMS`, the SQLSTATEs and the three sentences) live in
 [src/lib/limits.ts](../../../src/lib/limits.ts), which imports neither, not beside `MAX_ROWS`;
-`humanize` and `ListsScreen` both read them there. `src/lib/searchCopy.ts` is the same kind of
+`humanize` and `ListsScreen` read them there, as does Notifications when `acceptInvitation` rephrases a
+limit refusal. `src/lib/searchCopy.ts` is the same kind of
 module, reusing `limits.ts`' exported `grouped`. The `verify:` keeps screens to type imports from
 `listsApi` and `limits.ts` free of both modules.
 
-**What to do:** need Supabase anywhere new in `src/`? Import from `../lib/supabase`, and put
-anything that needs configuring — storage, realtime, a service client — in that file rather than at
-the call site. The `verify:` fails on any other file importing the library at runtime.
+**What to do:** need Supabase anywhere new in `src/`? Import from `../lib/supabase`, and put anything
+that needs configuring — storage, realtime, a service client — in that file, not at the call site.

@@ -4,9 +4,9 @@ title: A SELECT policy also gates the rows UPDATE and DELETE may touch, so self-
 type: gotcha
 status: current
 tags: [supabase, postgres, rls, security]
-sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, supabase/migrations/20260924000000_leave_list.sql]
-last_verified: 2026-09-23
-verify: grep -A1 'create policy "read your own memberships" on public.list_members' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'for select using (user_id = (select auth.uid()));' && grep -A3 'create function public.set_member_role' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer' && grep -A3 'create function public.remove_member' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer'
+sources: [ai/tasks/7-list-sharing/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, supabase/migrations/20260907000000_list_sharing.sql, supabase/migrations/20260924000000_leave_list.sql, ai/tasks/28-invitations/implementation-log-step-3.md, 5ab9b85, supabase/migrations/20261009000000_drop_share_list.sql, supabase/migrations/20261008000000_invitations.sql]
+last_verified: 2026-10-09
+verify: grep -A1 'create policy "read your own memberships" on public.list_members' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'for select using (user_id = (select auth.uid()));' && grep -A3 'create function public.set_member_role' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer' && grep -A3 'create function public.remove_member' supabase/migrations/20260907000000_list_sharing.sql | grep -q 'security definer' && grep -A3 'create function public.invite_to_list' supabase/migrations/20261008000000_invitations.sql | grep -q 'security definer' && grep -A3 'create function public.withdraw_invitation' supabase/migrations/20261008000000_invitations.sql | grep -q 'security definer'
 related: [list-data-scoped-by-rls, read-rooted-at-list-members, supabase-default-grants-defeat-revokes, refused-writes-return-zero-rows]
 indexed: false
 ---
@@ -31,16 +31,18 @@ qual the whole read path is built on
 ([read-rooted-at-list-members](read-rooted-at-list-members.md)).
 
 **So managing *other* people goes through `security definer` RPCs** — `set_member_role(list, user,
-role)` and `remove_member(list, user)`, alongside `share_list` — each repeating in its body the owner
-check its matching policy states, each raising `42501` when the caller is not an owner and `P0002`
-when the person named is not there. The two
+role)` and `remove_member(list, user)` — each repeating in its body the owner check its matching
+policy states, each raising `42501` when the caller is not an owner and `P0002` when the person named
+is not there. Asking someone *onto* a list is the same shape: `invite_to_list` and
+`withdraw_invitation` are definer RPCs that check ownership in their bodies, over invitation tables
+with no policy at all ([list-data-scoped-by-rls](list-data-scoped-by-rls.md)). The two
 policies are kept anyway: what they *do* reach is real (an owner demoting or removing **themselves**,
 which is what the `keep_last_owner` trigger exists to police), and they are the rule the RPCs must
 stay in step with. Do not delete them as dead weight, and do not add a third way in.
 
 **Over HTTP the same silence is worse, because it reaches the app.** A client `DELETE` filtered to
 zero rows comes back `204` with no error and is read as success — measured for a non-owner trying to
-remove their own membership. That is why step 19's "Leave list" is a fourth membership RPC
+remove their own membership. That is why step 19's "Leave list" is a membership RPC
 (`leave_list`), not a client `DELETE`, even though a *new*, self-scoped delete policy would in fact be
 reachable here (unlike the owner-acting-on-someone-else case this entry describes, since the select
 policy already always shows a caller their own row) — the RPC was chosen anyway, for the session guard
@@ -51,5 +53,5 @@ a filtered write in general.
 **What to do:** when a role must act on rows it cannot see, reach for a definer function, not a
 policy. And when testing a policy, assert the **row count**, not the absence of an error — `DELETE 0`
 and `UPDATE 0` are how RLS says no to a write whose target it hid from you. The `verify:` command
-asserts the trio this rests on: the membership select policy is still self-only, and both member
-management RPCs are still `security definer`.
+asserts what this rests on: the membership select policy is still self-only, and both member
+management RPCs and both invitation-managing RPCs are still `security definer`.

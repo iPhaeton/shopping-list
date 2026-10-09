@@ -4,9 +4,9 @@ title: Screens take navigation/route as props, never useNavigation()
 type: convention
 status: current
 tags: [navigation, screens, testing]
-sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, 6ef87a2]
-last_verified: 2026-10-03
-verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && test "$(grep -c '<Stack.Screen' src/navigation/RootNavigator.tsx)" = "$(grep -c 'headerShown: false' src/navigation/RootNavigator.tsx)" && ! grep -rq 'headerRight' src --include='*.tsx' --exclude='*.test.tsx' && grep -q 'onBack={() => navigation.goBack()}' src/screens/AccountScreen.tsx && grep -qF 'label="Back" outline={colors.outline} onPress={() => navigation.goBack()}' src/screens/SharingScreen.tsx && grep -q 'setOptions).toHaveBeenCalledWith(expect.objectContaining({ title:' src/screens/ListDetailScreen.test.tsx
+sources: [ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/7-list-sharing/implementation-log-step-2.md, ai/tasks/14-account-screen/implementation-log-step-1.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/tasks/28-invitations/implementation-log-step-3.md, ai/tasks/28-invitations/implementation-log-step-4.md, 6ef87a2, 5ab9b85, 0508f98]
+last_verified: 2026-10-09
+verify: ! grep -rqE 'useNavigation\(|useRoute\(' src/screens --include='*.tsx' --exclude='*.test.tsx' && grep -q 'Sharing: { listId: string }' src/navigation/types.ts && grep -q 'SetName: undefined;' src/navigation/types.ts && grep -q 'Notifications: undefined;' src/navigation/types.ts && grep -q 'BlockedPeople: undefined;' src/navigation/types.ts && grep -q "navigation.addListener('blur'" src/screens/NotificationsScreen.tsx && grep -A1 "navigation.addListener('focus'" src/screens/NotificationsScreen.tsx | grep -q 'if (!left.current) return;' && grep -q 'addListener: jest.fn(' src/screens/NotificationsScreen.test.tsx && grep -q 'right?: ReactNode;' src/components/ScreenHeader.tsx && test "$(grep -c '<Stack.Screen' src/navigation/RootNavigator.tsx)" = "$(grep -c 'headerShown: false' src/navigation/RootNavigator.tsx)" && ! grep -rq 'headerRight' src --include='*.tsx' --exclude='*.test.tsx' && grep -q 'onBack={() => navigation.goBack()}' src/screens/AccountScreen.tsx && grep -qF 'label="Back" outline={colors.outline} onPress={() => navigation.goBack()}' src/screens/SharingScreen.tsx && grep -q 'setOptions).toHaveBeenCalledWith(expect.objectContaining({ title:' src/screens/ListDetailScreen.test.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels, react-native-screens-past-the-sdk-pin, expo-sdk-version, phone-is-the-product, maestro-drives-the-native-ui, list-headers-are-pinned-and-opaque]
 ---
 
@@ -20,12 +20,20 @@ whole `NavigationContainer`. See the header comment in
 [src/screens/ListsScreen.test.tsx](../../../src/screens/ListsScreen.test.tsx). `SharingScreen` also
 takes `popToTop`, which sends you back when you remove your own membership.
 
+**A screen that reacts to coming back subscribes through the `navigation` prop too.**
+[NotificationsScreen](../../../src/screens/NotificationsScreen.tsx) listens to `blur` and `focus`
+with `navigation.addListener` and reloads only on a focus that **follows a blur**: React Navigation
+emits `focus` when the screen is first pushed, while the mount read is still in flight, so reloading
+on every focus would read twice per visit. Its suite's stub supplies an `addListener` that records
+listeners and returns an unsubscribe, plus an `emit('blur' | 'focus')` helper to fire them.
+
 **No screen has a native header, and none hands a control to the navigator (since task 20 step 5).**
-In [RootNavigator.tsx](../../../src/navigation/RootNavigator.tsx) all six routes carry
+In [RootNavigator.tsx](../../../src/navigation/RootNavigator.tsx) all eight routes carry
 `headerShown: false`, and the stack's `screenOptions` hold only `contentStyle`. Each screen draws
-its own header inside its own scrolling tree: the Account pill on Lists; Back, the Rename/Share pills
-and the serif title on List detail; on Account a
-[ScreenHeader](../../../src/components/ScreenHeader.tsx) — a round `Back` over the serif title; and
+its own header inside its own scrolling tree: the round search, bell and Account buttons on Lists;
+Back, the Rename/Share pills and the serif title on List detail; on Account, Notifications and
+Blocked people a [ScreenHeader](../../../src/components/ScreenHeader.tsx) — a round `Back` over the
+serif title, with an optional `right` node opposite Back (Notifications' `Blocked people` pill); and
 on Sharing, since task 20 step 6, the same `Back` `IconButton` and title drawn inline in its pinned
 header ([list-headers-are-pinned-and-opaque](list-headers-are-pinned-and-opaque.md)), its
 `List not found` state included. Because those controls live in the screen's tree, a suite presses
@@ -76,5 +84,7 @@ navigating away from it. `SignIn` exists only while signed out. `SetName` exists
 
 The `verify:` sweeps **all** of `src/screens/` for both hooks. Test files are excluded, because
 `ListsScreen.test.tsx` names `useNavigation()` in a comment. It also pins the `Sharing` and
-`SetName` routes, one `headerShown: false` per `Stack.Screen`, no `headerRight` anywhere in `src/`,
-Account's `ScreenHeader` Back and Sharing's inline one, and the `objectContaining` title assertion.
+`SetName`, `Notifications` and `BlockedPeople` routes, one `headerShown: false` per `Stack.Screen`,
+no `headerRight` anywhere in `src/`, Account's `ScreenHeader` Back and Sharing's inline one,
+`ScreenHeader`'s `right`, Notifications' focus-after-blur listener and its suite's `addListener` stub,
+and the `objectContaining` title assertion.

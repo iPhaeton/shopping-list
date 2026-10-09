@@ -1,12 +1,12 @@
 ---
 id: keyset-paging-in-the-order-shown
-title: Every paged read is keyset in the order its screen shows — live oldest first, the bin newest deletion first — and a redundant range bound beside the keyset `or` is what decides the plan
+title: Every paged read is keyset in the order its screen shows — live lists and items oldest first, bins newest deletion first, notifications and blocks newest first — and a redundant range bound beside the keyset `or` is what decides the plan
 type: decision
 status: current
-tags: [supabase, postgres, postgrest, performance, pagination, persistence, deletion]
-sources: [ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, src/lib/listsApi.ts, src/state/listsReducer.ts, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20261002000000_items_bin_order.sql]
-last_verified: 2026-10-03
-verify: grep -Fq ".order('created_at').order('id').limit(limit)" src/lib/listsApi.ts && grep -Fq ".order('created_at').order('list_id').limit(limit)" src/lib/listsApi.ts && grep -A3 "\.gte('created_at', after.createdAt)" src/lib/listsApi.ts | grep -Fq 'created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",id.gt."${after.id}")' && grep -A3 "\.gte('created_at', after.createdAt)" src/lib/listsApi.ts | grep -Fq 'and(created_at.eq."${after.createdAt}",list_id.gt."${after.id}")' && grep -Fq ".order('deleted_at', { ascending: false }).order('id', { ascending: false }).limit(limit)" src/lib/listsApi.ts && grep -A3 "\.lte('deleted_at', after.deletedAt)" src/lib/listsApi.ts | grep -Fq 'deleted_at.lt."${after.deletedAt}",and(deleted_at.eq."${after.deletedAt}",id.lt."${after.id}")' && grep -Fq ".order('lists(deleted_at)', { ascending: false })" src/lib/listsApi.ts && grep -A4 "\.lte('lists.deleted_at', after.deletedAt)" src/lib/listsApi.ts | grep -Fq "{ referencedTable: 'lists' }" && ! grep -B2 "referencedTable: 'lists'" src/lib/listsApi.ts | grep -q '\.order(' && grep -q 'create index on public.items (list_id, created_at);' supabase/migrations/20260831000000_lists.sql && grep -q '^create index items_bin_order_idx on public.items (list_id, deleted_at, id) where deleted_at is not null;$' supabase/migrations/20261002000000_items_bin_order.sql && grep -q 'byStamp(b.deletedAt, b.id, a.deletedAt, a.id)' src/state/listsReducer.ts && grep -q 'inDeletionOrder(bin)' src/screens/ListsScreen.tsx && grep -q 'inDeletionOrder(bin)' src/screens/ListDetailScreen.tsx
+tags: [supabase, postgres, postgrest, performance, pagination, persistence, deletion, notifications]
+sources: [ai/tasks/11-pagination/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/description-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/28-invitations/implementation-log-step-1.md, ai/tasks/28-invitations/implementation-log-step-3.md, ai/tasks/28-invitations/implementation-log-step-4-unblock.md, 47965d5, 5ab9b85, 2916e6e, src/lib/listsApi.ts, src/lib/notificationsApi.ts, src/state/listsReducer.ts, src/screens/NotificationsScreen.tsx, src/screens/BlockedPeopleScreen.tsx, supabase/migrations/20260831000000_lists.sql, supabase/migrations/20261002000000_items_bin_order.sql, supabase/migrations/20261008000000_invitations.sql]
+last_verified: 2026-10-09
+verify: M=supabase/migrations/20261008000000_invitations.sql; grep -q '^     and n.created_at <= coalesce(p_before_at, '"'"'infinity'"'"')$' $M && grep -q '^     and b.created_at <= coalesce(p_before_at, '"'"'infinity'"'"')$' $M && grep -q '^   order by n.created_at desc, n.id desc$' $M && grep -q '^   order by b.created_at desc, b.blocked_id desc$' $M && test "$(grep -c '^   limit least(greatest(p_limit, 1), 1000)$' $M)" = 2 && grep -q 'create index on public.notifications (recipient_id, created_at desc, id desc);' $M && grep -q 'create index on public.user_blocks (blocker_id, created_at desc, blocked_id desc);' $M && grep -q 'const limit = Math.min(Math.max(shown + 1, NOTIFICATION_PAGE_SIZE), NOTIFICATION_RELOAD_MAX);' src/screens/NotificationsScreen.tsx && grep -q 'if (!live.current || mine !== reloadSeq.current) return;' src/screens/NotificationsScreen.tsx && grep -q 'cursorRef.current !== asked) return;' src/screens/NotificationsScreen.tsx && grep -q 'cursor: rows.length < limit || !last ? null : { createdAt: last.created_at, id: last.id },' src/lib/notificationsApi.ts && grep -Fq ".order('created_at').order('id').limit(limit)" src/lib/listsApi.ts && grep -Fq ".order('created_at').order('list_id').limit(limit)" src/lib/listsApi.ts && grep -A3 "\.gte('created_at', after.createdAt)" src/lib/listsApi.ts | grep -Fq 'created_at.gt."${after.createdAt}",and(created_at.eq."${after.createdAt}",id.gt."${after.id}")' && grep -A3 "\.gte('created_at', after.createdAt)" src/lib/listsApi.ts | grep -Fq 'and(created_at.eq."${after.createdAt}",list_id.gt."${after.id}")' && grep -Fq ".order('deleted_at', { ascending: false }).order('id', { ascending: false }).limit(limit)" src/lib/listsApi.ts && grep -A3 "\.lte('deleted_at', after.deletedAt)" src/lib/listsApi.ts | grep -Fq 'deleted_at.lt."${after.deletedAt}",and(deleted_at.eq."${after.deletedAt}",id.lt."${after.id}")' && grep -Fq ".order('lists(deleted_at)', { ascending: false })" src/lib/listsApi.ts && grep -A4 "\.lte('lists.deleted_at', after.deletedAt)" src/lib/listsApi.ts | grep -Fq "{ referencedTable: 'lists' }" && ! grep -B2 "referencedTable: 'lists'" src/lib/listsApi.ts | grep -q '\.order(' && grep -q 'create index on public.items (list_id, created_at);' supabase/migrations/20260831000000_lists.sql && grep -q '^create index items_bin_order_idx on public.items (list_id, deleted_at, id) where deleted_at is not null;$' supabase/migrations/20261002000000_items_bin_order.sql && grep -q 'byStamp(b.deletedAt, b.id, a.deletedAt, a.id)' src/state/listsReducer.ts && grep -q 'inDeletionOrder(bin)' src/screens/ListsScreen.tsx && grep -q 'inDeletionOrder(bin)' src/screens/ListDetailScreen.tsx
 related: [read-rooted-at-list-members, max-rows-is-a-silent-ceiling, deletion-is-a-tombstone, realtime-is-a-nudge-to-a-per-user-inbox, first-fetch-replaces-list-state, list-cache-holds-acknowledged-rows, supabase-local-stack]
 ---
 
@@ -21,6 +21,25 @@ only ever lands below the rows already shown:
 | items, bin | `(deleted_at, id)` descending | `lte` | partial `items_bin_order_idx` |
 | lists, live | the membership's `(created_at, list_id)` — when you joined | `gte` | `list_members (user_id, created_at)` |
 | lists, bin | the list's `(deleted_at, id)` descending, through the embed | `lte` | none can serve it |
+| notifications (`my_notifications` RPC) | `(created_at, id)` descending | `<= coalesce(…)` | `notifications (recipient_id, created_at desc, id desc)` |
+| blocked people (`my_blocked_users` RPC) | `(created_at, blocked_id)` descending | `<= coalesce(…)` | `user_blocks (blocker_id, created_at desc, blocked_id desc)` |
+
+**Inside a SQL definer RPC the redundant bound must be `<= coalesce(p_before_at, 'infinity')`**
+([the invitations migration](../../../supabase/migrations/20261008000000_invitations.sql)). A
+non-inlined SQL function is planned without its argument values, so `p_before_at is null or …`
+leaves the bound in a Filter instead of the index condition: 752 vs 16,783 buffers at depth 8,000.
+Both RPCs clamp the page to `least(greatest(p_limit, 1), 1000)` — so **a null `p_limit` returns 1
+row**, not a default page. Always pass it.
+
+**Notifications page on scroll, outside `ListsContext`**
+([NotificationsScreen](../../../src/screens/NotificationsScreen.tsx)). Its reload (mount, nudge,
+return) re-reads everything shown in one call **and asks for one row more**: asking for exactly the
+rows shown hands back a cursor at the end, and the next scroll reads an empty page — found in the
+browser. Only the latest-started reload lands; a scroll page lands only if it continues the cursor
+the screen still holds; the cursor is the last *raw* row's, taken before rows of an unknown kind are
+dropped ([notificationsApi](../../../src/lib/notificationsApi.ts)). **New notification rows can land
+behind the newest**: an unblock restores an invitation dated when it was sent. Never assume new rows
+arrive only on page 1 — Notifications is safe because its reload re-reads everything shown.
 
 **Why the bin pages by `deleted_at` (task 24 step 2).** Had it kept paging by `created_at` while the
 bin view sorts newest deletion first, page 2 could hold yesterday's deletion and push it *above* rows
@@ -78,5 +97,6 @@ redundant bound beside its `or`, and is measured with
 Every page stays guarded against the silent row cap
 ([max-rows-is-a-silent-ceiling](max-rows-is-a-silent-ceiling.md)). The `verify:` pins both live
 keysets with their `gte`, the item bin's keyset with its `lte` and descending order, the lists bin's
-embed order and its `referencedTable` filter (and none on an order), both item indexes, and the
-client sorting the bin in the same direction.
+embed order and its `referencedTable` filter (and none on an order), both item indexes, the client
+sorting the bin in the same direction, both RPCs' `coalesce` bound, order, clamp and index, and the
+Notifications reload's extra row, latest-wins guard, cursor check and raw-row cursor.

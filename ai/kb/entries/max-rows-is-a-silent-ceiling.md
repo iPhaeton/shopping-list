@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [supabase, postgrest, pagination, config, persistence]
 sources: [ai/tasks/11-pagination/implementation-log-step-1.md, ai/suggestions/pagination.md, supabase/config.toml, src/lib/listsApi.ts, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md]
-last_verified: 2026-10-07
+last_verified: 2026-10-09
 verify: test "$(grep -oE '^max_rows = [0-9]+' supabase/config.toml | grep -oE '[0-9]+')" = "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && test "$(grep -oE '^export const LIST_PAGE_SIZE = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" -le "$(grep -oE '^export const MAX_ROWS = [0-9]+' src/lib/listsApi.ts | grep -oE '[0-9]+')" && ! awk '/^\[remotes\.production\]/{f=1} f' supabase/config.toml | grep -q '^max_rows' && test "$(grep -c '\.limit(limit)' src/lib/listsApi.ts)" = 4 && test "$(grep -c '\.limit(' src/lib/listsApi.ts)" = 4 && test "$(grep -c 'if (limit > MAX_ROWS)' src/lib/listsApi.ts)" = 2 && test "$(grep -c 'rows.length < limit' src/lib/listsApi.ts)" = 2 && ! grep -q 'limit(MAX_ROWS)' src/lib/listsApi.ts
 related: [keyset-paging-in-the-order-shown, read-rooted-at-list-members, deletion-is-a-tombstone, supabase-config-push-sends-the-whole-root, scope-boundaries, supabase-local-stack]
 indexed: false

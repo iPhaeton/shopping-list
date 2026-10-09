@@ -4,8 +4,8 @@ title: Lists, List detail and Sharing pin their whole header inside their scroll
 type: decision
 status: current
 tags: [ui, layout, flatlist, scrollview, ios, design, sharing]
-sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md]
-last_verified: 2026-10-03
+sources: [ai/tasks/22-sticky-headers/description-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-1.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md, ai/tasks/20-ux/description-step-6.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/23-list-limits/implementation-log-step-1.md, ai/tasks/24-search-and-sort/implementation-log-step-2.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/28-invitations/implementation-log-step-3.md, 5ab9b85]
+last_verified: 2026-10-09
 verify: grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListsScreen.tsx && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/ListDetailScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListsScreen.tsx && grep -q 'ListHeaderComponent={header}' src/screens/ListDetailScreen.tsx && grep -q 'style={styles.headerSky}' src/screens/ListsScreen.tsx && test "$(grep -c '<Sky height={SKY_HEIGHT} />' src/screens/ListsScreen.tsx)" = 2 && ! grep -q statusBarSky src/screens/ListsScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/ListDetailScreen.tsx && grep -q '<View style={styles.header}>' src/screens/ListDetailScreen.tsx && grep -A1 '^  header: {' src/screens/ListDetailScreen.tsx | grep -q 'backgroundColor: colors.skyHorizon' && grep -q 'stickyHeaderIndices={\[0\]}' src/screens/SharingScreen.tsx && grep -q 'styles.statusBarSky, { height: insets.top }' src/screens/SharingScreen.tsx && grep -A1 '^  header: {' src/screens/SharingScreen.tsx | grep -q 'backgroundColor: colors.skyHorizon'
 related: [phone-is-the-product, screens-take-navigation-props, maestro-drives-the-native-ui, svg-percent-size-frozen-on-ios, absolute-decoration-needs-pointer-events-on-its-wrapper]
 indexed: false
@@ -13,7 +13,8 @@ indexed: false
 
 **The user's requirement (task 22, 2026-09-28): on Lists and List detail the header, Create or Add
 bar included, is always on top.** "Header" is each screen's whole `ListHeaderComponent`: the title
-row (with the search/new `ModeButton`), the sync banner, the slot (the Create or Add bar, the
+row (with the search/new `ModeButton`, and on Lists the Notifications and Account `IconButton`s),
+the sync banner, the slot (the Create or Add bar, the
 `SearchField` with `SortButtons`, or a `BarSentence`), any `CoverageLine`, and the
 `Horizon`/`Hillside` strip with Show deleted. Its height therefore varies with mode. Both
 `FlatList`s pin it with `stickyHeaderIndices={[0]}`. With a `ListHeaderComponent`, index 0 is the

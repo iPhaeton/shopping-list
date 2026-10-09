@@ -3,10 +3,10 @@ id: realtime-channel-shared-per-topic
 title: A second subscribeToChanges call for the same user shares, and can tear down, the first's channel
 type: gotcha
 status: current
-tags: [supabase, realtime, state]
-sources: [ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/screens/SharingScreen.tsx]
-last_verified: 2026-10-03
-verify: test "$(grep -rn 'subscribeToChanges(userId' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.' | wc -l | tr -d ' ')" = 1 && grep -q 'return subscribeToChanges(userId, onNudge, onNudge);' src/state/ListsContext.tsx && grep -q 'lastNudge: { listId: string | undefined } | null;' src/state/ListsContext.tsx && grep -q 'const { lists, userId, refresh, lastNudge } = useLists();' src/screens/SharingScreen.tsx && ! grep -q 'subscribeToChanges' src/screens/SharingScreen.tsx
+tags: [supabase, realtime, state, notifications]
+sources: [ai/tasks/19-remove-oneself/implementation-log-step-2.md, ai/tasks/19-remove-oneself/implementation-log-step-3.md, ai/tasks/28-invitations/implementation-log-step-3.md, 5ab9b85, src/lib/listsChannel.ts, src/state/ListsContext.tsx, src/state/NotificationsContext.tsx, src/screens/SharingScreen.tsx, src/screens/NotificationsScreen.tsx]
+last_verified: 2026-10-09
+verify: test "$(grep -rn 'subscribeToChanges(userId' src --include='*.ts' --include='*.tsx' | grep -v '\.test\.' | wc -l | tr -d ' ')" = 1 && grep -q 'return subscribeToChanges(userId, onNudge, onResubscribe, onNotifications);' src/state/ListsContext.tsx && grep -q 'lastNudge: { listId: string | undefined } | null;' src/state/ListsContext.tsx && grep -q 'lastNotificationsNudge: object | null;' src/state/ListsContext.tsx && grep -q 'const onNotifications = () => setLastNotificationsNudge({});' src/state/ListsContext.tsx && grep -q 'const { lists, userId, refresh, lastNudge } = useLists();' src/screens/SharingScreen.tsx && grep -q 'const { lastNotificationsNudge } = useLists();' src/state/NotificationsContext.tsx && grep -q 'lastNotificationsNudge } = useLists();' src/screens/NotificationsScreen.tsx && ! grep -rq 'subscribeToChanges' src/screens src/state/NotificationsContext.tsx --exclude='*.test.tsx'
 related: [realtime-is-a-nudge-to-a-per-user-inbox, writes-retry-from-an-outbox, queries-go-through-a11y-labels]
 indexed: false
 ---
@@ -30,15 +30,26 @@ silently killed `ListsContext`'s own realtime subscription for the rest of the s
 anyone visited Sharing and navigated away.
 
 **What to do:** a screen or hook that needs to react to a nudge but isn't (or can't be) part of
-`ListsContext`'s reducer state reads `lastNudge` off `useLists()` instead of calling
-`subscribeToChanges` itself. `lastNudge` (`{ listId: string | undefined } | null`) is set by the same
-`onNudge` wrapper the one subscription effect already calls for both `onChange` and `onResubscribe`; it
-is a fresh object on every nudge, including two in a row naming the same list, so an effect keyed on it
-by reference always re-fires. `listId` is `undefined` for a resubscribe or malformed payload, mirroring
-`refreshSoon`'s own "not sure what changed" fallback. Do not open a second `subscribeToChanges` call for
-a topic this app already holds open — route through `lastNudge` instead.
+`ListsContext`'s reducer state reads one of its two nudge values off `useLists()` instead of calling
+`subscribeToChanges` itself:
+
+- **`lastNudge`** (`{ listId: string | undefined } | null`), for `list/changed` — set by the `onNudge`
+  wrapper, which is also the channel's `onChange`. `listId` is `undefined` for a resubscribe or a
+  malformed payload, mirroring `refreshSoon`'s "not sure what changed" fallback. `SharingScreen`
+  reads it (destructured beside `lists`, `userId`, `refresh`) and re-reads its roster and invitations
+  when it names this list or nothing.
+- **`lastNotificationsNudge`** (`object | null`), for `notifications/changed` — the channel's fourth
+  callback, `onNotifications`, sets a fresh `{}` (task 28 step 3).
+  [NotificationsContext](../../../src/state/NotificationsContext.tsx)'s unread count and
+  [NotificationsScreen](../../../src/screens/NotificationsScreen.tsx) both read it.
+
+`ListsContext`'s `onResubscribe` bumps **both**, since a reconnect may have missed either kind. Each
+is a fresh object on every nudge, so an effect keyed on it by reference always re-fires — two in a
+row naming the same list included. A new event on the same topic gets a new callback on the one
+`subscribeToChanges` and a new value here, never a second channel.
 
 The `verify:` command asserts there is still exactly one call site of `subscribeToChanges(userId`
-outside test files, that it is still `ListsContext`'s wrapped `onNudge, onNudge` pair, that
-`lastNudge` is still exposed with its current shape, that `SharingScreen` still reads it from
-`useLists()`, and that `SharingScreen` itself never calls `subscribeToChanges`.
+outside test files, that it is still `ListsContext`'s four-callback form, that both nudge values are
+exposed with their current shapes, that `SharingScreen`, `NotificationsContext` and
+`NotificationsScreen` read them from `useLists()`, and that no screen or `NotificationsContext` calls
+`subscribeToChanges`.

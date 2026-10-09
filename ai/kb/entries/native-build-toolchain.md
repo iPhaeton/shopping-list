@@ -4,8 +4,8 @@ title: A native dev build works end to end on both platforms — `npm run ios`/`
 type: environment
 status: current
 tags: [environment, verification, expo, ios, android, java, xcode, cocoapods, signing, apple-developer]
-sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, ai/tasks/26-apple-sign-in/implementation-log-step-3.md, b15d384, 9421c3c]
-last_verified: 2026-10-07
+sources: [README.md, ai/marketing/app-naming-candidates.md, app.json, package.json, ai/suggestions/social-sign-in.md, ai/suggestions/otp-biometric-auth.md, ai/tasks/1/implementation-log-step-1.md, ai/tasks/2/implementation-log-step-2.md, ai/tasks/3/implementation-log-step-1.md, ai/tasks/5-supabase-cloud/implementation-log-step-1.md, ai/tasks/6-custom-smtp/implementation-log-step-2.md, ai/tasks/13-google-sign-in/plan-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-1.md, ai/tasks/13-google-sign-in/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/21-expo-sdk-57/implementation-log-step-1.md, ai/docs/xcode-27-report-2026-09-27.md, ai/tasks/22-sticky-headers/implementation-log-step-2.md, ai/tasks/20-ux/implementation-log-step-5.md, ai/tasks/20-ux/implementation-log-step-6.md, ai/tasks/24-search-and-sort/implementation-log-step-3.md, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, ai/tasks/26-apple-sign-in/implementation-log-step-3.md, b15d384, 9421c3c, ai/tasks/28-invitations/implementation-log-step-3.md, 5ab9b85, ai/tasks/28-invitations/implementation-log-step-4.md, 0508f98]
+last_verified: 2026-10-09
 verify: xcode-select -p | grep -q Xcode.app && xcrun simctl list devices available | grep -q 'iPhone 18 Pro (' && test -x ~/Library/Android/sdk/platform-tools/adb && test -x ~/Library/Android/sdk/emulator/emulator && command -v pod >/dev/null && grep -q '"expo-dev-client"' package.json && test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = com.shoppingloop.app && test "$(node -p "require('./app.json').expo.android.package")" = com.shoppingloop.app && grep -q '"android": "expo run:android"' package.json && grep -q '"ios": "expo run:ios"' package.json && test -x /opt/homebrew/opt/openjdk/bin/java && /opt/homebrew/opt/openjdk/bin/java -version 2>&1 | grep -qE '"(1[7-9]|[2-9][0-9])' && (! test -f android/app/build.gradle || grep -q "storeFile file('debug.keystore')" android/app/build.gradle) && defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier | grep -q 'teamID = YZ75T58P4Z;' && security find-identity -v -p codesigning | grep -q '"Apple Development: ' && grep -q 'return !_env.env.CI;' node_modules/expo/node_modules/@expo/cli/build/src/start/server/metro/instantiateMetro.js && env -u LANG -u LC_ALL -u LC_CTYPE /opt/homebrew/opt/ruby/bin/ruby -e 'exit(Encoding.default_external == Encoding::UTF_8 ? 1 : 0)'
 related: [expo-sdk-version, ios-device-build-skips-provisioning-flags, ios-scene-support-is-opt-in, supabase-local-stack, supabase-target-picked-at-runtime, shoppingloop-is-the-visible-name-only, suggestions-are-proposals, expo-crypto-undefined-under-jest, scope-boundaries, google-native-signin-library-gaps, maestro-drives-the-native-ui, dev-client-draws-over-the-app, phone-is-the-product, theme-reaches-native-surfaces, jest-cold-cache-timeouts]
 ---
@@ -61,14 +61,8 @@ a file compares one bundle with itself.
 **Android.** `npm run android -- --no-bundler` builds against the Metro that `npm run ios` already
 started. **The Android Gradle Plugin needs Java 17+, and plain `java` resolved to 11** —
 `/usr/libexec/java_home` registers only Homebrew's `openjdk@11`, though the unversioned `openjdk`
-(Java 23) sits at `/opt/homebrew/opt/openjdk`. Fixed in `~/.zshrc`, after the `ANDROID_HOME` block:
-
-```
-export JAVA_HOME="/opt/homebrew/opt/openjdk"
-export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-Maestro needs the same Java. The `verify:` probes that path, as the audit's `/bin/sh` skips `~/.zshrc`.
+(Java 23) sits at `/opt/homebrew/opt/openjdk`. `~/.zshrc`, after the `ANDROID_HOME` block, exports
+`JAVA_HOME="/opt/homebrew/opt/openjdk"` and puts `$JAVA_HOME/bin` first on `PATH`. Maestro needs the same Java. The `verify:` probes that path, as the audit's `/bin/sh` skips `~/.zshrc`.
 
 **What is set up:**
 
@@ -80,8 +74,8 @@ Maestro needs the same Java. The `verify:` probes that path, as the audit's `/bi
 - **[`app.json`](../../../app.json)'s `ios.bundleIdentifier` and `android.package`, both
   `com.shoppingloop.app`** — reverse-DNS of the `shopping-loop.com` domain the project controls,
   hyphen dropped because Android package segments must be Java identifiers. A separate decision from
-  [shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md).
-  `ai/marketing/app-naming-candidates.md` line 12 ("nothing blocks a rename") is stale research.
+  [shoppingloop-is-the-visible-name-only](shoppingloop-is-the-visible-name-only.md);
+  `ai/marketing/app-naming-candidates.md`'s "nothing blocks a rename" is stale.
 - **`ios/` and `android/`** exist from `npx expo prebuild`, gitignored and regenerable — still the
   managed workflow, scene wiring included ([ios-scene-support-is-opt-in](ios-scene-support-is-opt-in.md)).
 - **The debug keystore survives `prebuild --clean`**, though `build.gradle` suggests otherwise.
@@ -90,21 +84,25 @@ Maestro needs the same Java. The `verify:` probes that path, as the audit's `/bi
   `4d3dbe5438b4d52b2707d5c039d09afb`). Back it up before a clean prebuild; if one regenerates it,
   re-read the SHA-1 with `keytool -list -v` and update the Console.
 
-**Disk and load are the machine's limits.** The disk runs nearly full (5–17 GB free); task 20
-step 5's Android build took it to 205 MB, crashing the emulator and Gradle and hanging Docker (the
-local Supabase) until a reboot. Check `df -h /System/Volumes/Data` before a native build, and free
-only what the session itself made. The repo lives in Dropbox with nothing heavy excluded
-(`com.dropbox.ignored` is the user's call): re-syncing a clean prebuild (~2 GB) held the load at
-25–120 for hours. When native work turns slow, check `uptime` and Dropbox before the app.
+**Disk, memory and load are the machine's limits.** The disk runs nearly full (5–17 GB free); one
+Android build took it to 205 MB, crashing the emulator and Gradle and hanging Docker until a
+reboot. Check `df -h /System/Volumes/Data` before a native build; free only what the session made.
+The repo lives in Dropbox with nothing heavy excluded (`com.dropbox.ignored` is the user's call):
+re-syncing a clean prebuild (~2 GB) held the load at 25–120 for hours. Check `uptime` and Dropbox
+before blaming the app.
+
+**The 8 GB Mac cannot reliably run the iOS 27 simulator beside the Docker stack** — task 28 lost
+two steps' simulator runs to it. At Docker Desktop's default 4.1 GB the XCUITest driver timed out
+and the Docker VM crashed once (host ports dead; `npx supabase stop && npx supabase start` brought
+it back, data intact). At 2.5 GB, booted headless, it still thrashed: `diskimagesiod` I/O plus
+first-boot daemons, load 140–220 for 5+ min, `simctl shutdown` ~10 min. **Lowering Docker alone is
+not enough**, and no working recipe is recorded yet.
 
 **What has been proven on a device:**
 
-- Android: a real Google account completed native sign-in on `Pixel_10` against local (task 13),
-  once `supabaseTarget.ts` learned the emulator's `127.0.0.1` isn't the host's
-  ([supabase-target-picked-at-runtime](supabase-target-picked-at-runtime.md)).
-- iOS: OTP sign-in against local, driven by Maestro reading Mailpit, and every screen — on iOS 26.5
-  (task 20) and iOS 27 (tasks 21, 20 step 5, and step 6 on the 18 Pro). The Google consent alert was reached; a completed
-  Google sign-in on iOS is not recorded ([google-native-signin-library-gaps](google-native-signin-library-gaps.md)).
+- Android: a real Google account completed native sign-in on `Pixel_10` against local (task 13).
+- iOS: OTP sign-in against local, driven by Maestro reading Mailpit, and every screen, on iOS 27.
+  A completed Google sign-in on iOS is not recorded ([google-native-signin-library-gaps](google-native-signin-library-gaps.md)).
 
 **Still absent:**
 
@@ -114,7 +112,6 @@ only what the session itself made. The repo lives in Dropbox with nothing heavy 
   cold-start frames — [theme-reaches-native-surfaces](theme-reaches-native-surfaces.md)), and **a
   production sign-in from any device** — see [supabase-local-stack](supabase-local-stack.md).
 
-**About the `verify:`.** Most clauses assert *presence* on this machine, so a FAIL on another
-machine is expected. Two assert behaviour: Expo CLI still disables the watcher under `CI`, and
-CocoaPods' Ruby still falls back to non-UTF-8 with no locale (once it stops, the locale bullet can
-go). README's Running section predates `expo run:*`; trust this entry over it.
+**`verify:`** asserts presence on this machine, plus two behaviours: Expo CLI disables the watcher
+under `CI`, and Ruby falls back to non-UTF-8 with no locale (once not, drop the locale bullet).
+README's Running section predates `expo run:*`; trust this entry over it.

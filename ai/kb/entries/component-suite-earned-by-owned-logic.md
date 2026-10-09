@@ -5,7 +5,7 @@ type: convention
 status: current
 tags: [testing, components, architecture]
 sources: [ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-1.md, ai/tasks/20-ux/implementation-log-step-3.md, ai/tasks/20-ux/implementation-log-step-4.md, ai/tasks/20-ux/implementation-log-step-5.md, src/components/UserAutocomplete.tsx, src/components/UserAutocomplete.test.tsx, ai/tasks/24-search-and-sort/implementation-log-step-3.md, src/components/useScrollReveal.ts]
-last_verified: 2026-10-05
+last_verified: 2026-10-09
 verify: test "$(ls src/components/*.test.tsx 2>/dev/null | wc -l | tr -d ' ')" = 1 && test -f src/components/UserAutocomplete.test.tsx && grep -q 'setTimeout' src/components/UserAutocomplete.tsx && grep -q 'useFakeTimers' src/components/UserAutocomplete.test.tsx
 related: [rntl-14-api-changes, queries-go-through-a11y-labels, supabase-client-module-boundary]
 indexed: false

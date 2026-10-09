@@ -5,7 +5,7 @@ type: gotcha
 status: current
 tags: [auth, state]
 sources: [ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-2.md, src/state/SessionContext.tsx, src/state/SessionContext.test.tsx, ai/tasks/26-apple-sign-in/implementation-log-step-2.md, b15d384]
-last_verified: 2026-10-07
+last_verified: 2026-10-09
 verify: test "$(awk '/^  function enterSignedIn/,/^  }/' src/state/SessionContext.tsx | grep -c 'setState(')" = 1 && grep -q "async function resolveRestoredSignIn" src/state/SessionContext.tsx && grep -q "never shows the full app for a restored session before a cache or fetch backs it up" src/state/SessionContext.test.tsx && awk '/^function withSameUser\(/,/^}/' src/state/SessionContext.tsx | grep -q 'session: prev.session' && grep -q "keeps a session updated while the live sign-in was still confirming its name" src/state/SessionContext.test.tsx
 related: [signed-in-event-fires-on-restore-too, first-fetch-replaces-list-state, theme-reaches-native-surfaces]
 ---

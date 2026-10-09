@@ -4,9 +4,9 @@ title: A write refused for a revoked session redirects to sign-in instead of err
 type: decision
 status: current
 tags: [state, auth, outbox, architecture]
-sources: [ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, src/lib/listsApi.ts, src/state/useOutbox.ts, src/state/ListsContext.tsx, src/state/SessionContext.tsx, src/screens/SharingScreen.tsx, src/screens/AccountScreen.tsx, src/screens/SetNameScreen.tsx, src/screens/SignInScreen.tsx, App.tsx]
-last_verified: 2026-10-05
-verify: grep -A2 'if (sessionRevoked) {' src/state/useOutbox.ts | grep -q 'onSessionRevoked();' && test "$(grep -n 'if (sessionRevoked) {' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" && grep -q 'onSessionRevoked: () => void;' src/state/useOutbox.ts && grep -q 'onSessionRevoked: () => void;' src/state/ListsContext.tsx && ! grep -qE "import .*SessionContext" src/state/ListsContext.tsx && grep -A2 'if (sessionRevoked) {' src/screens/SharingScreen.tsx | grep -q "signOut('revoked')" && test "$(grep -A1 'if (sessionRevoked) {' src/screens/AccountScreen.tsx | grep -c "void signOut('revoked');")" -ge 2 && grep -A2 'if (sessionRevoked) {' src/screens/SetNameScreen.tsx | grep -q "signOut('revoked')" && grep -q "signOut: (reason?: 'revoked') => Promise<Result>;" src/state/SessionContext.tsx && grep -q "revoked: 'You were signed out on another device.'" src/screens/SignInScreen.tsx && grep -q 'NOTICES\[state.reason\]' src/screens/SignInScreen.tsx && grep -q "onSessionRevoked={() => void signOut('revoked')}" App.tsx
+sources: [ai/tasks/15-session-revocation/implementation-log-step-2.md, ai/tasks/17-user-names/implementation-log-step-1.md, ai/tasks/18-share-by-name/implementation-log-step-1.md, ai/tasks/19-remove-oneself/implementation-log-step-1.md, ai/tasks/25-account-deletion/implementation-log-step-3.md, src/lib/listsApi.ts, src/state/useOutbox.ts, src/state/ListsContext.tsx, src/state/SessionContext.tsx, src/screens/SharingScreen.tsx, src/screens/AccountScreen.tsx, src/screens/SetNameScreen.tsx, src/screens/SignInScreen.tsx, App.tsx, ai/tasks/28-invitations/implementation-log-step-3.md, ai/tasks/28-invitations/implementation-log-step-4.md, src/screens/NotificationsScreen.tsx, src/screens/BlockedPeopleScreen.tsx, src/lib/notificationsApi.ts, 5ab9b85, 0508f98]
+last_verified: 2026-10-09
+verify: grep -A2 'if (sessionRevoked) {' src/state/useOutbox.ts | grep -q 'onSessionRevoked();' && test "$(grep -n 'if (sessionRevoked) {' src/state/useOutbox.ts | head -1 | cut -d: -f1)" -lt "$(grep -n 'dropDependents(rest, op)' src/state/useOutbox.ts | head -1 | cut -d: -f1)" && grep -q 'onSessionRevoked: () => void;' src/state/useOutbox.ts && grep -q 'onSessionRevoked: () => void;' src/state/ListsContext.tsx && ! grep -qE "import .*SessionContext" src/state/ListsContext.tsx && grep -A2 'if (sessionRevoked) {' src/screens/SharingScreen.tsx | grep -q "signOut('revoked')" && test "$(grep -A1 'if (sessionRevoked) {' src/screens/AccountScreen.tsx | grep -c "void signOut('revoked');")" -ge 2 && grep -A2 'if (sessionRevoked) {' src/screens/SetNameScreen.tsx | grep -q "signOut('revoked')" && test "$(grep -A1 -E 'if \((result\.)?sessionRevoked\) \{' src/screens/NotificationsScreen.tsx | grep -c "void signOut('revoked');")" -ge 2 && grep -A1 'if (result.sessionRevoked) {' src/screens/BlockedPeopleScreen.tsx | grep -q "void signOut('revoked');" && grep -q "signOut: (reason?: 'revoked') => Promise<Result>;" src/state/SessionContext.tsx && grep -q "revoked: 'You were signed out on another device.'" src/screens/SignInScreen.tsx && grep -q 'NOTICES\[state.reason\]' src/screens/SignInScreen.tsx && grep -q "onSessionRevoked={() => void signOut('revoked')}" App.tsx
 related: [session-still-valid-guards-writes, writes-retry-from-an-outbox, writes-can-land-on-a-tombstone, account-deletion-forces-signed-out-and-clears-twice]
 ---
 
@@ -19,14 +19,15 @@ other permission refusal in this schema also raises — and sets `Result.session
 ordinary role refusal.
 
 **One detection point, and every caller reacts to the flag instead of rendering anything — but not
-through a shared funnel.** Six of the twelve guarded RPCs are outbox writes, reached through
-`useOutbox.flush`. The other six (`share_list`, `set_member_role`, `remove_member`, `leave_list`,
-`set_name`, `delete_account`) are called synchronously, and each *call site* checks `sessionRevoked` for itself, inline
-— there is no second shared helper the way `useOutbox.flush` is for the outbox side. `SharingScreen`'s
-`run()` is one such call site, covering all four membership RPCs; `set_name` has **two** —
-`AccountScreen`'s `saveName()` and `SetNameScreen`'s `submit()` — and `delete_account` one,
-`AccountScreen`'s `pressConfirmDelete()`, so `AccountScreen` holds two inline checks; none is routed
-through `run()` or through another. All paths ultimately call `resultFor` (`writeResult` spreads its return before
+through a shared funnel.** Six of the eighteen guarded RPCs are outbox writes, reached through
+`useOutbox.flush`. The other twelve are called synchronously, and each *call site* checks
+`sessionRevoked` for itself, inline — there is no second shared helper the way `useOutbox.flush` is
+for the outbox side. `SharingScreen`'s `run()` covers `invite_to_list`, `withdraw_invitation`,
+`set_member_role`, `remove_member` and `leave_list`; `set_name` has **two** — `AccountScreen`'s
+`saveName()` and `SetNameScreen`'s `submit()` — and `delete_account` one, `AccountScreen`'s
+`pressConfirmDelete()`, so `AccountScreen` holds two inline checks. `NotificationsScreen` holds two
+too: `answer()` (accept, decline, block) and its read-marking (`mark_notifications_read`); and
+`BlockedPeopleScreen`'s `unblock()` one (`unblock_user`). None is routed through another. All paths ultimately call `resultFor` (`writeResult` spreads its return before
 rewriting `.error`), so `sessionRevoked` is computed once, but the reaction to it — `if
 (sessionRevoked) { void signOut('revoked'); return; }` — is copied at each synchronous call site
 rather than factored out; a new synchronous call site would repeat it again. None of
@@ -68,8 +69,8 @@ signed out on another device."` — so a new reason does not compile until it ha
 `sessionRevoked` off the `Result` its caller already gets back and calls `signOut('revoked')` (or,
 inside the outbox, the `onSessionRevoked` callback) — do not add a second detection point;
 `resultFor` is already shared by every caller. A synchronous call site copies the three-line check
-rather than reaching for a helper that does not exist yet; introducing one is fair game once a third
-screen needs it, but nothing here forces it. The `verify:` command asserts the outbox's interception
+rather than reaching for a helper that does not exist yet; five screens now copy it, so introducing
+one is fair game, but nothing here forces it. The `verify:` command asserts the outbox's interception
 happens before the write is ever dropped (`dropDependents`), that `ListsContext.tsx` still never
 imports `SessionContext`, that every synchronous call site reacts to the flag (both of
-`AccountScreen`'s), and that the `revoked` reason reaches `SignInScreen`'s `NOTICES` map.
+`AccountScreen`'s and of `NotificationsScreen`'s), and that the `revoked` reason reaches `SignInScreen`'s `NOTICES` map.
