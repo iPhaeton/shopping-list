@@ -1,10 +1,13 @@
 import { LISTS_FULL, OWNED_LISTS_FULL } from './limits';
 import {
   acceptInvitation,
+  blockInviter,
   declineInvitation,
+  fetchBlockedUsers,
   fetchNotifications,
   fetchUnreadCount,
   markNotificationsRead,
+  unblockUser,
 } from './notificationsApi';
 import { supabase } from './supabase';
 
@@ -185,6 +188,29 @@ describe('the other calls', () => {
 
     await declineInvitation('inv1');
     expect(rpc).toHaveBeenLastCalledWith('decline_invitation', { p_invitation_id: 'inv1' });
+
+    // Block takes the invitation, never a user id; unblock takes the person.
+    await blockInviter('inv1');
+    expect(rpc).toHaveBeenLastCalledWith('block_inviter', { p_invitation_id: 'inv1' });
+
+    await unblockUser('u2');
+    expect(rpc).toHaveBeenLastCalledWith('unblock_user', { p_user_id: 'u2' });
+  });
+
+  it('answers a block and an unblock as writes', async () => {
+    respondToRpcWith({ data: null, error: null, status: 204 });
+    expect(await blockInviter('inv1')).toEqual({ error: null, verdict: 'ok' });
+    expect(await unblockUser('u2')).toEqual({ error: null, verdict: 'ok' });
+
+    respondToRpcWith({ data: null, error: { message: 'TypeError: Failed to fetch' }, status: 0 });
+    expect(await blockInviter('inv1')).toMatchObject({ verdict: 'retryable' });
+
+    respondToRpcWith({
+      data: null,
+      error: { message: 'this device has been signed out', code: '42501' },
+      status: 403,
+    });
+    expect(await unblockUser('u2')).toMatchObject({ sessionRevoked: true });
   });
 
   it('reads the unread count', async () => {
@@ -249,5 +275,74 @@ describe('the other calls', () => {
     });
 
     expect(await markNotificationsRead(['n1'])).toMatchObject({ sessionRevoked: true });
+  });
+});
+
+const MAYA = { user_id: 'u2', name: 'Maya', blocked_at: '2026-10-09T10:00:00+00:00' };
+const JORDAN = { user_id: 'u3', name: 'Jordan', blocked_at: '2026-10-09T09:00:00+00:00' };
+const ALEX = { user_id: 'u4', name: 'Alex', blocked_at: '2026-10-09T08:00:00+00:00' };
+
+describe('fetchBlockedUsers', () => {
+  it('asks for page 1 with no cursor, and for the rows after one with it', async () => {
+    const rpc = respondToRpcWith({ data: [], error: null, status: 200 });
+
+    await fetchBlockedUsers({ limit: 100 });
+    expect(rpc).toHaveBeenLastCalledWith('my_blocked_users', { p_limit: 100 });
+
+    await fetchBlockedUsers({ before: { blockedAt: '2026-10-09T08:00:00+00:00', userId: 'u4' }, limit: 100 });
+    expect(rpc).toHaveBeenLastCalledWith('my_blocked_users', {
+      p_before_at: '2026-10-09T08:00:00+00:00',
+      p_before_id: 'u4',
+      p_limit: 100,
+    });
+  });
+
+  it('maps each row, and continues from the last row of a full page', async () => {
+    respondToRpcWith({ data: [MAYA, JORDAN, ALEX], error: null, status: 200 });
+
+    expect(await fetchBlockedUsers({ limit: 3 })).toEqual({
+      blocked: [
+        { userId: 'u2', name: 'Maya', blockedAt: '2026-10-09T10:00:00+00:00' },
+        { userId: 'u3', name: 'Jordan', blockedAt: '2026-10-09T09:00:00+00:00' },
+        { userId: 'u4', name: 'Alex', blockedAt: '2026-10-09T08:00:00+00:00' },
+      ],
+      cursor: { blockedAt: '2026-10-09T08:00:00+00:00', userId: 'u4' },
+      error: null,
+      retryable: false,
+    });
+  });
+
+  it('says a short page is the end', async () => {
+    respondToRpcWith({ data: [MAYA, JORDAN], error: null, status: 200 });
+
+    expect((await fetchBlockedUsers({ limit: 3 })).cursor).toBeNull();
+  });
+
+  it('reads a null body as an empty last page', async () => {
+    respondToRpcWith({ data: null, error: null, status: 200 });
+
+    expect(await fetchBlockedUsers({ limit: 100 })).toEqual({
+      blocked: [],
+      cursor: null,
+      error: null,
+      retryable: false,
+    });
+  });
+
+  it('says whether a failed read is worth trying again', async () => {
+    respondToRpcWith({ data: null, error: { message: 'TypeError: Failed to fetch' }, status: 0 });
+    expect(await fetchBlockedUsers({ limit: 100 })).toEqual({
+      blocked: null,
+      cursor: null,
+      error: 'TypeError: Failed to fetch',
+      retryable: true,
+    });
+
+    respondToRpcWith({ data: null, error: { message: 'permission denied', code: '42501' }, status: 403 });
+    expect((await fetchBlockedUsers({ limit: 100 })).retryable).toBe(false);
+  });
+
+  it('refuses a page larger than max_rows', async () => {
+    await expect(fetchBlockedUsers({ limit: 1001 })).rejects.toThrow('silently capped');
   });
 });

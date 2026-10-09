@@ -13,6 +13,8 @@ export type RootStackParamList = {
   Account: undefined;
   /** Invitations to you and answers to yours (task 28), paged newest first. */
   Notifications: undefined;
+  /** Who this account blocked (task 28), paged newest block first. */
+  BlockedPeople: undefined;
 };
 
 export type SignInScreenProps = NativeStackScreenProps<RootStackParamList, 'SignIn'>;
@@ -22,3 +24,4 @@ export type ListDetailScreenProps = NativeStackScreenProps<RootStackParamList, '
 export type SharingScreenProps = NativeStackScreenProps<RootStackParamList, 'Sharing'>;
 export type AccountScreenProps = NativeStackScreenProps<RootStackParamList, 'Account'>;
 export type NotificationsScreenProps = NativeStackScreenProps<RootStackParamList, 'Notifications'>;
+export type BlockedPeopleScreenProps = NativeStackScreenProps<RootStackParamList, 'BlockedPeople'>;

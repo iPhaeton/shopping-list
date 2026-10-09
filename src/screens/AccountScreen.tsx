@@ -37,9 +37,9 @@ const isRelayAddress = (email: string | undefined): email is string =>
   !!email && email.toLowerCase().endsWith(RELAY_DOMAIN);
 
 /**
- * `navigation` only goes back: like `SignInScreen`, a successful sign-out — or a deleted account —
- * flips the session state and `RootNavigator` swaps stacks, which unmounts this screen rather than
- * navigating away from it.
+ * `navigation` goes back, and on to Blocked people (task 28). Like `SignInScreen`, a successful
+ * sign-out — or a deleted account — flips the session state and `RootNavigator` swaps stacks, which
+ * unmounts this screen rather than navigating away from it.
  *
  * The two confirms, "Sign out of all devices" and "Delete account", are never open together: opening
  * either closes the other (task 25 step 1). While one of the account-ending requests runs, the others
@@ -293,6 +293,15 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
             </View>
           </Card>
 
+          {/* Its own card between Appearance and signing out, as the task 28 mockup places it. */}
+          <Card style={[styles.card, styles.pillCard]}>
+            <PillButton
+              label="Blocked people"
+              size="lg"
+              onPress={() => navigation.navigate('BlockedPeople')}
+            />
+          </Card>
+
           <Card style={[styles.card, styles.pillCard]}>
             <PillButton
               label="Sign out"
@@ -463,7 +472,8 @@ const useStyles = themedStyles((colors) => ({
   picker: {
     marginTop: 13,
   },
-  // The sign-out card and the delete card: lg pills, a confirm opening in place of the danger one.
+  // The Blocked people, sign-out and delete cards: lg pills, a confirm opening in place of the
+  // danger one.
   pillCard: {
     paddingTop: 18,
     paddingBottom: 20,

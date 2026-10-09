@@ -5,6 +5,7 @@ import { ActivityIndicator, Image, View } from 'react-native';
 
 import { ScreenSky } from '../components/Sky';
 import { AccountScreen } from '../screens/AccountScreen';
+import { BlockedPeopleScreen } from '../screens/BlockedPeopleScreen';
 import { ListDetailScreen } from '../screens/ListDetailScreen';
 import { ListsScreen } from '../screens/ListsScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
@@ -143,6 +144,11 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
             name="Notifications"
             component={NotificationsScreen}
             options={{ title: 'Notifications', headerShown: false }}
+          />
+          <Stack.Screen
+            name="BlockedPeople"
+            component={BlockedPeopleScreen}
+            options={{ title: 'Blocked people', headerShown: false }}
           />
         </>
       );

@@ -15,6 +15,7 @@ import { ScreenSky } from '../components/Sky';
 import { ago } from '../lib/ago';
 import {
   acceptInvitation,
+  blockInviter,
   declineInvitation,
   fetchNotifications,
   markNotificationsRead,
@@ -42,7 +43,8 @@ const ROLE_ARTICLE: Record<Role, string> = { reader: 'a reader', writer: 'a writ
 /** A stable empty array while the first page loads, so the `FlatList`'s `data` never allocates one. */
 const NONE: Notification[] = [];
 
-type Answer = 'accept' | 'decline';
+/** Block is a decline first (D2), so it answers the invitation as the other two do. */
+type Answer = 'accept' | 'decline' | 'block';
 
 /**
  * Invitations to you, and the answers to yours (task 28), newest first, a page of 100 at a time
@@ -58,6 +60,12 @@ type Answer = 'accept' | 'decline';
  * page lands only if it continues the cursor the screen still holds — a reload that replaced the
  * cursor meanwhile drops it, and the next scroll asks again. `first-fetch-replaces-list-state`
  * records the same rule for the lists.
+ *
+ * **Block (D5) is a confirm on the card, then a reload.** The database drops every card from that
+ * person, so the reload takes them off every loaded page. **A return to this screen reloads too**:
+ * from Blocked people, an unblock brings that person's cards back, and nothing nudges about it.
+ * Only a focus after a blur counts — the focus that comes with the push itself finds the mount's
+ * read already on its way.
  *
  * **Read marking is per page (D4, D8).** Each landing marks exactly its own rows that were unread
  * and not yet seen this visit, then re-reads the bell's count. Unread rows on pages not scrolled to
@@ -83,6 +91,8 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState<{ id: string; answer: Answer } | null>(null);
+  // The card whose Block confirm is open, by notification id.
+  const [confirmingBlockId, setConfirmingBlockId] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   // The ids that were unread when this visit first loaded them.
   const [dots, setDots] = useState<ReadonlySet<string>>(() => new Set());
@@ -96,6 +106,8 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const live = useRef(true);
   // A nudge from before this screen opened is old news: the mount read is newer.
   const nudgeAtMount = useRef(lastNotificationsNudge);
+  // Whether another screen covered this one since it last had focus.
+  const left = useRef(false);
 
   function show(next: Notification[], nextCursor: NotificationCursor | null) {
     rowsRef.current = next;
@@ -173,6 +185,22 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   }, []);
 
   useEffect(() => {
+    const offBlur = navigation.addListener('blur', () => {
+      left.current = true;
+    });
+    const offFocus = navigation.addListener('focus', () => {
+      if (!left.current) return;
+      left.current = false;
+      void reload();
+    });
+    return () => {
+      offBlur();
+      offFocus();
+    };
+    // Subscribed once: `reload` reads everything it needs through refs.
+  }, [navigation]);
+
+  useEffect(() => {
     if (!lastNotificationsNudge || lastNotificationsNudge === nudgeAtMount.current) return;
     const timer = setTimeout(() => void reload(), NUDGE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
@@ -183,7 +211,11 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     setInFlight({ id: n.id, answer: choice });
 
     const result =
-      choice === 'accept' ? await acceptInvitation(n.invitationId) : await declineInvitation(n.invitationId);
+      choice === 'accept'
+        ? await acceptInvitation(n.invitationId)
+        : choice === 'decline'
+          ? await declineInvitation(n.invitationId)
+          : await blockInviter(n.invitationId);
     if (!live.current) return;
 
     // This device's session was revoked elsewhere: hand off to sign-in, as Sharing's `run` does.
@@ -195,6 +227,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     if (result.error && result.verdict === 'retryable') {
       setActionError(OFFLINE_ACTION);
       setInFlight(null);
+      setConfirmingBlockId(null);
       return;
     }
 
@@ -204,7 +237,9 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     if (result.error) setActionError(result.error);
     else if (choice === 'accept') void refresh();
     await reload();
-    if (live.current) setInFlight(null);
+    if (!live.current) return;
+    setInFlight(null);
+    setConfirmingBlockId(null);
   }
 
   const now = Date.now();
@@ -282,29 +317,67 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     }
 
     const running = inFlight?.id === n.id ? inFlight.answer : null;
+    const busy = inFlight !== null;
     return (
       <Card style={styles.card}>
         {body}
-        {pending && invitation ? (
-          <View style={styles.actions}>
-            <PillButton
-              label={`Decline invitation to ${n.listName}`}
-              visibleLabel={running === 'decline' ? 'Declining…' : 'Decline'}
-              size="md"
-              disabled={inFlight !== null}
-              onPress={() => void answer(invitation, 'decline')}
-              style={styles.half}
-            />
-            <PillButton
-              label={`Accept invitation to ${n.listName}`}
-              visibleLabel={running === 'accept' ? 'Accepting…' : 'Accept'}
-              variant="filled"
-              size="md"
-              disabled={inFlight !== null}
-              onPress={() => void answer(invitation, 'accept')}
-              style={styles.half}
-            />
+        {pending && invitation && confirmingBlockId === n.id ? (
+          <View style={styles.confirm}>
+            <Text style={styles.confirmText}>
+              {n.actorName} will be told you declined, and you won't see invitations from them
+              any more. Unblock them any time under Blocked people.
+            </Text>
+            <View style={styles.confirmActions}>
+              <PillButton
+                label={`Cancel blocking ${n.actorName}`}
+                visibleLabel="Cancel"
+                size="md"
+                disabled={busy}
+                onPress={() => setConfirmingBlockId(null)}
+                style={styles.half}
+              />
+              <PillButton
+                label={`Confirm block ${n.actorName}`}
+                visibleLabel={running === 'block' ? 'Blocking…' : 'Block'}
+                variant="danger"
+                size="md"
+                disabled={busy}
+                onPress={() => void answer(invitation, 'block')}
+                style={styles.half}
+              />
+            </View>
           </View>
+        ) : pending && invitation ? (
+          <>
+            <View style={styles.actions}>
+              <PillButton
+                label={`Decline invitation to ${n.listName}`}
+                visibleLabel={running === 'decline' ? 'Declining…' : 'Decline'}
+                size="md"
+                disabled={busy}
+                onPress={() => void answer(invitation, 'decline')}
+                style={styles.half}
+              />
+              <PillButton
+                label={`Accept invitation to ${n.listName}`}
+                visibleLabel={running === 'accept' ? 'Accepting…' : 'Accept'}
+                variant="filled"
+                size="md"
+                disabled={busy}
+                onPress={() => void answer(invitation, 'accept')}
+                style={styles.half}
+              />
+            </View>
+            {/* A name of any length fits: the pill cuts it with `…`; the label keeps it whole. */}
+            <PillButton
+              label={`Block ${n.actorName}`}
+              size="md"
+              tone="danger"
+              disabled={busy}
+              onPress={() => setConfirmingBlockId(n.id)}
+              style={styles.block}
+            />
+          </>
         ) : null}
       </Card>
     );
@@ -326,10 +399,20 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         renderItem={({ item, index }) => (
           <View style={[styles.item, index === 0 && styles.first]}>{renderCard(item)}</View>
         )}
-        extraData={[dots, inFlight, lists]}
+        extraData={[dots, inFlight, confirmingBlockId, lists]}
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={<ScreenHeader title="Notifications" onBack={() => navigation.goBack()} />}
+        // The way to Blocked people sits in the header, there on every page and on the empty state:
+        // after the last card it would wait on every page loading first.
+        ListHeaderComponent={
+          <ScreenHeader
+            title="Notifications"
+            onBack={() => navigation.goBack()}
+            right={
+              <PillButton label="Blocked people" onPress={() => navigation.navigate('BlockedPeople')} />
+            }
+          />
+        }
         ListEmptyComponent={
           rows !== null ? (
             <EmptyState
@@ -372,7 +455,9 @@ function Separator() {
 
 // Measured off the Notifications mockups (task 28 step 2): cards at x 20–370, 10pt apart, the first
 // 12 under the title, padded 14/13 as Sharing's member cards are; a 36pt avatar, the text 13 after
-// it; Decline and Accept half each, 11 apart, 12 under the text.
+// it; Decline and Accept half each, 11 apart, 12 under the text, Block full width 10 under them.
+// The Block confirm takes all three's place as Sharing's confirm does: the warning 10 under the
+// text, its two pills half each, 11 apart, 10 under it.
 const useStyles = themedStyles((colors) => ({
   content: {
     flexGrow: 1,
@@ -444,6 +529,23 @@ const useStyles = themedStyles((colors) => ({
   },
   half: {
     flex: 1,
+  },
+  block: {
+    marginTop: 10,
+  },
+  confirm: {
+    marginTop: 10,
+  },
+  confirmText: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.textSecondary,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 11,
+    marginTop: 10,
   },
   pressed: {
     opacity: 0.6,

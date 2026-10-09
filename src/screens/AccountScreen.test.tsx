@@ -56,7 +56,7 @@ const auth = supabase.auth as unknown as {
   signOut: jest.Mock;
 };
 
-const navigation = { goBack: jest.fn() };
+const navigation = { goBack: jest.fn(), navigate: jest.fn() };
 const props = { navigation, route: {} } as unknown as AccountScreenProps;
 
 beforeEach(() => {
@@ -90,6 +90,14 @@ it('goes back through its own drawn Back button', async () => {
 
   expect(navigation.goBack).toHaveBeenCalled();
   expect(screen.getByRole('header', { name: 'Account' })).toBeOnTheScreen();
+});
+
+it('opens Blocked people from its own card', async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByLabelText('Blocked people'));
+
+  expect(navigation.navigate).toHaveBeenCalledWith('BlockedPeople');
 });
 
 it('signs out this device only', async () => {

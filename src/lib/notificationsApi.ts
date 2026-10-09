@@ -4,9 +4,9 @@ import { MAX_ROWS, resultFor, type Result } from './listsApi';
 import { supabase } from './supabase';
 
 /**
- * The Notifications screen's reads and writes (task 28). Every one is an RPC: the three tables
- * behind them have no policy and no grant, because each answer needs a row the caller's RLS would
- * hide — the inviter's name, a list the invitee is not on yet.
+ * The Notifications and Blocked people screens' reads and writes (task 28). Every one is an RPC:
+ * the three tables behind them have no policy and no grant, because each answer needs a row the
+ * caller's RLS would hide — the inviter's name, a list the invitee is not on yet.
  *
  * Online-only, like the Sharing screen: nothing here is cached and nothing goes through the outbox.
  * An answer to an invitation is given while the person is looking at it, and a queued accept
@@ -27,6 +27,9 @@ export const NOTIFICATION_PAGE_SIZE = 100;
  * from `listsApi`, whose suites mock it whole.
  */
 export const NOTIFICATION_RELOAD_MAX = MAX_ROWS;
+
+/** Blocked people per page, as `NOTIFICATION_PAGE_SIZE` (D8). */
+export const BLOCKED_PAGE_SIZE = 100;
 
 export type InvitationStatus = 'pending' | 'accepted' | 'declined';
 
@@ -59,6 +62,12 @@ export type Notification =
     })
   | (Common & { kind: 'invitation_accepted' })
   | (Common & { kind: 'invitation_declined' });
+
+/** Someone this account blocked, newest block first. */
+export type BlockedUser = { userId: string; name: string; blockedAt: string };
+
+/** Where the next page of blocked people starts: the last row read. */
+export type BlockedCursor = { blockedAt: string; userId: string };
 
 type NotificationRow = {
   id: string;
@@ -169,6 +178,73 @@ export async function declineInvitation(invitationId: string): Promise<Result> {
     p_invitation_id: invitationId,
   });
   return resultFor(error, status);
+}
+
+/**
+ * Declines the invitation, as `declineInvitation` does, and blocks the inviter (D2, D5). Takes the
+ * invitation, never a user id: blocking is only offered on one. The inviter hears an ordinary
+ * decline and nothing more; their other pending invitations to this account go quiet, and every
+ * notification from them is hidden while the block stands.
+ */
+export async function blockInviter(invitationId: string): Promise<Result> {
+  const { error, status } = await supabase.rpc('block_inviter', { p_invitation_id: invitationId });
+  return resultFor(error, status);
+}
+
+/**
+ * Lifts a block. Their notifications show again; the invitations suppressed meanwhile stay
+ * suppressed. No nudge follows — no notification row changes — so the caller re-reads the count.
+ */
+export async function unblockUser(userId: string): Promise<Result> {
+  const { error, status } = await supabase.rpc('unblock_user', { p_user_id: userId });
+  return resultFor(error, status);
+}
+
+/**
+ * A page of the people this account blocked, newest block first, keyset as `fetchNotifications`
+ * pages: `cursor` is the last row's from a full page, `null` from a short one. A row dropped on
+ * screen after an unblock never shifts the next page, which continues from the cursor's values.
+ */
+export async function fetchBlockedUsers({
+  before,
+  limit,
+}: {
+  before?: BlockedCursor | null;
+  limit: number;
+}): Promise<{
+  blocked: BlockedUser[] | null;
+  cursor: BlockedCursor | null;
+  error: string | null;
+  retryable: boolean;
+}> {
+  if (limit > MAX_ROWS) {
+    throw new Error(`fetchBlockedUsers: a page of ${limit} rows would be silently capped at ${MAX_ROWS}`);
+  }
+
+  const { data, error, status } = await supabase.rpc(
+    'my_blocked_users',
+    before
+      ? { p_before_at: before.blockedAt, p_before_id: before.userId, p_limit: limit }
+      : { p_limit: limit }
+  );
+
+  if (error) {
+    return { blocked: null, cursor: null, error: error.message, retryable: isRetryable(error, status) };
+  }
+
+  const rows = (data ?? []) as { user_id: string; name: string; blocked_at: string }[];
+  const blocked = rows.map((row) => ({
+    userId: row.user_id,
+    name: row.name,
+    blockedAt: row.blocked_at,
+  }));
+  const last = blocked[blocked.length - 1];
+  return {
+    blocked,
+    cursor: blocked.length < limit || !last ? null : { blockedAt: last.blockedAt, userId: last.userId },
+    error: null,
+    retryable: false,
+  };
 }
 
 /** A read is classified the way a write is, so offline reads the same everywhere. */

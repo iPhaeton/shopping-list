@@ -6,6 +6,7 @@ import { fetchLists } from '../lib/listsApi';
 import { subscribeToChanges } from '../lib/listsChannel';
 import {
   acceptInvitation,
+  blockInviter,
   declineInvitation,
   fetchNotifications,
   fetchUnreadCount,
@@ -37,6 +38,7 @@ jest.mock('../lib/notificationsApi', () => ({
   markNotificationsRead: jest.fn(),
   acceptInvitation: jest.fn(),
   declineInvitation: jest.fn(),
+  blockInviter: jest.fn(),
 }));
 
 jest.mock('../lib/listsApi', () => ({
@@ -168,13 +170,29 @@ function serveLists(lists: Pick<List, 'id' | 'name'>[]) {
 }
 
 let notificationsNudge: () => void = () => {};
-const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+
+/**
+ * The navigation events the screen listens for, delivered by `emit` — the stub's `addListener`
+ * keeps them and hands back an unsubscribe, as the real one does.
+ */
+let listeners: Record<string, (() => void)[]> = {};
+const navigation = {
+  navigate: jest.fn(),
+  goBack: jest.fn(),
+  addListener: jest.fn((event: string, listener: () => void) => {
+    (listeners[event] ??= []).push(listener);
+    return () => {
+      listeners[event] = listeners[event].filter((l) => l !== listener);
+    };
+  }),
+};
 
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
 
   server = [];
+  listeners = {};
   serveLists([]);
   jest.mocked(fetchNotifications).mockImplementation(async ({ before: cursorAfter, limit }) => page(cursorAfter, limit));
   jest.mocked(fetchUnreadCount).mockResolvedValue({ count: 0, error: null, retryable: false });
@@ -184,6 +202,7 @@ beforeEach(async () => {
   });
   jest.mocked(acceptInvitation).mockResolvedValue({ error: null, verdict: 'ok', listId: 'l1' });
   jest.mocked(declineInvitation).mockResolvedValue({ error: null, verdict: 'ok' });
+  jest.mocked(blockInviter).mockResolvedValue({ error: null, verdict: 'ok' });
   jest.mocked(fetchProfile).mockResolvedValue({ name: 'Alice', error: null });
   jest.mocked(subscribeToChanges).mockImplementation((_userId, _onChange, _onResubscribe, onNotifications) => {
     notificationsNudge = onNotifications;
@@ -219,6 +238,13 @@ async function nudge() {
   await act(async () => notificationsNudge());
   await act(async () => {
     jest.advanceTimersByTime(NUDGE_DEBOUNCE);
+  });
+}
+
+/** Another screen covering this one (`blur`), or this one shown again (`focus`). */
+async function emit(event: 'blur' | 'focus') {
+  await act(async () => {
+    for (const listener of listeners[event] ?? []) listener();
   });
 }
 
@@ -698,5 +724,204 @@ describe('read marking', () => {
     await renderScreen();
 
     await waitFor(() => expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' }));
+  });
+});
+
+// --- Blocking --------------------------------------------------------------------------------------
+
+const WARNING =
+  "Maya will be told you declined, and you won't see invitations from them any more. Unblock " +
+  'them any time under Blocked people.';
+
+describe('blocking', () => {
+  it('offers Block on a pending, available invitation only', async () => {
+    server = [
+      invitation('n1'),
+      invitation('n2', { actorId: 'u5', actorName: 'Jordan', status: 'declined' }),
+      invitation('n3', { actorId: 'u6', actorName: 'Priya', available: false }),
+      answer('n4', 'invitation_declined'),
+    ];
+
+    await renderScreen();
+
+    expect(await screen.findByLabelText('Block Maya')).toHaveTextContent('Block Maya');
+    expect(screen.queryByLabelText('Block Jordan')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Block Priya')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Block Sam')).not.toBeOnTheScreen();
+  });
+
+  it('warns first, in place of the answers', async () => {
+    server = [invitation('n1')];
+
+    await renderScreen();
+    await fireEvent.press(await screen.findByLabelText('Block Maya'));
+
+    expect(screen.getByText(WARNING)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Cancel blocking Maya')).toHaveTextContent('Cancel');
+    expect(screen.getByLabelText('Confirm block Maya')).toHaveTextContent('Block');
+    expect(screen.queryByLabelText('Decline invitation to Weekend BBQ')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Accept invitation to Weekend BBQ')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Block Maya')).not.toBeOnTheScreen();
+    expect(blockInviter).not.toHaveBeenCalled();
+  });
+
+  it('cancels back to the answers', async () => {
+    server = [invitation('n1')];
+
+    await renderScreen();
+    await fireEvent.press(await screen.findByLabelText('Block Maya'));
+    await fireEvent.press(screen.getByLabelText('Cancel blocking Maya'));
+
+    expect(screen.queryByText(WARNING)).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Accept invitation to Weekend BBQ')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Block Maya')).toBeOnTheScreen();
+    expect(blockInviter).not.toHaveBeenCalled();
+  });
+
+  it('blocks by the invitation, re-reads, and every card from that person goes', async () => {
+    server = [
+      invitation('n1'),
+      answer('n2', 'invitation_accepted'),
+      invitation('n3', { listName: 'Picnic', status: 'declined' }),
+    ];
+    // The database hides everything from the blocked person.
+    jest.mocked(blockInviter).mockImplementation(async () => {
+      server = server.filter((n) => n.actorId !== 'u2');
+      return { error: null, verdict: 'ok' };
+    });
+
+    await renderScreen();
+    expect(await screen.findByText('Maya invited you to Picnic')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByLabelText('Block Maya'));
+    await fireEvent.press(screen.getByLabelText('Confirm block Maya'));
+
+    expect(blockInviter).toHaveBeenCalledWith('inv-n1');
+    await waitFor(() => expect(screen.queryByText('Maya invited you to Weekend BBQ')).not.toBeOnTheScreen());
+    expect(screen.queryByText('Maya invited you to Picnic')).not.toBeOnTheScreen();
+    expect(screen.getByText('Sam accepted your invitation to Camping trip')).toBeOnTheScreen();
+    expect(screen.queryByText(WARNING)).not.toBeOnTheScreen();
+    expect(reloads()).toHaveLength(2);
+  });
+
+  it('shows Blocking… meanwhile, with every other action held', async () => {
+    server = [
+      invitation('n1'),
+      invitation('n2', { actorId: 'u5', actorName: 'Jordan', listName: 'Picnic' }),
+    ];
+    const reply = deferred<{ error: null; verdict: 'ok' }>();
+    jest.mocked(blockInviter).mockReturnValue(reply.promise);
+
+    await renderScreen();
+    await fireEvent.press(await screen.findByLabelText('Block Maya'));
+    await fireEvent.press(screen.getByLabelText('Confirm block Maya'));
+
+    expect(screen.getByLabelText('Confirm block Maya')).toHaveTextContent('Blocking…');
+    expect(screen.getByLabelText('Confirm block Maya')).toBeDisabled();
+    expect(screen.getByLabelText('Cancel blocking Maya')).toBeDisabled();
+    expect(screen.getByLabelText('Accept invitation to Picnic')).toBeDisabled();
+    expect(screen.getByLabelText('Block Jordan')).toBeDisabled();
+
+    await act(async () => reply.resolve({ error: null, verdict: 'ok' }));
+    expect(screen.getByLabelText('Block Jordan')).not.toBeDisabled();
+  });
+
+  it('says a connection is needed, re-reads nothing, and closes the confirm', async () => {
+    server = [invitation('n1')];
+    jest.mocked(blockInviter).mockResolvedValue({ error: 'TypeError: Failed to fetch', verdict: 'retryable' });
+
+    await renderScreen();
+    await fireEvent.press(await screen.findByLabelText('Block Maya'));
+    await fireEvent.press(screen.getByLabelText('Confirm block Maya'));
+
+    expect(await screen.findByText('You need a connection to answer an invitation.')).toBeOnTheScreen();
+    expect(reloads()).toHaveLength(1);
+    expect(screen.queryByText(WARNING)).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Block Maya')).not.toBeDisabled();
+  });
+
+  it("shows a refusal in the database's words, re-reads, and closes the confirm", async () => {
+    server = [invitation('n1')];
+    jest
+      .mocked(blockInviter)
+      .mockResolvedValue({ error: 'this invitation is no longer open', verdict: 'permanent' });
+
+    await renderScreen();
+    await fireEvent.press(await screen.findByLabelText('Block Maya'));
+    await fireEvent.press(screen.getByLabelText('Confirm block Maya'));
+
+    expect(await screen.findByText('this invitation is no longer open')).toBeOnTheScreen();
+    expect(reloads()).toHaveLength(2);
+    expect(screen.queryByText(WARNING)).not.toBeOnTheScreen();
+  });
+
+  it('signs this device out instead of blocking for a revoked session', async () => {
+    server = [invitation('n1')];
+    jest.mocked(blockInviter).mockResolvedValue({
+      error: 'this device has been signed out',
+      verdict: 'permanent',
+      sessionRevoked: true,
+    });
+
+    await renderScreen();
+    await fireEvent.press(await screen.findByLabelText('Block Maya'));
+    await fireEvent.press(screen.getByLabelText('Confirm block Maya'));
+
+    await act(async () => {});
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(screen.queryByText('this device has been signed out')).not.toBeOnTheScreen();
+  });
+});
+
+describe('Blocked people', () => {
+  it('opens from the header', async () => {
+    server = [invitation('n1')];
+
+    await renderScreen();
+    await fireEvent.press(screen.getByLabelText('Blocked people'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('BlockedPeople');
+  });
+
+  it('is there on the empty state too', async () => {
+    await renderScreen();
+
+    expect(await screen.findByText('No notifications yet')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Blocked people')).toBeOnTheScreen();
+  });
+});
+
+describe('coming back to the screen', () => {
+  /** An unblock elsewhere changes no notification row, so nothing nudges: the return re-reads. */
+  it('re-reads everything shown in one call, and shows what came back', async () => {
+    server = many(5);
+
+    await renderScreen();
+    await scrollToEnd();
+    expect(await screen.findByText('Person 5 declined your invitation to List 5')).toBeOnTheScreen();
+
+    server = [answer('x1', 'invitation_declined', { createdAt: before(0), actorName: 'Priya' }), ...server];
+    await emit('blur');
+    await emit('focus');
+
+    expect(reloads()).toHaveLength(2);
+    expect(reloads()[1][0]).toEqual({ limit: 6 });
+    expect(await screen.findByText('Priya declined your invitation to Camping trip')).toBeOnTheScreen();
+  });
+
+  it('reads nothing more for the focus that comes with opening the screen', async () => {
+    server = [invitation('n1')];
+
+    await renderScreen();
+    await emit('focus');
+
+    expect(reloads()).toHaveLength(1);
+  });
+
+  it('stops listening once it is gone', async () => {
+    await renderScreen();
+    await screen.unmount();
+
+    expect(listeners.blur).toEqual([]);
+    expect(listeners.focus).toEqual([]);
   });
 });
