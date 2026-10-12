@@ -17,6 +17,7 @@ User requests (2026-10-11 and 2026-10-12), verbatim, in order. This whole task c
    - Spanish: "Spain (es-ES)".
    - Serbian: "Both" — Cyrillic is translated; Latin is generated from it letter by letter.
    - Tone: "Like iOS does" — per language, the formal or informal "you" that iOS itself uses.
+9. After step 1: "Update the steps of the tasks to skip librarian. Add the last step to run librarian."
 
 The design was argued in chat only; there is no suggestion document. These descriptions are the spec.
 
@@ -49,14 +50,18 @@ The design was argued in chat only; there is no suggestion document. These descr
 | 4 | `scripts/translate.mjs`, the glossary, the 19 translated catalogs, the `sr-Latn` transliteration, and a back-translation review |
 | 5 | the layout pass: every screen in German, Finnish, Hungarian and pseudo on the iPhone 18 Pro simulator; fixes; the user's sign-off |
 | 6 | the sign-in code email in every language: `user_metadata.locale`, a generated template and subject, Mailpit; the production push is the user's |
+| 7 | `/librarian deposit 29` once, for the whole task: all six logs in one deposit |
 
 Dependencies:
 - 1 → 2 → 3.
 - Step 4 needs 2. If step 3 lands after it, rerun the script for 3's new messages; it translates only what is missing.
 - Steps 5 and 6 both need 4.
+- Step 7 needs 1–6, so it runs last.
 
-Each step ends with its log and `/librarian deposit 29`, as CLAUDE.md says. There is no separate deposit
-step.
+Steps 1–6 each end with their log, and no step among them runs `/librarian deposit 29`. Step 7 deposits
+the whole task at once (request 9). For this task, that overrides CLAUDE.md's deposit after every step.
+The deposit planner reads logs, never descriptions, so each step's **KB impact** rows reach the KB only
+through the **KB candidates** table at the end of that step's log.
 
 **Scope change.** [scope-boundaries](../../kb/entries/scope-boundaries.md) gains: the interface in D1's
 languages, chosen by the device.
@@ -191,7 +196,7 @@ that has visible text, a placeholder, accessibility props and an error banner.
    - `new Intl.NumberFormat('de').format(1000)` → `1.000`, and `('pl')` → `1000`.
 
    This also settles part of [search-fold-fallbacks-ship](../../kb/entries/search-fold-fallbacks-ship.md)'s
-   open question for iOS. Hand the results to the deposit.
+   open question for iOS. Put the results in the log's KB candidates, for step 7.
 4. **English unchanged.** On the iPhone 18 Pro simulator, against local
    ([supabase-target-picked-at-runtime](../../kb/entries/supabase-target-picked-at-runtime.md)), the Set
    name screen looks as before. Shoot before and after into `screenshots/step-1/`.
@@ -202,8 +207,9 @@ that has visible text, a placeholder, accessibility props and an error banner.
 
 ## After this step
 
-- Write `implementation-log-step-1.md` beside this file.
-- Run `/librarian deposit 29`.
+- Write `implementation-log-step-1.md` beside this file. End it with a **KB candidates** table: this
+  step's KB impact rows below, as actually built, plus anything else the step taught.
+- Do not run `/librarian deposit 29`, whatever CLAUDE.md says. Step 7 deposits the whole task.
 
 ## KB impact
 

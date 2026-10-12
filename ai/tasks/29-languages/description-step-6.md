@@ -141,8 +141,9 @@ From [otp-email-templates-carry-the-code](../../kb/entries/otp-email-templates-c
 
 ## After this step
 
-- Write `implementation-log-step-6.md` beside this file.
-- Run `/librarian deposit 29`.
+- Write `implementation-log-step-6.md` beside this file. End it with a **KB candidates** table: this
+  step's KB impact rows below, as actually built, plus anything else the step taught.
+- Do not run `/librarian deposit 29`, whatever CLAUDE.md says. Step 7 deposits the whole task.
 
 ## KB impact
 
