@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -57,6 +58,7 @@ export function UserAutocomplete({
   disabled = false,
 }: Props) {
   const styles = useStyles();
+  const { t } = useLingui();
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
 
   useEffect(() => {
@@ -90,34 +92,50 @@ export function UserAutocomplete({
       <AddBar
         value={value}
         onChangeText={onChangeText}
-        placeholder="Start typing a name"
-        accessibilityLabel="Name"
+        placeholder={t({
+          comment: 'Placeholder of the field on the Sharing screen where an owner looks up someone to invite.',
+          message: 'Start typing a name',
+        })}
+        accessibilityLabel={t({
+          comment: "A person's name: the label of a field or a value on screen.",
+          message: 'Name',
+        })}
         autoCapitalize="words"
-        buttonLabel="Invite"
+        buttonLabel={t({
+          comment: 'Button (verb) beside the field: invites the person picked to the list. Fits about 10 characters.',
+          message: 'Invite',
+        })}
         canSubmit={canInvite}
         onSubmit={onInvite}
       />
       {suggestions.length > 0 ? (
         <Card style={styles.suggestions}>
-          {suggestions.map((user, index) => (
-            <Pressable
-              key={user.userId}
-              accessibilityRole="button"
-              accessibilityLabel={`Invite ${user.name}`}
-              accessibilityState={{ disabled }}
-              disabled={disabled}
-              onPress={() => onSelect(user)}
-              style={({ pressed }) => [
-                styles.suggestion,
-                index > 0 && styles.suggestionDivider,
-                pressed && styles.pressed,
-              ]}>
-              <Avatar id={user.userId} name={user.name} size={30} />
-              <Text style={styles.suggestionText} numberOfLines={1}>
-                {user.name}
-              </Text>
-            </Pressable>
-          ))}
+          {suggestions.map((user, index) => {
+            const name = user.name;
+            return (
+              <Pressable
+                key={user.userId}
+                accessibilityRole="button"
+                accessibilityLabel={t({
+                  comment:
+                    "VoiceOver only: a suggested person under the invite field; tapping picks them. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.",
+                  message: `Invite ${name}`,
+                })}
+                accessibilityState={{ disabled }}
+                disabled={disabled}
+                onPress={() => onSelect(user)}
+                style={({ pressed }) => [
+                  styles.suggestion,
+                  index > 0 && styles.suggestionDivider,
+                  pressed && styles.pressed,
+                ]}>
+                <Avatar id={user.userId} name={name} size={30} />
+                <Text style={styles.suggestionText} numberOfLines={1}>
+                  {name}
+                </Text>
+              </Pressable>
+            );
+          })}
         </Card>
       ) : null}
     </View>

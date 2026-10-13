@@ -71,7 +71,11 @@ export function SetNameScreen(_props: SetNameScreenProps) {
         return;
       }
       // `failure` is the server's own wording, shown as it arrives.
-      setError(verdict === 'retryable' ? t`You need a connection to set your name.` : failure);
+      setError(
+        verdict === 'retryable'
+          ? t({ comment: 'Shown when saving the name failed for lack of a connection.', message: 'You need a connection to set your name.' })
+          : failure
+      );
       setPending(false);
     }
   }
@@ -95,8 +99,8 @@ export function SetNameScreen(_props: SetNameScreenProps) {
         style={styles.field}
         value={name}
         onChangeText={editName}
-        placeholder={t`Your name`}
-        accessibilityLabel={t`Your name`}
+        placeholder={t({ comment: 'Placeholder and label of the field holding the name other people see for this account.', message: 'Your name' })}
+        accessibilityLabel={t({ comment: 'Placeholder and label of the field holding the name other people see for this account.', message: 'Your name' })}
         autoCapitalize="words"
         autoCorrect={false}
         returnKeyType="done"
@@ -104,7 +108,7 @@ export function SetNameScreen(_props: SetNameScreenProps) {
       />
 
       <PillButton
-        label={t`Continue`}
+        label={t({ comment: 'Button under the name field: saves the name and goes on into the app. A full-width button.', message: 'Continue' })}
         variant="filled"
         size="lg"
         disabled={!canSubmit}

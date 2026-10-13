@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { Text, View } from 'react-native';
 
 import { themedStyles } from '../state/ThemeContext';
@@ -13,11 +14,18 @@ import { PillButton } from './PillButton';
  */
 export function CoverageLine({ text, onRetry }: { text: string; onRetry?: () => void }) {
   const styles = useStyles();
+  const { t } = useLingui();
 
   return (
     <View style={styles.row}>
       <Text style={styles.text}>{text}</Text>
-      {onRetry ? <PillButton label="Try again" onPress={onRetry} /> : null}
+      {onRetry ? <PillButton
+          label={t({
+            comment: 'Button beside a line saying some lists or items could not load: loads them again. Fits about 10 characters.',
+            message: 'Try again',
+          })}
+          onPress={onRetry}
+        /> : null}
     </View>
   );
 }

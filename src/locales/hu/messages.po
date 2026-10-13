@@ -7,8 +7,828 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: hu\n"
 
+#. VoiceOver only: the separator between the parts of a list read aloud, e.g. "Unread, Maya invited you to Picnic, 2 min ago". English is a comma and a space.
+#: src/i18n/spokenList.ts
+msgid ", "
+msgstr ""
+
+#. A link that is waiting before it can send another code. # is a countdown in seconds; "s" abbreviates seconds.
+#: src/screens/SignInScreen.tsx
+msgid "{cooldown, plural, other {Resend code in #s}}"
+msgstr ""
+
+#. Title when a search of a list's items loaded so far finds nothing; the rest are still to load. # is how many were searched.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {No matches in the # loaded items}}"
+msgstr ""
+
+#. Title when a search of the lists loaded so far finds nothing; the rest are still to load. # is how many were searched.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {No matches in the # loaded lists}}"
+msgstr ""
+
+#. Under the search field when the rest of a list's items could not load (offline). # is how many were searched.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Searched the # loaded items. The rest need a connection.}}"
+msgstr ""
+
+#. Under the search field when the rest of the lists could not load (offline). # is how many were searched.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Searched the # loaded lists. The rest need a connection.}}"
+msgstr ""
+
+#. Under the search field when only a list's first items could be searched: there are too many to load. # is how many.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Searched the first # items.}}"
+msgstr ""
+
+#. Under the search field when only the first lists could be searched: there are too many to load. # is how many.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Searched the first # lists.}}"
+msgstr ""
+
+#. Under the search field while the rest of a list's items load in the background. # is how many are loaded so far.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Searching # loaded items · loading the rest…}}"
+msgstr ""
+
+#. Under the search field while the rest of the lists load in the background. # is how many are loaded so far.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Searching # loaded lists · loading the rest…}}"
+msgstr ""
+
+#. Under the sort buttons when the rest of a list's items could not load (offline). # is how many were sorted.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Sorted the # loaded items. The rest need a connection.}}"
+msgstr ""
+
+#. Under the sort buttons when the rest of the lists could not load (offline). # is how many were sorted.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Sorted the # loaded lists. The rest need a connection.}}"
+msgstr ""
+
+#. Under the sort buttons when only a list's first items could be sorted: there are too many to load. # is how many.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Sorted the first # items.}}"
+msgstr ""
+
+#. Under the sort buttons when only the first lists could be sorted: there are too many to load. # is how many.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Sorted the first # lists.}}"
+msgstr ""
+
+#. Under the sort buttons while the rest of a list's items load in the background. # is how many are loaded so far.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Sorting # loaded items · loading the rest…}}"
+msgstr ""
+
+#. Under the sort buttons while the rest of the lists load in the background. # is how many are loaded so far.
+#: src/lib/searchCopy.ts
+msgid "{count, plural, other {Sorting # loaded lists · loading the rest…}}"
+msgstr ""
+
+#. How long ago something happened, in whole days, abbreviated: short, small print beside other text.
+#: src/lib/ago.ts
+msgid "{days, plural, other {# d ago}}"
+msgstr ""
+
+#. Under the title when a list's bin is empty: how long deleted items are kept. # is a number of days (30).
+#: src/screens/ListDetailScreen.tsx
+msgid "{days, plural, other {Deleted items wait here for # days.}}"
+msgstr ""
+
+#. Under the title when the bin of lists is empty: how long deleted lists are kept. # is a number of days (30).
+#: src/screens/ListsScreen.tsx
+msgid "{days, plural, other {Deleted lists wait here for # days.}}"
+msgstr ""
+
+#. How long ago something happened, in whole hours, abbreviated: short, small print beside other text.
+#: src/lib/ago.ts
+msgid "{hours, plural, other {# h ago}}"
+msgstr ""
+
+#. VoiceOver only: a list someone else shared with this person. {listName} is the list's name as typed: never inflect it.
+#: src/components/ListRow.tsx
+msgid "{listName}, shared with you"
+msgstr ""
+
+#. Shown when a list holds the most items allowed (# is that limit, 1,000).
+#: src/lib/limits.ts
+msgid "{max, plural, other {This list is full: # items at most.}}"
+msgstr ""
+
+#. Shown when the person owns the most lists allowed (# is that limit, 100).
+#: src/lib/limits.ts
+msgid "{max, plural, other {You own # lists. Delete one or hand one over to make room.}}"
+msgstr ""
+
+#. Shown when the person is a member of the most lists allowed, their own and shared ones (# is that limit, 1,000).
+#: src/lib/limits.ts
+msgid "{max, plural, other {You're on # lists. Delete or leave one to make room.}}"
+msgstr ""
+
+#. How long ago something happened, in whole minutes, abbreviated: short, small print beside other text.
+#: src/lib/ago.ts
+msgid "{minutes, plural, other {# min ago}}"
+msgstr ""
+
+#. "Sign in with Apple" is Apple's feature: use the name Apple uses in this language. # is a number of minutes (5).
+#: src/lib/appleSignIn.ts
+msgid "{minutes, plural, other {Sign in with Apple needs a few minutes to reset. Try again in # minutes.}}"
+msgstr ""
+
+#. The person's own row among a list's members. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "{name} (you)"
+msgstr ""
+
+#. A notification: someone accepted this person's invitation to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.
+#: src/screens/NotificationsScreen.tsx
+msgid "{name} accepted your invitation to {listName}"
+msgstr ""
+
+#. A notification: someone declined this person's invitation to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.
+#: src/screens/NotificationsScreen.tsx
+msgid "{name} declined your invitation to {listName}"
+msgstr ""
+
+#. A notification: someone invited this person to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.
+#: src/screens/NotificationsScreen.tsx
+msgid "{name} invited you to {listName}"
+msgstr ""
+
+#. The confirm before blocking the person who sent an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. “Blocked people” is the name of that screen: use its translation.
+#: src/screens/NotificationsScreen.tsx
+msgid "{name} will be told you declined, and you won't see invitations from them any more. Unblock them any time under Blocked people."
+msgstr ""
+
+#. The confirm before removing someone from a list: what it costs them. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "{name} will lose access to this list until someone invites them again."
+msgstr ""
+
+#. The confirm before withdrawing an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending.
+#: src/screens/SharingScreen.tsx
+msgid "{name}'s invitation will be withdrawn."
+msgstr ""
+
+#. VoiceOver only: two sort orders in priority order, e.g. "to do first, then A to Z".
+#: src/lib/searchCopy.ts
+msgid "{order}, then {next}"
+msgstr ""
+
+#. A quiet banner while changes made offline wait to be sent. # is how many changes.
+#: src/components/SyncBanner.tsx
+msgid "{pending, plural, one {# change will sync when you're back online} other {# changes will sync when you're back online}}"
+msgstr ""
+
+#. Under the search field when the rest of the lists could not load (offline). {loaded} is how many were searched; # is the approximate total.
+#: src/lib/searchCopy.ts
+msgid "{total, plural, other {Searched {loaded} of # lists. The rest need a connection.}}"
+msgstr ""
+
+#. Under the search field while the rest of the lists load in the background. {loaded} is how many are loaded so far; # is the approximate total.
+#: src/lib/searchCopy.ts
+msgid "{total, plural, other {Searching {loaded} of # lists · loading the rest…}}"
+msgstr ""
+
+#. Under the sort buttons when the rest of the lists could not load (offline). {loaded} is how many were sorted; # is the approximate total.
+#: src/lib/searchCopy.ts
+msgid "{total, plural, other {Sorted {loaded} of # lists. The rest need a connection.}}"
+msgstr ""
+
+#. Under the sort buttons while the rest of the lists load in the background. {loaded} is how many are loaded so far; # is the approximate total.
+#: src/lib/searchCopy.ts
+msgid "{total, plural, other {Sorting {loaded} of # lists · loading the rest…}}"
+msgstr ""
+
+#. VoiceOver only: the bell button's value, how many notifications are unread. # is that number.
+#: src/screens/ListsScreen.tsx
+msgid "{unreadCount, plural, other {# unread}}"
+msgstr ""
+
+#. Under the members, for a list's only owner: why they cannot leave or step down.
+#: src/screens/SharingScreen.tsx
+msgid "A list must keep at least one owner."
+msgstr ""
+
+#. VoiceOver only: a sort order, alphabetical.
+#. VoiceOver only: a sort order, alphabetical.
+#: src/components/SortButtons.tsx
+#: src/lib/searchCopy.ts
+msgid "A to Z"
+msgstr ""
+
+#. Sort button, alphabetical: the first and last letters of the alphabet. Fits about 10 characters.
+#: src/components/SortButtons.tsx
+msgid "A–Z"
+msgstr ""
+
+#. Button (verb) on an invitation: joins the list. Fits about 12 characters, half of a row.
+#: src/screens/NotificationsScreen.tsx
+msgid "Accept"
+msgstr ""
+
+#. VoiceOver only: the Accept button on an invitation. {listName} is the list's name as typed: never inflect it.
+#: src/screens/NotificationsScreen.tsx
+msgid "Accept invitation to {listName}"
+msgstr ""
+
+#. The Accept button while the answer is being sent. Fits about 12 characters.
+#: src/screens/NotificationsScreen.tsx
+msgid "Accepting…"
+msgstr ""
+
+#. The Account screen's title, and the label of the button that opens it.
+#. The Account screen's title, and the label of the button that opens it.
+#. The Account screen's title, and the label of the button that opens it.
+#: src/navigation/RootNavigator.tsx
+#: src/screens/AccountScreen.tsx
+#: src/screens/ListsScreen.tsx
+msgid "Account"
+msgstr ""
+
+#. Button (verb) beside the field: adds the item typed to the list. Fits about 10 characters.
+#: src/screens/ListDetailScreen.tsx
+msgid "Add"
+msgstr ""
+
+#. Placeholder of the field where a new item is typed.
+#: src/screens/ListDetailScreen.tsx
+msgid "Add an item"
+msgstr ""
+
+#. Under the title of an empty list, for someone who can add to it.
+#: src/screens/ListDetailScreen.tsx
+msgid "Add your first item above."
+msgstr ""
+
+#. Label (noun) of the picker that chooses the light theme, the dark theme, or Auto.
+#: src/screens/AccountScreen.tsx
+msgid "Appearance"
+msgstr ""
+
+#. Shown when Apple sign-in failed and could not recover by itself; trying again later may work.
+#: src/lib/appleSignIn.ts
+msgid "Apple sign-in couldn't finish. Try again in a minute."
+msgstr ""
+
+#. Under a pending invitation: the role it offers, can only see the list. Short, small print.
+#: src/screens/NotificationsScreen.tsx
+msgid "as a reader"
+msgstr ""
+
+#. Under a pending invitation: the role it offers, can add and change items. Short, small print.
+#: src/screens/NotificationsScreen.tsx
+msgid "as a writer"
+msgstr ""
+
+#. Under a pending invitation: the role it offers, can also share, rename and delete the list. Short, small print.
+#: src/screens/NotificationsScreen.tsx
+msgid "as an owner"
+msgstr ""
+
+#. Appearance picker option: switches between the light and dark themes at sunrise and sunset. Fits about 9 characters, one of three equal segments.
+#: src/screens/AccountScreen.tsx
+msgid "Auto"
+msgstr ""
+
+#. VoiceOver only: the round arrow button that goes back to the previous screen.
+#. VoiceOver only: the round arrow button that goes back to the previous screen.
+#. VoiceOver only: the round arrow button that goes back to the previous screen.
+#: src/components/ScreenHeader.tsx
+#: src/screens/ListDetailScreen.tsx
+#: src/screens/SharingScreen.tsx
+msgid "Back"
+msgstr ""
+
+#. Button (verb) in a confirm: blocks the person who sent the invitation. Fits about 12 characters, half of a row.
+#: src/screens/NotificationsScreen.tsx
+msgid "Block"
+msgstr ""
+
+#. Button under an invitation: opens the confirm to block its sender. Full width; a long name is cut with …. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.
+#: src/screens/NotificationsScreen.tsx
+msgid "Block {name}"
+msgstr ""
+
+#. The Blocked people screen: its title, and the buttons that open it from Account and Notifications.
+#. The Blocked people screen: its title, and the buttons that open it from Account and Notifications.
+#. The Blocked people screen: its title, and the buttons that open it from Account and Notifications.
+#. The Blocked people screen: its title, and the buttons that open it from Account and Notifications.
+#: src/navigation/RootNavigator.tsx
+#: src/screens/AccountScreen.tsx
+#: src/screens/BlockedPeopleScreen.tsx
+#: src/screens/NotificationsScreen.tsx
+msgid "Blocked people"
+msgstr ""
+
+#. The Block button while the block is being sent. Fits about 12 characters.
+#: src/screens/NotificationsScreen.tsx
+msgid "Blocking…"
+msgstr ""
+
+#. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
+#. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
+#. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
+#. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
+#. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
+#. Button beside a text field being edited: closes the editor without saving.
+#. Button beside a text field being edited: closes the editor without saving.
+#: src/components/AddBar.tsx
+#: src/screens/AccountScreen.tsx
+#: src/screens/NotificationsScreen.tsx
+#: src/screens/SharingScreen.tsx
+msgid "Cancel"
+msgstr ""
+
+#. VoiceOver only: the Cancel button under the block confirm. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.
+#: src/screens/NotificationsScreen.tsx
+msgid "Cancel blocking {name}"
+msgstr ""
+
+#. VoiceOver only: the Cancel button under the Delete account confirm.
+#: src/screens/AccountScreen.tsx
+msgid "Cancel deleting account"
+msgstr ""
+
+#. VoiceOver only: the Cancel button under the name being edited.
+#: src/screens/AccountScreen.tsx
+msgid "Cancel editing name"
+msgstr ""
+
+#. Under the title when a search finds nothing.
+#: src/lib/searchCopy.ts
+msgid "Check the spelling, or try fewer letters."
+msgstr ""
+
+#. Title of the screen where the person types the code that was emailed to them.
+#: src/screens/SignInScreen.tsx
+msgid "Check your email"
+msgstr ""
+
+#. The browser tab's title on web while a new account picks the name other people see.
+#: src/navigation/RootNavigator.tsx
+msgid "Choose a name"
+msgstr ""
+
+#. VoiceOver only: the × button in the search field, which empties it.
+#: src/components/SearchField.tsx
+msgid "Clear search"
+msgstr ""
+
+#. VoiceOver only: the button that confirms blocking someone. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.
+#: src/screens/NotificationsScreen.tsx
+msgid "Confirm block {name}"
+msgstr ""
+
+#. VoiceOver only: the button that confirms deleting the account.
+#: src/screens/AccountScreen.tsx
+msgid "Confirm delete account"
+msgstr ""
+
+#. VoiceOver only: the button that confirms leaving a list.
+#: src/screens/SharingScreen.tsx
+msgid "Confirm leave list"
+msgstr ""
+
+#. VoiceOver only: the button that confirms removing someone from a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "Confirm remove {name}"
+msgstr ""
+
+#. VoiceOver only: the button that confirms signing out of every device.
+#: src/screens/AccountScreen.tsx
+msgid "Confirm sign out of all devices"
+msgstr ""
+
+#. VoiceOver only: the button that confirms withdrawing an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending.
+#: src/screens/SharingScreen.tsx
+msgid "Confirm withdraw {name}'s invitation"
+msgstr ""
+
+#. Button under the name field: saves the name and goes on into the app. A full-width button.
 #: src/screens/SetNameScreen.tsx
 msgid "Continue"
+msgstr ""
+
+#. VoiceOver only: Apple's own sign-in button, whose visible words Apple draws in the device's language. Use Apple's wording for this button.
+#: src/screens/SignInScreen.tsx
+msgid "Continue with Apple"
+msgstr ""
+
+#. Button that signs in with a Google account. Use Google's usual wording for this button.
+#: src/screens/SignInScreen.tsx
+msgid "Continue with Google"
+msgstr ""
+
+#. Shown when the lists could not be read.
+#: src/state/reloadPages.ts
+msgid "Could not load your lists."
+msgstr ""
+
+#. Shown when the phone's own storage refuses to keep a change waiting to be sent.
+#: src/state/useOutbox.ts
+msgid "Could not save your changes on this device — they will be lost if the app closes."
+msgstr ""
+
+#. Button (verb) beside the field: creates a list with the name typed. Fits about 10 characters.
+#: src/screens/ListsScreen.tsx
+msgid "Create"
+msgstr ""
+
+#. Sort button (noun): sorts by the date each list or item was added, its arrow showing the direction. Fits about 8 characters beside the arrow.
+#: src/components/SortButtons.tsx
+msgid "Date"
+msgstr ""
+
+#. Appearance picker option: the light theme. Fits about 9 characters, one of three equal segments.
+#: src/screens/AccountScreen.tsx
+msgid "Day"
+msgstr ""
+
+#. Under the Appearance picker with Auto on, in a polar summer: the light theme stays on all day. "Day" is the name of the light theme in the picker.
+#: src/state/resolveTheme.ts
+msgid "Day all day today"
+msgstr ""
+
+#. Under the Appearance picker with Auto on: when the light theme ("Day" in the picker) comes on next. {time} is a clock time, e.g. 06:48. Short: it shares a line with the "Appearance" label.
+#: src/state/resolveTheme.ts
+msgid "Day from {time}"
+msgstr ""
+
+#. Button (verb) on an invitation: says no to it. Fits about 12 characters, half of a row.
+#: src/screens/NotificationsScreen.tsx
+msgid "Decline"
+msgstr ""
+
+#. VoiceOver only: the Decline button on an invitation. {listName} is the list's name as typed: never inflect it.
+#: src/screens/NotificationsScreen.tsx
+msgid "Decline invitation to {listName}"
+msgstr ""
+
+#. Under an invitation this person declined (a state, not a button). Short, small print.
+#: src/screens/NotificationsScreen.tsx
+msgid "Declined"
+msgstr ""
+
+#. The Decline button while the answer is being sent. Fits about 12 characters.
+#: src/screens/NotificationsScreen.tsx
+msgid "Declining…"
+msgstr ""
+
+#. VoiceOver only: the bin button on an item, which deletes it. {itemName} is an item's name as the person typed it: never inflect it.
+#: src/components/ItemRow.tsx
+msgid "Delete {itemName}"
+msgstr ""
+
+#. VoiceOver only: the bin button on a list, which deletes it. {listName} is the list's name as typed: never inflect it.
+#: src/components/ListRow.tsx
+msgid "Delete {listName}"
+msgstr ""
+
+#. Button: starts deleting the account (a confirm follows). A full-width button.
+#: src/screens/AccountScreen.tsx
+msgid "Delete account"
+msgstr ""
+
+#. In place of the search field while a list's bin is shown: what the screen lists now.
+#: src/screens/ListDetailScreen.tsx
+msgid "Deleted items, newest first."
+msgstr ""
+
+#. In place of the search field while the bin is shown: what the screen lists now.
+#: src/screens/ListsScreen.tsx
+msgid "Deleted lists, newest first."
+msgstr ""
+
+#. The confirm under Delete account: what deleting costs.
+#: src/screens/AccountScreen.tsx
+msgid "Deleting your account can't be undone. Lists you're the only owner of will be deleted, including for anyone you shared them with. Lists that have another owner will stay with their members."
+msgstr ""
+
+#. The confirm button while the account is being deleted.
+#: src/screens/AccountScreen.tsx
+msgid "Deleting…"
+msgstr ""
+
+#. Button (verb): drops the waiting change. Fits about 10 characters, beside "Restore and keep my change".
+#: src/components/BlockedBanner.tsx
+msgid "Discard"
+msgstr ""
+
+#. VoiceOver only: the Discard button, which drops the waiting change.
+#: src/components/BlockedBanner.tsx
+msgid "Discard my change"
+msgstr ""
+
+#. Button (verb) beside the name: opens it for editing. Fits about 8 characters.
+#: src/screens/AccountScreen.tsx
+msgid "Edit"
+msgstr ""
+
+#. VoiceOver only: the Edit button beside the name.
+#: src/screens/AccountScreen.tsx
+msgid "Edit name"
+msgstr ""
+
+#. Label (noun) above the account's email address.
+#. Label (noun) above the account's email address.
+#: src/screens/AccountScreen.tsx
+msgid "Email"
+msgstr ""
+
+#. The label of the email field on the sign-in screen.
+#: src/screens/SignInScreen.tsx
+msgid "Email address"
+msgstr ""
+
+#. Under the title when the list asked for is not there any more.
+#. Under the title when the list asked for is not there any more.
+#: src/screens/ListDetailScreen.tsx
+#: src/screens/SharingScreen.tsx
+msgid "Go back and pick a list from the list screen."
+msgstr ""
+
+#. Under the title when there are no notifications.
+#: src/screens/NotificationsScreen.tsx
+msgid "Invitations to shared lists show up here."
+msgstr ""
+
+#. Button (verb) beside the field: invites the person picked to the list. Fits about 10 characters.
+#: src/components/UserAutocomplete.tsx
+msgid "Invite"
+msgstr ""
+
+#. VoiceOver only: a suggested person under the invite field; tapping picks them. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.
+#: src/components/UserAutocomplete.tsx
+msgid "Invite {name}"
+msgstr ""
+
+#. VoiceOver only: the Owner option of the role a new person is invited with.
+#: src/screens/SharingScreen.tsx
+msgid "Invite as owner"
+msgstr ""
+
+#. VoiceOver only: the Reader option of the role a new person is invited with.
+#: src/screens/SharingScreen.tsx
+msgid "Invite as reader"
+msgstr ""
+
+#. VoiceOver only: the Writer option of the role a new person is invited with.
+#: src/screens/SharingScreen.tsx
+msgid "Invite as writer"
+msgstr ""
+
+#. Heading (adjective, plural) over the people invited to a list who have not answered yet.
+#: src/screens/SharingScreen.tsx
+msgid "Invited"
+msgstr ""
+
+#. Under the name of someone invited to a list. {age} is how long ago, a whole phrase such as "5 min ago" or "just now". Avoid a participle that shows the gender of the person invited: their gender is unknown.
+#: src/screens/SharingScreen.tsx
+msgid "Invited {age}"
+msgstr ""
+
+#. Placeholder of the field that renames an item on a shopping list.
+#: src/components/ItemRow.tsx
+msgid "Item name"
+msgstr ""
+
+#. How long ago something happened: under a minute. Shown in small print beside other text.
+#: src/lib/ago.ts
+msgid "just now"
+msgstr ""
+
+#. Button: leaves the list, for a member who is not an owner. Fits about 12 characters in its confirm, half of a row.
+#: src/screens/SharingScreen.tsx
+msgid "Leave list"
+msgstr ""
+
+#. The Leave list button while leaving is being sent. Fits about 12 characters.
+#: src/screens/SharingScreen.tsx
+msgid "Leaving…"
+msgstr ""
+
+#. The browser tab's title on a list's screen while the list's name is not known yet.
+#: src/screens/ListDetailScreen.tsx
+msgid "List"
+msgstr ""
+
+#. Placeholder of the field that renames a list.
+#: src/screens/ListDetailScreen.tsx
+msgid "List name"
+msgstr ""
+
+#. Title when the list asked for is not there any more (deleted, or access removed).
+#. Title when the list asked for is not there any more (deleted, or access removed).
+#: src/screens/ListDetailScreen.tsx
+#: src/screens/SharingScreen.tsx
+msgid "List not found"
+msgstr ""
+
+#. VoiceOver only: a spinner while the blocked people load.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "Loading blocked people"
+msgstr ""
+
+#. VoiceOver only: a spinner while a list is looked up.
+#: src/screens/ListDetailScreen.tsx
+msgid "Loading list"
+msgstr ""
+
+#. VoiceOver only: a spinner while a list's items load.
+#: src/screens/ListDetailScreen.tsx
+msgid "Loading list items"
+msgstr ""
+
+#. VoiceOver only: a spinner while the next page of blocked people loads.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "Loading more blocked people"
+msgstr ""
+
+#. VoiceOver only: a spinner while the next page of items loads.
+#: src/screens/ListDetailScreen.tsx
+msgid "Loading more items"
+msgstr ""
+
+#. VoiceOver only: a spinner while the next page of lists loads.
+#: src/screens/ListsScreen.tsx
+msgid "Loading more lists"
+msgstr ""
+
+#. VoiceOver only: a spinner while the next page of notifications loads.
+#: src/screens/NotificationsScreen.tsx
+msgid "Loading more notifications"
+msgstr ""
+
+#. VoiceOver only: a spinner while the notifications load.
+#: src/screens/NotificationsScreen.tsx
+msgid "Loading notifications"
+msgstr ""
+
+#. VoiceOver only: a spinner while a list's members load.
+#: src/screens/SharingScreen.tsx
+msgid "Loading who has access"
+msgstr ""
+
+#. VoiceOver only: a spinner while the lists load.
+#: src/screens/ListsScreen.tsx
+msgid "Loading your lists"
+msgstr ""
+
+#. VoiceOver only: the hint on an unticked item, saying what a tap does.
+#: src/components/ItemRow.tsx
+msgid "Marks this item as done"
+msgstr ""
+
+#. VoiceOver only: the hint on a ticked item, saying what a tap does.
+#: src/components/ItemRow.tsx
+msgid "Marks this item as not done"
+msgstr ""
+
+#. Title (heading) of the app's main screen, which shows every list of the person's.
+#. Title (heading) of the app's main screen, which shows every list of the person's.
+#: src/navigation/RootNavigator.tsx
+#: src/screens/ListsScreen.tsx
+msgid "My Lists"
+msgstr ""
+
+#. A person's name: the label of a field or a value on screen.
+#. A person's name: the label of a field or a value on screen.
+#. A person's name: the label of a field or a value on screen.
+#: src/components/UserAutocomplete.tsx
+#: src/screens/AccountScreen.tsx
+msgid "Name"
+msgstr ""
+
+#. Under the title before the person has any list. "Groceries" is an example name for a shopping list.
+#: src/screens/ListsScreen.tsx
+msgid "Name your first list above — for example, Groceries."
+msgstr ""
+
+#. VoiceOver only: the round + button that shows the field for adding an item.
+#: src/screens/ListDetailScreen.tsx
+msgid "New item"
+msgstr ""
+
+#. VoiceOver only: the round + button that shows the field for naming a new list.
+#: src/screens/ListsScreen.tsx
+msgid "New list"
+msgstr ""
+
+#. Placeholder of the field where a new list is named.
+#: src/screens/ListsScreen.tsx
+msgid "New list name"
+msgstr ""
+
+#. VoiceOver only: a sort order in force, by date added.
+#: src/lib/searchCopy.ts
+msgid "newest first"
+msgstr ""
+
+#. VoiceOver only: the date sort button's state, newest added first.
+#: src/components/SortButtons.tsx
+msgid "Newest first"
+msgstr ""
+
+#. Appearance picker option: the dark theme. Fits about 9 characters, one of three equal segments.
+#: src/screens/AccountScreen.tsx
+msgid "Night"
+msgstr ""
+
+#. Under the Appearance picker with Auto on, in a polar winter: the dark theme stays on all day. "Night" is the name of the dark theme in the picker.
+#: src/state/resolveTheme.ts
+msgid "Night all day today"
+msgstr ""
+
+#. Under the Appearance picker with Auto on: when the dark theme ("Night" in the picker) comes on next. {time} is a clock time, e.g. 19:12. Short: it shares a line with the "Appearance" label.
+#: src/state/resolveTheme.ts
+msgid "Night from {time}"
+msgstr ""
+
+#. Title of the Lists screen before the person has any list.
+#: src/screens/ListsScreen.tsx
+msgid "No lists yet"
+msgstr ""
+
+#. Under an invitation that can no longer be answered: the list was deleted or the invitation withdrawn. Short, small print.
+#: src/screens/NotificationsScreen.tsx
+msgid "No longer available"
+msgstr ""
+
+#. Title when a search finds nothing. {query} is what the person typed, inserted as typed.
+#: src/lib/searchCopy.ts
+msgid "No matches for \"{query}\""
+msgstr ""
+
+#. Title of the Notifications screen when there are none.
+#: src/screens/NotificationsScreen.tsx
+msgid "No notifications yet"
+msgstr ""
+
+#. Under the title of an empty list, for someone who can only read it.
+#: src/screens/ListDetailScreen.tsx
+msgid "Nobody has added anything yet."
+msgstr ""
+
+#. Shown in place of the account's name while it has none yet.
+#: src/screens/AccountScreen.tsx
+msgid "Not set"
+msgstr ""
+
+#. Shown when an action needs an account and the app is signed out.
+#: src/state/SessionContext.tsx
+msgid "Not signed in."
+msgstr ""
+
+#. Title of a list with no items yet.
+#: src/screens/ListDetailScreen.tsx
+msgid "Nothing on this list"
+msgstr ""
+
+#. The Notifications screen: its title, and the label of the bell button that opens it.
+#. The Notifications screen: its title, and the label of the bell button that opens it.
+#. The Notifications screen: its title, and the label of the bell button that opens it.
+#: src/navigation/RootNavigator.tsx
+#: src/screens/ListsScreen.tsx
+#: src/screens/NotificationsScreen.tsx
+msgid "Notifications"
+msgstr ""
+
+#. VoiceOver only: a sort button is switched off.
+#: src/components/SortButtons.tsx
+msgid "Off"
+msgstr ""
+
+#. VoiceOver only: a sort order in force, by date added.
+#: src/lib/searchCopy.ts
+msgid "oldest first"
+msgstr ""
+
+#. VoiceOver only: the date sort button's state, oldest added first.
+#: src/components/SortButtons.tsx
+msgid "Oldest first"
+msgstr ""
+
+#. Under the members, for someone who is not an owner of the list.
+#: src/screens/SharingScreen.tsx
+msgid "Only an owner can change who has access."
+msgstr ""
+
+#. Shown when someone who is not an owner of a list tries to delete it or restore it from the bin.
+#: src/state/useListWrites.ts
+msgid "Only an owner can delete or restore this list."
+msgstr ""
+
+#. Shown when someone who is not an owner of a list tries to rename it.
+#: src/state/useListWrites.ts
+msgid "Only an owner can rename this list."
+msgstr ""
+
+#. VoiceOver only: a notification card that opens its list. {listName} is the list's name as typed: never inflect it.
+#: src/screens/NotificationsScreen.tsx
+msgid "Open {listName}"
 msgstr ""
 
 #. Unique: no two accounts can have the same name.
@@ -16,15 +836,499 @@ msgstr ""
 msgid "Other people in your lists will see this. It has to be unique."
 msgstr ""
 
+#. A member's role, on a badge: can also share, rename and delete the list. Lowercase; the badge capitalizes the first letter.
+#: src/screens/SharingScreen.tsx
+msgctxt "badge"
+msgid "owner"
+msgstr ""
+
+#. Role picker option (noun): a member who can also rename, share and delete the list. Fits about 7 characters: the picker is three equal segments in a narrow space.
+#: src/components/RolePicker.tsx
+msgid "Owner"
+msgstr ""
+
+#. Heading over the members of a list on the Sharing screen.
+#: src/screens/SharingScreen.tsx
+msgid "People with access"
+msgstr ""
+
+#. Under the title when nobody is blocked. "Notifications" is the name of that screen.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "People you block from Notifications show up here."
+msgstr ""
+
 #. Title of the screen where a new account chooses the name other people see. Not a list's name.
 #: src/screens/SetNameScreen.tsx
 msgid "Pick a name"
 msgstr ""
 
+#. Under the search field on a list this person can only read.
+#: src/screens/ListDetailScreen.tsx
+msgid "Read only — you can see this list but not change it."
+msgstr ""
+
+#. A member's role, on a badge: can only see the list. Lowercase; the badge capitalizes the first letter.
+#: src/screens/SharingScreen.tsx
+msgctxt "badge"
+msgid "reader"
+msgstr ""
+
+#. Role picker option (noun): a member who can only see the list. Fits about 7 characters: the picker is three equal segments in a narrow space.
+#: src/components/RolePicker.tsx
+msgid "Reader"
+msgstr ""
+
+#. Button (verb) in a confirm: removes the member from the list. Fits about 12 characters, half of a row.
+#: src/screens/SharingScreen.tsx
+msgid "Remove"
+msgstr ""
+
+#. VoiceOver only: the bin button on a member's row, which removes them from the list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "Remove {name}"
+msgstr ""
+
+#. The Remove button while the removal is being sent. Fits about 12 characters.
+#: src/screens/SharingScreen.tsx
+msgid "Removing…"
+msgstr ""
+
+#. Button (verb) in a list's header: renames the list. Fits about 10 characters, one of the header's buttons.
+#: src/screens/ListDetailScreen.tsx
+msgid "Rename"
+msgstr ""
+
+#. VoiceOver only: the pencil button on an item, which renames it. {itemName} is an item's name as the person typed it: never inflect it.
+#: src/components/ItemRow.tsx
+msgid "Rename {itemName}"
+msgstr ""
+
+#. VoiceOver only: the Rename button in a list's header.
+#: src/screens/ListDetailScreen.tsx
+msgid "Rename list"
+msgstr ""
+
+#. A link under the code field: emails a new code.
+#: src/screens/SignInScreen.tsx
+msgid "Resend code"
+msgstr ""
+
+#. VoiceOver only: the button that takes a deleted item out of the bin. {itemName} is an item's name as the person typed it: never inflect it.
+#: src/components/ItemRow.tsx
+msgid "Restore {itemName}"
+msgstr ""
+
+#. Takes a deleted list out of the bin: what VoiceOver reads for the icon on the Lists screen, and the visible label of the button on the list's own screen. {listName} is the list's name as typed: never inflect it.
+#. Takes a deleted list out of the bin: what VoiceOver reads for the icon on the Lists screen, and the visible label of the button on the list's own screen. {listName} is the list's name as typed: never inflect it.
+#: src/components/ListRow.tsx
+#: src/screens/ListDetailScreen.tsx
+msgid "Restore {listName}"
+msgstr ""
+
+#. Button: takes the deleted list or item out of the bin and sends the waiting change.
+#: src/components/BlockedBanner.tsx
+msgid "Restore and keep my change"
+msgstr ""
+
+#. Button beside a name being edited: saves the new name. Fits about 10 characters.
+#. Button beside a name being edited: saves the new name. Fits about 10 characters.
+#: src/components/ItemRow.tsx
+#: src/screens/ListDetailScreen.tsx
+msgid "Save"
+msgstr ""
+
+#. Button: saves the name being edited. Fits about 12 characters, half of a row of two buttons.
+#: src/screens/AccountScreen.tsx
+msgid "Save name"
+msgstr ""
+
+#. The Save name button while the new name is being saved. Fits about 12 characters.
+#: src/screens/AccountScreen.tsx
+msgid "Saving…"
+msgstr ""
+
+#. VoiceOver only: a round magnifier button that shows the search field and sort buttons.
+#: src/components/ModeButton.tsx
+msgid "Search and sort"
+msgstr ""
+
+#. Placeholder and label of the field that searches a list's items by name.
+#: src/screens/ListDetailScreen.tsx
+msgid "Search items"
+msgstr ""
+
+#. Placeholder and label of the field that searches the lists by name.
+#: src/screens/ListsScreen.tsx
+msgid "Search lists"
+msgstr ""
+
+#. VoiceOver only: the search in force. {query} is what the person typed, inserted as typed.
+#: src/lib/searchCopy.ts
+msgid "Searching {query}"
+msgstr ""
+
+#. Button: emails a sign-in code to the address typed. A full-width button.
+#: src/screens/SignInScreen.tsx
+msgid "Send code"
+msgstr ""
+
+#. VoiceOver only: the Owner option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "Set {name} to owner"
+msgstr ""
+
+#. VoiceOver only: the Reader option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "Set {name} to reader"
+msgstr ""
+
+#. VoiceOver only: the Writer option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
+#: src/screens/SharingScreen.tsx
+msgid "Set {name} to writer"
+msgstr ""
+
+#. Button (verb): shares something through the system share sheet, or opens who a list is shared with. Fits about 10 characters.
+#. Button (verb): shares something through the system share sheet, or opens who a list is shared with. Fits about 10 characters.
+#: src/screens/AccountScreen.tsx
+#: src/screens/ListDetailScreen.tsx
+msgid "Share"
+msgstr ""
+
+#. VoiceOver only: the Share button beside the email address, which opens the system share sheet.
+#: src/screens/AccountScreen.tsx
+msgid "Share email address"
+msgstr ""
+
+#. VoiceOver only: the Share button in a list's header, which opens who has access to the list.
+#: src/screens/ListDetailScreen.tsx
+msgid "Share list"
+msgstr ""
+
+#. Under a list's name on the Lists screen: someone else's list that this person can change.
+#: src/components/ListRow.tsx
+msgid "Shared with you · can edit"
+msgstr ""
+
+#. Under a list's name on the Lists screen: someone else's list that this person can only read.
+#: src/components/ListRow.tsx
+msgid "Shared with you · view only"
+msgstr ""
+
+#. Title (heading) of the screen that shows who has access to a list, and lets an owner invite people.
+#. Title (heading) of the screen that shows who has access to a list, and lets an owner invite people.
+#: src/navigation/RootNavigator.tsx
+#: src/screens/SharingScreen.tsx
+msgid "Sharing"
+msgstr ""
+
+#. A switch that shows only the deleted lists or items (the bin) instead of the live ones. Its label sits beside it on the screen.
+#. A switch that shows only the deleted lists or items (the bin) instead of the live ones. Its label sits beside it on the screen.
+#: src/components/ShowDeletedToggle.tsx
+msgid "Show deleted"
+msgstr ""
+
+#. Button (verb) under the code field: signs in with the code typed. A full-width button.
+#: src/screens/SignInScreen.tsx
+msgctxt "button"
+msgid "Sign in"
+msgstr ""
+
+#. Title of the sign-in screen (heading), above the email field.
+#: src/screens/SignInScreen.tsx
+msgctxt "heading"
+msgid "Sign in"
+msgstr ""
+
+#. Button: signs out of this device only. A full-width button.
+#: src/screens/AccountScreen.tsx
+msgid "Sign out"
+msgstr ""
+
+#. Button: signs out of every device at once. A full-width button.
+#: src/screens/AccountScreen.tsx
+msgid "Sign out of all devices"
+msgstr ""
+
+#. Shown when Apple or Google sign-in finished but sent back nothing to sign in with.
+#. Shown when Apple or Google sign-in finished but sent back nothing to sign in with.
+#: src/lib/appleSignIn.ts
+#: src/lib/googleSignIn.ts
+msgid "Sign-in did not return an identity token"
+msgstr ""
+
+#. The confirm button while every device is being signed out.
+#: src/screens/AccountScreen.tsx
+msgid "Signing out…"
+msgstr ""
+
+#. The label of the field where the emailed six-digit code is typed.
+#: src/screens/SignInScreen.tsx
+msgid "Six-digit code"
+msgstr ""
+
+#. VoiceOver only: the sort button that sorts by when each was added.
+#: src/components/SortButtons.tsx
+msgid "Sort by date added"
+msgstr ""
+
+#. VoiceOver only: the sort button that sorts alphabetically.
+#: src/components/SortButtons.tsx
+msgid "Sort by name"
+msgstr ""
+
+#. VoiceOver only: the sort button that puts items still to do first or last.
+#: src/components/SortButtons.tsx
+msgid "Sort by to do"
+msgstr ""
+
+#. Placeholder of the field on the Sharing screen where an owner looks up someone to invite.
+#: src/components/UserAutocomplete.tsx
+msgid "Start typing a name"
+msgstr ""
+
+#. A change made earlier, refused when it reached the server.
+#: src/lib/listsApi.ts
+msgid "That change is no longer valid."
+msgstr ""
+
+#. A change made earlier is waiting: the item it was made to has since been deleted (put in the bin).
+#: src/components/BlockedBanner.tsx
+msgid "That item is in the bin. Restore it and keep your change?"
+msgstr ""
+
+#. A change made earlier is waiting: the list it was made to has since been deleted (put in the bin).
+#: src/components/BlockedBanner.tsx
+msgid "That list is in the bin. Restore it and keep your change?"
+msgstr ""
+
+#. Title when the bin (the deleted lists or items) is empty.
+#. Title when the bin (the deleted lists or items) is empty.
+#: src/screens/ListDetailScreen.tsx
+#: src/screens/ListsScreen.tsx
+msgid "The bin is empty"
+msgstr ""
+
+#. Under an Apple Hide My Email address. “Sign in with Apple” is Apple's feature: use the name Apple uses in this language.
+#: src/screens/AccountScreen.tsx
+msgid "This address hides your real email. On another iPhone, use Sign in with Apple. On Android or the web, sign in with this address, and Apple forwards the code to your inbox."
+msgstr ""
+
+#. On a deleted list's own screen. “Show deleted” is the switch of that name: use its translation.
+#: src/screens/ListDetailScreen.tsx
+msgid "This list is in the bin. Restoring it brings back everything except the items you deleted separately — those are one tick of Show deleted away."
+msgstr ""
+
+#. The confirm under Sign out of all devices: what it does.
+#: src/screens/AccountScreen.tsx
+msgid "This signs every device out, not just this one."
+msgstr ""
+
+#. VoiceOver only: a sort order in force, items still to do before done ones.
+#: src/lib/searchCopy.ts
+msgid "to do first"
+msgstr ""
+
+#. VoiceOver only: the to-do sort button is on, items still to do first.
+#: src/components/SortButtons.tsx
+msgid "To do first"
+msgstr ""
+
+#. Sort button: items still to do go first. Fits about 10 characters, one of three equal buttons.
+#: src/components/SortButtons.tsx
+msgid "To Do First"
+msgstr ""
+
+#. VoiceOver only: a sort order in force, done items before those still to do.
+#: src/lib/searchCopy.ts
+msgid "to do last"
+msgstr ""
+
+#. VoiceOver only: the to-do sort button is on, done items first.
+#: src/components/SortButtons.tsx
+msgid "To do last"
+msgstr ""
+
+#. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
+#: src/components/SortButtons.tsx
+msgid "To Do Last"
+msgstr ""
+
+#. Button beside a line saying some lists or items could not load: loads them again. Fits about 10 characters.
+#: src/components/CoverageLine.tsx
+msgid "Try again"
+msgstr ""
+
+#. Button (verb) beside a blocked person: lets their invitations through again. Fits about 12 characters.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "Unblock"
+msgstr ""
+
+#. VoiceOver only: the Unblock button beside a blocked person. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "Unblock {name}"
+msgstr ""
+
+#. The Unblock button while the unblock is being sent. Fits about 12 characters.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "Unblocking…"
+msgstr ""
+
+#. VoiceOver only: the dot on an avatar that marks a notification not seen before.
+#: src/screens/NotificationsScreen.tsx
+msgid "Unread"
+msgstr ""
+
+#. A link under the code field: goes back to type a different email address.
+#: src/screens/SignInScreen.tsx
+msgid "Use a different email"
+msgstr ""
+
+#. Under the title. {address} is the email address the person typed, inserted as typed.
+#: src/screens/SignInScreen.tsx
+msgid "We sent a six-digit code to {address}."
+msgstr ""
+
+#. Under the sign-in title: how signing in works.
+#: src/screens/SignInScreen.tsx
+msgid "We'll email you a six-digit code. No password needed."
+msgstr ""
+
+#. Button (verb) in a confirm: withdraws the invitation. Fits about 12 characters, half of a row.
+#: src/screens/SharingScreen.tsx
+msgid "Withdraw"
+msgstr ""
+
+#. VoiceOver only: the × button on an invitation, which withdraws it. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending, e.g. "Withdraw the invitation for {name}".
+#: src/screens/SharingScreen.tsx
+msgid "Withdraw {name}'s invitation"
+msgstr ""
+
+#. The Withdraw button while the withdrawal is being sent. Fits about 12 characters.
+#: src/screens/SharingScreen.tsx
+msgid "Withdrawing…"
+msgstr ""
+
+#. A member's role, on a badge: can add and change items. Lowercase; the badge capitalizes the first letter.
+#: src/screens/SharingScreen.tsx
+msgctxt "badge"
+msgid "writer"
+msgstr ""
+
+#. Role picker option (noun): a member who can add, tick off and rename items. Fits about 7 characters: the picker is three equal segments in a narrow space.
+#: src/components/RolePicker.tsx
+msgid "Writer"
+msgstr ""
+
+#. Button: confirms deleting the account. Shares a row with Cancel.
+#: src/screens/AccountScreen.tsx
+msgid "Yes, delete my account"
+msgstr ""
+
+#. Button: confirms signing out of every device. Shares a row with Cancel.
+#: src/screens/AccountScreen.tsx
+msgid "Yes, sign out everywhere"
+msgstr ""
+
+#. Shown when someone who can only read a list tries to change it.
+#. Shown when someone who can only read a list tries to change it.
+#. Shown when someone who can only read a list tries to change it.
+#. Shown when someone who can only read a list tries to change it.
+#: src/state/useListWrites.ts
+msgid "You have read-only access to this list."
+msgstr ""
+
+#. Title of the Blocked people screen when nobody is blocked.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "You haven't blocked anyone"
+msgstr ""
+
+#. Under an invitation this person accepted: they are now a member of the list. Short, small print.
+#: src/screens/NotificationsScreen.tsx
+msgid "You joined"
+msgstr ""
+
+#. Shown when answering an invitation failed for lack of a connection.
+#: src/screens/NotificationsScreen.tsx
+msgid "You need a connection to answer an invitation."
+msgstr ""
+
+#. Shown when a change to who has access failed for lack of a connection.
+#: src/screens/SharingScreen.tsx
+msgid "You need a connection to change who has access."
+msgstr ""
+
+#. Shown when saving a new name failed for lack of a connection.
+#: src/screens/AccountScreen.tsx
+msgid "You need a connection to change your name."
+msgstr ""
+
+#. Shown when deleting the account failed for lack of a connection.
+#: src/screens/AccountScreen.tsx
+msgid "You need a connection to delete your account."
+msgstr ""
+
+#. Shown when the list of blocked people could not load for lack of a connection.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "You need a connection to see who you've blocked."
+msgstr ""
+
+#. Shown when the notifications could not load for lack of a connection.
+#: src/screens/NotificationsScreen.tsx
+msgid "You need a connection to see your notifications."
+msgstr ""
+
+#. Shown when saving the name failed for lack of a connection.
 #: src/screens/SetNameScreen.tsx
 msgid "You need a connection to set your name."
 msgstr ""
 
+#. Shown when unblocking someone failed for lack of a connection.
+#: src/screens/BlockedPeopleScreen.tsx
+msgid "You need a connection to unblock someone."
+msgstr ""
+
+#. A change made earlier, refused when it reached the server: the role changed meanwhile.
+#: src/lib/listsApi.ts
+msgid "You no longer have permission to make that change."
+msgstr ""
+
+#. Above the sign-in form after this device was signed out from another one. Keep it to one line.
+#: src/screens/SignInScreen.tsx
+msgid "You were signed out on another device."
+msgstr ""
+
+#. The confirm before leaving a list, or removing yourself from it: what it costs.
+#: src/screens/SharingScreen.tsx
+msgid "You'll lose access to this list until someone invites you again."
+msgstr ""
+
+#. Placeholder of the email field: an example address. Localize it if your language has a usual example, keeping it a valid address.
+#: src/screens/SignInScreen.tsx
+msgid "you@example.com"
+msgstr ""
+
+#. Above the sign-in form after the account was deleted. Keep it to one line.
+#: src/screens/SignInScreen.tsx
+msgid "Your account was deleted."
+msgstr ""
+
+#. Placeholder and label of the field holding the name other people see for this account.
+#. Placeholder and label of the field holding the name other people see for this account.
+#. Placeholder and label of the field holding the name other people see for this account.
+#. Placeholder and label of the field holding the name other people see for this account.
+#: src/screens/AccountScreen.tsx
 #: src/screens/SetNameScreen.tsx
 msgid "Your name"
+msgstr ""
+
+#. VoiceOver only: a sort order, reverse alphabetical.
+#. VoiceOver only: a sort order, reverse alphabetical.
+#: src/components/SortButtons.tsx
+#: src/lib/searchCopy.ts
+msgid "Z to A"
+msgstr ""
+
+#. Sort button (lit), reverse alphabetical: the last and first letters of the alphabet. Fits about 10 characters.
+#: src/components/SortButtons.tsx
+msgid "Z–A"
 msgstr ""

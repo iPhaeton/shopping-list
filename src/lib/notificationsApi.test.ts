@@ -1,4 +1,4 @@
-import { LISTS_FULL, OWNED_LISTS_FULL } from './limits';
+import { listsFull, ownedListsFull } from './limits';
 import {
   acceptInvitation,
   blockInviter,
@@ -241,8 +241,8 @@ describe('the other calls', () => {
    * person over the limit is the one holding the phone, so they read the Lists screen's sentences.
    */
   it.each([
-    ['LM002', 'they are already on 1,000 lists', LISTS_FULL],
-    ['LM001', 'they already own 100 lists', OWNED_LISTS_FULL],
+    ['LM002', 'they are already on 1,000 lists', listsFull()],
+    ['LM001', 'they already own 100 lists', ownedListsFull()],
   ])('rephrases a %s refusal at accept in the second person', async (code, message, sentence) => {
     respondToRpcWith({ data: null, error: { message, code }, status: 400 });
 

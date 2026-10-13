@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans } from '@lingui/react';
+import { useLingui } from '@lingui/react/macro';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,6 +16,7 @@ import { ChevronIcon } from '../components/icons';
 import { PillButton } from '../components/PillButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenSky } from '../components/Sky';
+import { spokenList } from '../i18n/spokenList';
 import { ago } from '../lib/ago';
 import {
   acceptInvitation,
@@ -32,16 +37,37 @@ import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Role } from '../state/types';
 import { fonts, radius, spacing } from '../theme';
 
-const OFFLINE_LOAD = 'You need a connection to see your notifications.';
-const OFFLINE_ACTION = 'You need a connection to answer an invitation.';
-
 /** As `NotificationsContext` collapses a burst of nudges: marking n rows read sends n of them. */
 const NUDGE_DEBOUNCE_MS = 300;
 
-const ROLE_ARTICLE: Record<Role, string> = { reader: 'a reader', writer: 'a writer', owner: 'an owner' };
-
 /** A stable empty array while the first page loads, so the `FlatList`'s `data` never allocates one. */
 const NONE: Notification[] = [];
+
+/**
+ * A card's sentence: one whole message per kind, so a language orders the two names its own way.
+ * A descriptor, so the one message serves twice — rendered with the names in bold, where `name` and
+ * `listName` are `<Text>`s that `Trans` slots in as elements (never parsed as text), and as the plain
+ * string in the card's `accessibilityValue`.
+ */
+function sentence(kind: Notification['kind'], name: ReactNode, listName: ReactNode): MessageDescriptor {
+  switch (kind) {
+    case 'list_invitation':
+      return msg({
+        comment: "A notification: someone invited this person to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.",
+        message: `${name} invited you to ${listName}`,
+      });
+    case 'invitation_accepted':
+      return msg({
+        comment: "A notification: someone accepted this person's invitation to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.",
+        message: `${name} accepted your invitation to ${listName}`,
+      });
+    case 'invitation_declined':
+      return msg({
+        comment: "A notification: someone declined this person's invitation to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.",
+        message: `${name} declined your invitation to ${listName}`,
+      });
+  }
+}
 
 /** Block is a decline first (D2), so it answers the invitation as the other two do. */
 type Answer = 'accept' | 'decline' | 'block';
@@ -79,6 +105,7 @@ type Answer = 'accept' | 'decline' | 'block';
  */
 export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const styles = useStyles();
+  const { t, i18n } = useLingui();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { lists, refresh, lastNotificationsNudge } = useLists();
@@ -145,7 +172,16 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
 
     if (!notifications) {
       // With rows on screen a failed reload changes nothing: they stay, and the next nudge asks again.
-      if (rowsRef.current === null) setLoadError(retryable ? OFFLINE_LOAD : error);
+      if (rowsRef.current === null) {
+        setLoadError(
+          retryable
+            ? t({
+                comment: 'Shown when the notifications could not load for lack of a connection.',
+                message: 'You need a connection to see your notifications.',
+              })
+            : error
+        );
+      }
       return;
     }
 
@@ -226,7 +262,12 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     }
 
     if (result.error && result.verdict === 'retryable') {
-      setActionError(OFFLINE_ACTION);
+      setActionError(
+        t({
+          comment: 'Shown when answering an invitation failed for lack of a connection.',
+          message: 'You need a connection to answer an invitation.',
+        })
+      );
       setInFlight(null);
       setConfirmingBlockId(null);
       return;
@@ -246,48 +287,70 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const now = Date.now();
   const held = (listId: string) => lists.some((list) => list.id === listId);
 
+  /** A pending invitation's role, under its sentence. */
+  function roleLead(role: Role): string {
+    switch (role) {
+      case 'reader':
+        return t({ comment: 'Under a pending invitation: the role it offers, can only see the list. Short, small print.', message: 'as a reader' });
+      case 'writer':
+        return t({ comment: 'Under a pending invitation: the role it offers, can add and change items. Short, small print.', message: 'as a writer' });
+      case 'owner':
+        return t({ comment: 'Under a pending invitation: the role it offers, can also share, rename and delete the list. Short, small print.', message: 'as an owner' });
+    }
+  }
+
   function renderCard(n: Notification) {
     const dotted = dots.has(n.id);
     const invitation = n.kind === 'list_invitation' ? n : null;
+    const name = n.actorName;
+    const listName = n.listName;
+    const joined = invitation !== null && invitation.status === 'accepted';
     const outcome = !invitation
       ? null
-      : invitation.status === 'accepted'
-        ? 'You joined'
+      : joined
+        ? t({
+            comment: 'Under an invitation this person accepted: they are now a member of the list. Short, small print.',
+            message: 'You joined',
+          })
         : invitation.status === 'declined'
-          ? 'Declined'
+          ? t({ comment: 'Under an invitation this person declined (a state, not a button). Short, small print.', message: 'Declined' })
           : invitation.available
             ? null
-            : 'No longer available';
+            : t({
+                comment: 'Under an invitation that can no longer be answered: the list was deleted or the invitation withdrawn. Short, small print.',
+                message: 'No longer available',
+              });
     const pending = invitation !== null && outcome === null;
     const resolved = invitation !== null && outcome !== null;
     const opens = invitation ? invitation.status === 'accepted' : n.kind === 'invitation_accepted' && held(n.listId);
 
-    const verb =
-      n.kind === 'list_invitation'
-        ? ' invited you to '
-        : n.kind === 'invitation_accepted'
-          ? ' accepted your invitation to '
-          : ' declined your invitation to ';
     const age = ago(n.createdAt, now);
     // The line under the sentence: a pending invitation's role, a resolved one's outcome in its
     // place, an answer's age alone.
-    const lead = pending && invitation ? `as ${ROLE_ARTICLE[invitation.role]}` : outcome;
-    const sentence = `${n.actorName}${verb}${n.listName}`;
+    const lead = pending && invitation ? roleLead(invitation.role) : outcome;
+    const unread = t({
+      comment: 'VoiceOver only: the dot on an avatar that marks a notification not seen before.',
+      message: 'Unread',
+    });
 
     const body = (
       <View style={styles.row}>
         <View style={styles.avatar}>
           <Avatar id={n.actorId} name={n.actorName} />
-          {dotted ? <View accessible accessibilityLabel="Unread" style={styles.dot} /> : null}
+          {dotted ? <View accessible accessibilityLabel={unread} style={styles.dot} /> : null}
         </View>
         <View style={styles.text}>
           <Text style={[styles.sentence, resolved && styles.muted, dotted && styles.strong]}>
-            <Text style={styles.strong}>{n.actorName}</Text>
-            {verb}
-            <Text style={styles.strong}>{n.listName}</Text>
+            <Trans
+              {...sentence(
+                n.kind,
+                <Text style={styles.strong}>{name}</Text>,
+                <Text style={styles.strong}>{listName}</Text>
+              )}
+            />
           </Text>
           <Text style={styles.meta}>
-            {lead === 'You joined' ? <Text style={styles.joined}>{lead}</Text> : lead}
+            {joined ? <Text style={styles.joined}>{lead}</Text> : lead}
             {lead ? ' · ' : ''}
             {age}
           </Text>
@@ -306,9 +369,17 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       return (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Open ${n.listName}`}
+          accessibilityLabel={t({
+            comment: "VoiceOver only: a notification card that opens its list. {listName} is the list's name as typed: never inflect it.",
+            message: `Open ${listName}`,
+          })}
           accessibilityValue={{
-            text: `${dotted ? 'Unread, ' : ''}${sentence}, ${lead ? `${lead}, ` : ''}${age}`,
+            text: spokenList([
+              ...(dotted ? [unread] : []),
+              i18n._(sentence(n.kind, name, listName)),
+              ...(lead ? [lead] : []),
+              age,
+            ]),
           }}
           onPress={() => navigation.navigate('ListDetail', { listId: n.listId })}
           style={({ pressed }) => pressed && styles.pressed}>
@@ -325,21 +396,31 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         {pending && invitation && confirmingBlockId === n.id ? (
           <View style={styles.confirm}>
             <Text style={styles.confirmText}>
-              {n.actorName} will be told you declined, and you won't see invitations from them
-              any more. Unblock them any time under Blocked people.
+              {t({
+                comment:
+                  "The confirm before blocking the person who sent an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. “Blocked people” is the name of that screen: use its translation.",
+                message: `${name} will be told you declined, and you won't see invitations from them any more. Unblock them any time under Blocked people.`,
+              })}
             </Text>
             <View style={styles.confirmActions}>
               <PillButton
-                label={`Cancel blocking ${n.actorName}`}
-                visibleLabel="Cancel"
+                label={t({ comment: "VoiceOver only: the Cancel button under the block confirm. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.", message: `Cancel blocking ${name}` })}
+                visibleLabel={t({ comment: 'Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.', message: 'Cancel' })}
                 size="md"
                 disabled={busy}
                 onPress={() => setConfirmingBlockId(null)}
                 style={styles.half}
               />
               <PillButton
-                label={`Confirm block ${n.actorName}`}
-                visibleLabel={running === 'block' ? 'Blocking…' : 'Block'}
+                label={t({ comment: "VoiceOver only: the button that confirms blocking someone. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.", message: `Confirm block ${name}` })}
+                visibleLabel={
+                  running === 'block'
+                    ? t({ comment: 'The Block button while the block is being sent. Fits about 12 characters.', message: 'Blocking…' })
+                    : t({
+                        comment: 'Button (verb) in a confirm: blocks the person who sent the invitation. Fits about 12 characters, half of a row.',
+                        message: 'Block',
+                      })
+                }
                 variant="danger"
                 size="md"
                 disabled={busy}
@@ -352,16 +433,30 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
           <>
             <View style={styles.actions}>
               <PillButton
-                label={`Decline invitation to ${n.listName}`}
-                visibleLabel={running === 'decline' ? 'Declining…' : 'Decline'}
+                label={t({ comment: "VoiceOver only: the Decline button on an invitation. {listName} is the list's name as typed: never inflect it.", message: `Decline invitation to ${listName}` })}
+                visibleLabel={
+                  running === 'decline'
+                    ? t({ comment: 'The Decline button while the answer is being sent. Fits about 12 characters.', message: 'Declining…' })
+                    : t({
+                        comment: 'Button (verb) on an invitation: says no to it. Fits about 12 characters, half of a row.',
+                        message: 'Decline',
+                      })
+                }
                 size="md"
                 disabled={busy}
                 onPress={() => void answer(invitation, 'decline')}
                 style={styles.half}
               />
               <PillButton
-                label={`Accept invitation to ${n.listName}`}
-                visibleLabel={running === 'accept' ? 'Accepting…' : 'Accept'}
+                label={t({ comment: "VoiceOver only: the Accept button on an invitation. {listName} is the list's name as typed: never inflect it.", message: `Accept invitation to ${listName}` })}
+                visibleLabel={
+                  running === 'accept'
+                    ? t({ comment: 'The Accept button while the answer is being sent. Fits about 12 characters.', message: 'Accepting…' })
+                    : t({
+                        comment: 'Button (verb) on an invitation: joins the list. Fits about 12 characters, half of a row.',
+                        message: 'Accept',
+                      })
+                }
                 variant="filled"
                 size="md"
                 disabled={busy}
@@ -371,7 +466,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
             </View>
             {/* A name of any length fits: the pill cuts it with `…`; the label keeps it whole. */}
             <PillButton
-              label={`Block ${n.actorName}`}
+              label={t({
+                comment: "Button under an invitation: opens the confirm to block its sender. Full width; a long name is cut with …. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.",
+                message: `Block ${name}`,
+              })}
               size="md"
               tone="danger"
               disabled={busy}
@@ -407,23 +505,38 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         // after the last card it would wait on every page loading first.
         ListHeaderComponent={
           <ScreenHeader
-            title="Notifications"
+            title={t({
+              comment: 'The Notifications screen: its title, and the label of the bell button that opens it.',
+              message: 'Notifications',
+            })}
             onBack={() => navigation.goBack()}
             right={
-              <PillButton label="Blocked people" onPress={() => navigation.navigate('BlockedPeople')} />
+              <PillButton
+                label={t({
+                  comment: 'The Blocked people screen: its title, and the buttons that open it from Account and Notifications.',
+                  message: 'Blocked people',
+                })}
+                onPress={() => navigation.navigate('BlockedPeople')}
+              />
             }
           />
         }
         ListEmptyComponent={
           rows !== null ? (
             <EmptyState
-              title="No notifications yet"
-              hint="Invitations to shared lists show up here."
+              title={t({ comment: 'Title of the Notifications screen when there are none.', message: 'No notifications yet' })}
+              hint={t({
+                comment: 'Under the title when there are no notifications.',
+                message: 'Invitations to shared lists show up here.',
+              })}
               ink={colors.text}
             />
           ) : loadError ? null : (
             <View style={styles.loading}>
-              <ActivityIndicator accessibilityLabel="Loading notifications" color={colors.text} />
+              <ActivityIndicator
+                accessibilityLabel={t({ comment: 'VoiceOver only: a spinner while the notifications load.', message: 'Loading notifications' })}
+                color={colors.text}
+              />
             </View>
           )
         }
@@ -433,7 +546,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
           <View style={styles.footer}>
             {loadingMore ? (
               <ActivityIndicator
-                accessibilityLabel="Loading more notifications"
+                accessibilityLabel={t({
+                  comment: 'VoiceOver only: a spinner while the next page of notifications loads.',
+                  message: 'Loading more notifications',
+                })}
                 color={colors.text}
                 style={styles.loadingMore}
               />

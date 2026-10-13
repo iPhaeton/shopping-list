@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
-import { LISTS_FULL, OWNED_LISTS_FULL } from '../lib/limits';
+import { listsFull, ownedListsFull } from '../lib/limits';
 import { fetchListCounts, fetchLists, insertList, setListDeleted } from '../lib/listsApi';
 import { subscribeToChanges } from '../lib/listsChannel';
 import type { ListsScreenProps } from '../navigation/types';
@@ -582,16 +582,16 @@ describe('at a list limit', () => {
     await renderAtCounts(99, 999);
 
     expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
-    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
-    expect(screen.queryByText(LISTS_FULL)).not.toBeOnTheScreen();
+    expect(screen.queryByText(ownedListsFull())).not.toBeOnTheScreen();
+    expect(screen.queryByText(listsFull())).not.toBeOnTheScreen();
   });
 
   /** The database checks the total first, so the warning names the limit a refusal would. */
   it('names the total when both are reached', async () => {
     await renderAtCounts(100, 1000);
 
-    expect(screen.getByText(LISTS_FULL)).toBeOnTheScreen();
-    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
+    expect(screen.getByText(listsFull())).toBeOnTheScreen();
+    expect(screen.queryByText(ownedListsFull())).not.toBeOnTheScreen();
   });
 
   it('counts a list the moment it is created', async () => {
@@ -599,7 +599,7 @@ describe('at a list limit', () => {
 
     await createList('Groceries');
 
-    expect(screen.getByText(OWNED_LISTS_FULL)).toBeOnTheScreen();
+    expect(screen.getByText(ownedListsFull())).toBeOnTheScreen();
     expect(screen.queryByLabelText('New list name')).not.toBeOnTheScreen();
   });
 
@@ -611,7 +611,7 @@ describe('at a list limit', () => {
     await fireEvent.press(screen.getByLabelText('Show deleted'));
 
     expect(screen.getByText('Deleted lists, newest first.')).toBeOnTheScreen();
-    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
+    expect(screen.queryByText(ownedListsFull())).not.toBeOnTheScreen();
   });
 
   /** The sentence says "delete one", so deleting one has to bring the bar back. */
@@ -619,12 +619,12 @@ describe('at a list limit', () => {
     serveLists([GROCERIES]);
     await renderAtCounts(100, 100);
     await fireEvent.press(screen.getByLabelText('New list'));
-    expect(screen.getByText(OWNED_LISTS_FULL)).toBeOnTheScreen();
+    expect(screen.getByText(ownedListsFull())).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByLabelText('Delete Groceries'));
 
     expect(screen.getByLabelText('New list name')).toBeOnTheScreen();
-    expect(screen.queryByText(OWNED_LISTS_FULL)).not.toBeOnTheScreen();
+    expect(screen.queryByText(ownedListsFull())).not.toBeOnTheScreen();
   });
 });
 

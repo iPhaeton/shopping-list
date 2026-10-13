@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react';
 import { Pressable, Text, View } from 'react-native';
 
 import type { ItemSort, ListSort, SortKey } from '../state/arrange';
@@ -6,11 +8,16 @@ import { fonts, radius, spacing } from '../theme';
 import { ArrowDownIcon, ArrowUpIcon } from './icons';
 
 /** What each button reads as: its label, then its state as `accessibilityValue`. */
-const LABELS: Record<SortKey, string> = {
-  todo: 'Sort by to do',
-  az: 'Sort by name',
-  date: 'Sort by date added',
-};
+function labelFor(key: SortKey): string {
+  switch (key) {
+    case 'todo':
+      return t({ comment: 'VoiceOver only: the sort button that puts items still to do first or last.', message: 'Sort by to do' });
+    case 'az':
+      return t({ comment: 'VoiceOver only: the sort button that sorts alphabetically.', message: 'Sort by name' });
+    case 'date':
+      return t({ comment: 'VoiceOver only: the sort button that sorts by when each was added.', message: 'Sort by date added' });
+  }
+}
 
 /**
  * The sort, one toggle button per key, **left to right in priority order** — the leftmost lit button
@@ -32,6 +39,9 @@ export function SortButtons({
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
+  // The copy comes from `labelFor` and `describe`, outside render; reading the context re-renders
+  // the buttons when the language changes.
+  useLingui();
 
   return (
     <View style={styles.row}>
@@ -43,7 +53,7 @@ export function SortButtons({
           <Pressable
             key={key}
             accessibilityRole="button"
-            accessibilityLabel={LABELS[key]}
+            accessibilityLabel={labelFor(key)}
             accessibilityValue={{ text: value }}
             onPress={() => onPress(key)}
             style={({ pressed }) => [styles.button, on && styles.buttonOn, pressed && styles.pressed]}>
@@ -69,24 +79,64 @@ function describe(
       const todo = 'todo' in sort ? sort.todo : null;
       return {
         on: todo !== null,
-        face: todo === 'last' ? 'To Do Last' : 'To Do First',
-        value: todo === null ? 'Off' : todo === 'first' ? 'To do first' : 'To do last',
+        face:
+          todo === 'last'
+            ? t({
+                comment: 'Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.',
+                message: 'To Do Last',
+              })
+            : t({
+                comment: 'Sort button: items still to do go first. Fits about 10 characters, one of three equal buttons.',
+                message: 'To Do First',
+              }),
+        value:
+          todo === null
+            ? off()
+            : todo === 'first'
+              ? t({ comment: 'VoiceOver only: the to-do sort button is on, items still to do first.', message: 'To do first' })
+              : t({ comment: 'VoiceOver only: the to-do sort button is on, done items first.', message: 'To do last' }),
       };
     }
     case 'az':
       return {
         on: sort.az !== null,
-        face: sort.az === 'desc' ? 'Z–A' : 'A–Z',
-        value: sort.az === null ? 'Off' : sort.az === 'asc' ? 'A to Z' : 'Z to A',
+        face:
+          sort.az === 'desc'
+            ? t({
+                comment: 'Sort button (lit), reverse alphabetical: the last and first letters of the alphabet. Fits about 10 characters.',
+                message: 'Z–A',
+              })
+            : t({
+                comment: 'Sort button, alphabetical: the first and last letters of the alphabet. Fits about 10 characters.',
+                message: 'A–Z',
+              }),
+        value:
+          sort.az === null
+            ? off()
+            : sort.az === 'asc'
+              ? t({ comment: 'VoiceOver only: a sort order, alphabetical.', message: 'A to Z' })
+              : t({ comment: 'VoiceOver only: a sort order, reverse alphabetical.', message: 'Z to A' }),
       };
     case 'date':
       return {
         on: true,
-        face: 'Date',
-        value: sort.date === 'asc' ? 'Oldest first' : 'Newest first',
+        face: t({
+          comment:
+            'Sort button (noun): sorts by the date each list or item was added, its arrow showing the direction. Fits about 8 characters beside the arrow.',
+          message: 'Date',
+        }),
+        value:
+          sort.date === 'asc'
+            ? t({ comment: 'VoiceOver only: the date sort button\'s state, oldest added first.', message: 'Oldest first' })
+            : t({ comment: 'VoiceOver only: the date sort button\'s state, newest added first.', message: 'Newest first' }),
         arrow: sort.date === 'asc' ? 'up' : 'down',
       };
   }
+}
+
+/** A sort button that is not lit. */
+function off(): string {
+  return t({ comment: 'VoiceOver only: a sort button is switched off.', message: 'Off' });
 }
 
 const useStyles = themedStyles((colors) => ({

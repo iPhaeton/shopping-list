@@ -1,3 +1,5 @@
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
@@ -21,12 +23,6 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 const CODE_LENGTH = 6;
 
-/** Why this device is here, when it did not choose to be. One line, never two. */
-const NOTICES: Record<SignOutReason, string> = {
-  revoked: 'You were signed out on another device.',
-  deleted: 'Your account was deleted.',
-};
-
 /**
  * Two phases in one screen: email, then the code that lands in the inbox. There is no separate
  * sign-up screen — `requestCode` creates the account when the address is new.
@@ -36,9 +32,26 @@ const NOTICES: Record<SignOutReason, string> = {
  */
 export function SignInScreen(_props: SignInScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { name: theme } = useTheme();
   const { requestCode, verifyCode, signInWithGoogle, signInWithApple, state } = useSession();
-  const notice = state.status === 'signedOut' && state.reason ? NOTICES[state.reason] : null;
+
+  /** Why this device is here, when it did not choose to be. One line, never two. */
+  function noticeFor(reason: SignOutReason): string {
+    switch (reason) {
+      case 'revoked':
+        return t({
+          comment: 'Above the sign-in form after this device was signed out from another one. Keep it to one line.',
+          message: 'You were signed out on another device.',
+        });
+      case 'deleted':
+        return t({
+          comment: 'Above the sign-in form after the account was deleted. Keep it to one line.',
+          message: 'Your account was deleted.',
+        });
+    }
+  }
+  const notice = state.status === 'signedOut' && state.reason ? noticeFor(state.reason) : null;
 
   const [phase, setPhase] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -52,6 +65,13 @@ export function SignInScreen(_props: SignInScreenProps) {
     const timer = setTimeout(() => setCooldown((seconds) => seconds - 1), 1000);
     return () => clearTimeout(timer);
   }, [cooldown]);
+
+  const address = email.trim();
+  const resend = t({ comment: 'A link under the code field: emails a new code.', message: 'Resend code' });
+  const startAgain = t({
+    comment: 'A link under the code field: goes back to type a different email address.',
+    message: 'Use a different email',
+  });
 
   const canSend = email.trim().length > 0 && !pending;
   const canVerify = code.trim().length === CODE_LENGTH && !pending;
@@ -125,8 +145,16 @@ export function SignInScreen(_props: SignInScreenProps) {
 
       {phase === 'email' ? (
         <>
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.hint}>We'll email you a six-digit code. No password needed.</Text>
+          <Text style={styles.title}>
+            <Trans context="heading" comment="Title of the sign-in screen (heading), above the email field.">
+              Sign in
+            </Trans>
+          </Text>
+          <Text style={styles.hint}>
+            <Trans comment="Under the sign-in title: how signing in works.">
+              We'll email you a six-digit code. No password needed.
+            </Trans>
+          </Text>
 
           {error ? <ErrorBanner message={error} style={styles.error} /> : null}
 
@@ -134,8 +162,11 @@ export function SignInScreen(_props: SignInScreenProps) {
             style={styles.field}
             value={email}
             onChangeText={setEmail}
-            placeholder="you@example.com"
-            accessibilityLabel="Email address"
+            placeholder={t({
+              comment: 'Placeholder of the email field: an example address. Localize it if your language has a usual example, keeping it a valid address.',
+              message: 'you@example.com',
+            })}
+            accessibilityLabel={t({ comment: 'The label of the email field on the sign-in screen.', message: 'Email address' })}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
@@ -145,7 +176,10 @@ export function SignInScreen(_props: SignInScreenProps) {
           />
 
           <PillButton
-            label="Send code"
+            label={t({
+              comment: 'Button: emails a sign-in code to the address typed. A full-width button.',
+              message: 'Send code',
+            })}
             variant="filled"
             size="lg"
             disabled={!canSend}
@@ -167,7 +201,11 @@ export function SignInScreen(_props: SignInScreenProps) {
                   : AppleAuthenticationButtonStyle.BLACK
               }
               cornerRadius={26}
-              accessibilityLabel="Continue with Apple"
+              accessibilityLabel={t({
+                comment:
+                  "VoiceOver only: Apple's own sign-in button, whose visible words Apple draws in the device's language. Use Apple's wording for this button.",
+                message: 'Continue with Apple',
+              })}
               onPress={() => void continueWith(signInWithApple)}
               style={[styles.action, styles.apple]}
             />
@@ -175,7 +213,10 @@ export function SignInScreen(_props: SignInScreenProps) {
 
           {Platform.OS !== 'web' && (
             <PillButton
-              label="Continue with Google"
+              label={t({
+                comment: "Button that signs in with a Google account. Use Google's usual wording for this button.",
+                message: 'Continue with Google',
+              })}
               size="lg"
               icon={<GoogleIcon />}
               disabled={pending}
@@ -186,8 +227,17 @@ export function SignInScreen(_props: SignInScreenProps) {
         </>
       ) : (
         <>
-          <Text style={styles.title}>Check your email</Text>
-          <Text style={styles.hint}>We sent a six-digit code to {email.trim()}.</Text>
+          <Text style={styles.title}>
+            <Trans comment="Title of the screen where the person types the code that was emailed to them.">
+              Check your email
+            </Trans>
+          </Text>
+          <Text style={styles.hint}>
+            {t({
+              comment: 'Under the title. {address} is the email address the person typed, inserted as typed.',
+              message: `We sent a six-digit code to ${address}.`,
+            })}
+          </Text>
 
           {error ? <ErrorBanner message={error} style={styles.error} /> : null}
 
@@ -196,7 +246,7 @@ export function SignInScreen(_props: SignInScreenProps) {
             value={code}
             onChangeText={setCode}
             placeholder="123456"
-            accessibilityLabel="Six-digit code"
+            accessibilityLabel={t({ comment: 'The label of the field where the emailed six-digit code is typed.', message: 'Six-digit code' })}
             keyboardType="number-pad"
             maxLength={CODE_LENGTH}
             autoCorrect={false}
@@ -205,7 +255,11 @@ export function SignInScreen(_props: SignInScreenProps) {
           />
 
           <PillButton
-            label="Sign in"
+            label={t({
+              context: 'button',
+              comment: 'Button (verb) under the code field: signs in with the code typed. A full-width button.',
+              message: 'Sign in',
+            })}
             variant="filled"
             size="lg"
             disabled={!canVerify}
@@ -219,24 +273,30 @@ export function SignInScreen(_props: SignInScreenProps) {
           */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Resend code"
+            accessibilityLabel={resend}
             accessibilityState={{ disabled: !canResend }}
             disabled={!canResend}
             onPress={send}
             hitSlop={4}
             style={[styles.link, styles.firstLink]}>
             <Text style={[styles.linkText, !canResend && styles.linkTextDisabled]}>
-              {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+              {cooldown > 0
+                ? t({
+                    comment:
+                      'A link that is waiting before it can send another code. # is a countdown in seconds; "s" abbreviates seconds.',
+                    message: plural(cooldown, { other: 'Resend code in #s' }),
+                  })
+                : resend}
             </Text>
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Use a different email"
+            accessibilityLabel={startAgain}
             onPress={startOver}
             hitSlop={4}
             style={[styles.link, styles.lastLink]}>
-            <Text style={styles.linkText}>Use a different email</Text>
+            <Text style={styles.linkText}>{startAgain}</Text>
           </Pressable>
         </>
       )}

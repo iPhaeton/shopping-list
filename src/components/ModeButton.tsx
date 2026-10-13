@@ -1,3 +1,5 @@
+import { useLingui } from '@lingui/react/macro';
+
 import { useTheme } from '../state/ThemeContext';
 import { IconButton } from './IconButton';
 import { PlusIcon, SearchIcon } from './icons';
@@ -25,6 +27,7 @@ export function ModeButton({
   summary?: string;
   onPress: () => void;
 }) {
+  const { t } = useLingui();
   const { colors } = useTheme();
 
   if (mode === 'search') {
@@ -36,7 +39,15 @@ export function ModeButton({
   }
 
   return (
-    <IconButton label="Search and sort" value={summary} outline={colors.outline} dot={dot} onPress={onPress}>
+    <IconButton
+      label={t({
+        comment: 'VoiceOver only: a round magnifier button that shows the search field and sort buttons.',
+        message: 'Search and sort',
+      })}
+      value={summary}
+      outline={colors.outline}
+      dot={dot}
+      onPress={onPress}>
       <SearchIcon color={colors.text} size={18} />
     </IconButton>
   );

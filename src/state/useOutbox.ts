@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { useCallback, type Dispatch, type MutableRefObject } from 'react';
 
 import { fetchItem } from '../lib/listsApi';
@@ -65,7 +66,12 @@ export function useOutbox({
     } catch {
       // The queue is still in memory and will still be sent; what is lost is surviving a restart,
       // and that is worth saying out loud rather than pretending the change is safe.
-      setError('Could not save your changes on this device — they will be lost if the app closes.');
+      setError(
+        t({
+          comment: "Shown when the phone's own storage refuses to keep a change waiting to be sent.",
+          message: 'Could not save your changes on this device — they will be lost if the app closes.',
+        })
+      );
     }
   }, [userId]);
 

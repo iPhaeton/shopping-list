@@ -1,12 +1,7 @@
+import { useLingui } from '@lingui/react/macro';
+
 import type { Role } from '../state/types';
 import { SegmentedPicker, type SegmentedOption } from './SegmentedPicker';
-
-/** Declaration order, weakest first — the same order the database's enum is written in. */
-const ROLES: SegmentedOption<Role>[] = [
-  { value: 'reader', title: 'Reader' },
-  { value: 'writer', title: 'Writer' },
-  { value: 'owner', title: 'Owner' },
-];
 
 type Props = {
   value: Role;
@@ -24,9 +19,39 @@ type Props = {
 };
 
 export function RolePicker({ value, labelFor, disabled = false, track, size, onChange }: Props) {
+  const { t } = useLingui();
+  // Declaration order, weakest first — the same order the database's enum is written in. Built in
+  // render, so the titles are in the language active now.
+  const roles: SegmentedOption<Role>[] = [
+    {
+      value: 'reader',
+      title: t({
+        comment:
+          'Role picker option (noun): a member who can only see the list. Fits about 7 characters: the picker is three equal segments in a narrow space.',
+        message: 'Reader',
+      }),
+    },
+    {
+      value: 'writer',
+      title: t({
+        comment:
+          'Role picker option (noun): a member who can add, tick off and rename items. Fits about 7 characters: the picker is three equal segments in a narrow space.',
+        message: 'Writer',
+      }),
+    },
+    {
+      value: 'owner',
+      title: t({
+        comment:
+          'Role picker option (noun): a member who can also rename, share and delete the list. Fits about 7 characters: the picker is three equal segments in a narrow space.',
+        message: 'Owner',
+      }),
+    },
+  ];
+
   return (
     <SegmentedPicker
-      options={ROLES}
+      options={roles}
       value={value}
       labelFor={labelFor}
       disabled={disabled}

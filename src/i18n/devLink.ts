@@ -33,3 +33,17 @@ export function listenForDevLocaleLinks(apply: (target: DevLocaleTarget) => void
   Linking.addEventListener('url', ({ url }) => handle(url));
   void Linking.getInitialURL().then(handle);
 }
+
+/**
+ * Web's way in, dev builds only, for the same purpose: there `Linking` only ever sees the page's own
+ * http URL, so no link can reach the app. A Playwright session calls `__setDevLocale('pseudo')` —
+ * `'device'` to go back — and the page switches in place, exactly as a link would switch it. Answers
+ * whether the target was one of ours.
+ */
+export function exposeDevLocaleSwitch(apply: (target: DevLocaleTarget) => void): void {
+  (globalThis as { __setDevLocale?: (target: string) => boolean }).__setDevLocale = (target) => {
+    const parsed = parseDevLocaleLink(`shopping-list://dev/locale/${target}`);
+    if (parsed) apply(parsed);
+    return parsed !== null;
+  };
+}

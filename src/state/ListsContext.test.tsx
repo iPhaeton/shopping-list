@@ -20,7 +20,7 @@ import {
   type Result,
 } from '../lib/listsApi';
 import { subscribeToChanges } from '../lib/listsChannel';
-import { ITEMS_FULL } from '../lib/limits';
+import { itemsFull } from '../lib/limits';
 import { loadOutbox, saveOutbox } from '../lib/outbox';
 import { ListsProvider, useLists } from './ListsContext';
 import { inDeletionOrder, inJoinOrder, NO_LIST_COUNTS, NO_LIST_CURSORS } from './listsReducer';
@@ -1988,11 +1988,11 @@ it('leaves one banner and drops the item when the database says the list is full
     { type: 'item/setDone', listId: 'l1', itemId: 'i9', doneAt: '2026-10-01T09:00:00.000Z' },
   ]);
   serveLists([GROCERIES]);
-  api.addItem.mockResolvedValue({ error: ITEMS_FULL, verdict: 'permanent' });
+  api.addItem.mockResolvedValue({ error: itemsFull(), verdict: 'permanent' });
 
   await renderProbe();
 
-  expect(await screen.findByText(`error: ${ITEMS_FULL}`)).toBeOnTheScreen();
+  expect(await screen.findByText(`error: ${itemsFull()}`)).toBeOnTheScreen();
   await waitFor(() => expect(screen.getByText('pending: 0')).toBeOnTheScreen());
   expect(api.setItemDone).not.toHaveBeenCalled();
   expect(screen.queryByText(/One too many/)).not.toBeOnTheScreen();

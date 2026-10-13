@@ -1,3 +1,5 @@
+import { plural } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -21,6 +23,7 @@ const SHOW_AFTER_MS = 400;
  */
 export function SyncBanner({ pending }: { pending: number }) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
   const waiting = pending > 0;
@@ -37,8 +40,6 @@ export function SyncBanner({ pending }: { pending: number }) {
 
   if (!visible) return null;
 
-  const changes = pending === 1 ? '1 change' : `${pending} changes`;
-
   return (
     <View accessibilityLiveRegion="polite" style={styles.wrap}>
       <View
@@ -50,7 +51,15 @@ export function SyncBanner({ pending }: { pending: number }) {
       </View>
       <View style={styles.banner}>
         <CloudIcon color={colors.text} size={18} />
-        <Text style={styles.text}>{`${changes} will sync when you're back online`}</Text>
+        <Text style={styles.text}>
+          {t({
+            comment: 'A quiet banner while changes made offline wait to be sent. # is how many changes.',
+            message: plural(pending, {
+              one: "# change will sync when you're back online",
+              other: "# changes will sync when you're back online",
+            }),
+          })}
+        </Text>
       </View>
     </View>
   );

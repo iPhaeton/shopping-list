@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import type { Session } from '@supabase/supabase-js';
 import {
   createContext,
@@ -378,7 +379,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const deleteAccount = useCallback(async (): Promise<ApiResult> => {
     if (state.status !== 'signedIn' && state.status !== 'nameRequired') {
-      return { error: 'Not signed in.', verdict: 'permanent' };
+      return { error: notSignedIn(), verdict: 'permanent' };
     }
     const userId = state.session.user.id;
 
@@ -423,7 +424,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setName = useCallback(
     async (name: string): Promise<ApiResult> => {
       if (state.status !== 'signedIn' && state.status !== 'nameRequired') {
-        return { error: 'Not signed in.', verdict: 'permanent' };
+        return { error: notSignedIn(), verdict: 'permanent' };
       }
       const { session } = state;
       const result = await setNameRpc(name);
@@ -475,4 +476,9 @@ export function useSession(): SessionContextValue {
   const value = useContext(SessionContext);
   if (!value) throw new Error('useSession must be used inside a <SessionProvider>');
   return value;
+}
+
+/** A write asked for with no session to make it in. */
+function notSignedIn(): string {
+  return t({ comment: 'Shown when an action needs an account and the app is signed out.', message: 'Not signed in.' });
 }

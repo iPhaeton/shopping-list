@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+
 import { HORIZON, sunElevation, sunEvents } from '../lib/sun';
 import type { ThemePreference } from '../lib/themePreference';
 import { ZONE_COORDS } from '../lib/zoneCoords';
@@ -85,18 +87,41 @@ function byClock(now: Date): ResolvedTheme {
   return { name: 'night', next: { name: 'day', at: at(1, DAY_FROM_HOUR) }, timeZone: null };
 }
 
-const TITLES: Record<ThemeName, string> = { day: 'Day', night: 'Night' };
-
 /**
  * The line under the Appearance picker while Auto is on: `Night from 19:12`, `Day from 06:48`, in
  * the device's clock format. With no switch within a day (a polar summer or winter), `Day all day
  * today`. Formatted in the zone the time was worked out for — the device's own, in the app —
- * and `locale` is only for tests: the app passes none and gets the device's.
+ * and `locale` is only for tests: the app passes none and gets the device's (D13). One whole
+ * message per theme, so a language can agree the sentence with each name.
  */
 export function describeNextChange(resolved: ResolvedTheme, locale?: string): string {
   const { name, next, timeZone } = resolved;
-  if (!next) return `${TITLES[name]} all day today`;
-  return `${TITLES[next.name]} from ${clockTime(next.at, timeZone, locale)}`;
+  if (!next) {
+    return name === 'day'
+      ? t({
+          comment:
+            'Under the Appearance picker with Auto on, in a polar summer: the light theme stays on all day. "Day" is the name of the light theme in the picker.',
+          message: 'Day all day today',
+        })
+      : t({
+          comment:
+            'Under the Appearance picker with Auto on, in a polar winter: the dark theme stays on all day. "Night" is the name of the dark theme in the picker.',
+          message: 'Night all day today',
+        });
+  }
+
+  const time = clockTime(next.at, timeZone, locale);
+  return next.name === 'day'
+    ? t({
+        comment:
+          'Under the Appearance picker with Auto on: when the light theme ("Day" in the picker) comes on next. {time} is a clock time, e.g. 06:48. Short: it shares a line with the "Appearance" label.',
+        message: `Day from ${time}`,
+      })
+    : t({
+        comment:
+          'Under the Appearance picker with Auto on: when the dark theme ("Night" in the picker) comes on next. {time} is a clock time, e.g. 19:12. Short: it shares a line with the "Appearance" label.',
+        message: `Night from ${time}`,
+      });
 }
 
 function clockTime(at: Date, timeZone: string | null, locale: string | undefined) {

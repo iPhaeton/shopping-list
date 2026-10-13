@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react';
 import { DarkTheme, DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect, useMemo } from 'react';
@@ -35,6 +37,9 @@ export function RootNavigator() {
   const { state } = useSession();
   const { name, colors } = useTheme();
   const styles = useStyles();
+  // `screensFor`'s titles are read in render; reading the context re-renders them on a change of
+  // language.
+  useLingui();
 
   // What the navigator paints where no screen does — behind a push, say. Left at React Navigation's
   // default, that is a white card sliding across the night sky.
@@ -115,7 +120,10 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
         <Stack.Screen
           name="SetName"
           component={SetNameScreen}
-          options={{ title: 'Choose a name', headerShown: false }}
+          options={{
+            title: t({ comment: "The browser tab's title on web while a new account picks the name other people see.", message: 'Choose a name' }),
+            headerShown: false,
+          }}
         />
       );
     case 'signedIn':
@@ -127,28 +135,56 @@ function screensFor(state: Exclude<AuthState, { status: 'loading' }>) {
             Back still works without the native button: the edge swipe on iOS and the hardware back
             on Android belong to the stack, not the header.
           */}
-          <Stack.Screen name="Lists" component={ListsScreen} options={{ title: 'My Lists', headerShown: false }} />
+          <Stack.Screen
+            name="Lists"
+            component={ListsScreen}
+            options={{
+              title: t({ comment: "Title (heading) of the app's main screen, which shows every list of the person's.", message: 'My Lists' }),
+              headerShown: false,
+            }}
+          />
           {/* `ListDetail`'s title comes from the screen, through `setOptions`. */}
           <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ headerShown: false }} />
           <Stack.Screen
             name="Sharing"
             component={SharingScreen}
-            options={{ title: 'Sharing', headerShown: false }}
+            options={{
+              title: t({
+                comment: 'Title (heading) of the screen that shows who has access to a list, and lets an owner invite people.',
+                message: 'Sharing',
+              }),
+              headerShown: false,
+            }}
           />
           <Stack.Screen
             name="Account"
             component={AccountScreen}
-            options={{ title: 'Account', headerShown: false }}
+            options={{
+              title: t({ comment: "The Account screen's title, and the label of the button that opens it.", message: 'Account' }),
+              headerShown: false,
+            }}
           />
           <Stack.Screen
             name="Notifications"
             component={NotificationsScreen}
-            options={{ title: 'Notifications', headerShown: false }}
+            options={{
+              title: t({
+                comment: 'The Notifications screen: its title, and the label of the bell button that opens it.',
+                message: 'Notifications',
+              }),
+              headerShown: false,
+            }}
           />
           <Stack.Screen
             name="BlockedPeople"
             component={BlockedPeopleScreen}
-            options={{ title: 'Blocked people', headerShown: false }}
+            options={{
+              title: t({
+                comment: 'The Blocked people screen: its title, and the buttons that open it from Account and Notifications.',
+                message: 'Blocked people',
+              }),
+              headerShown: false,
+            }}
           />
         </>
       );

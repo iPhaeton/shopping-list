@@ -1,6 +1,6 @@
 import { i18n, type Messages } from '@lingui/core';
 import { getLocales } from 'expo-localization';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { messages as be } from '../locales/be/messages';
 import { messages as bg } from '../locales/bg/messages';
@@ -77,16 +77,19 @@ AppState.addEventListener('change', (state) => {
 });
 
 // `__DEV__` is a constant Metro folds away in a production bundle, `require`s included — so neither
-// the pseudo catalog nor the link handler ships.
+// the pseudo catalog nor the link handler, nor web's switch, ships.
 if (__DEV__) {
   i18n.load(PSEUDO_LOCALE, require('../locales/pseudo/messages').messages as Messages);
 
-  const { listenForDevLocaleLinks } = require('./devLink') as typeof import('./devLink');
-  listenForDevLocaleLinks((target) => {
+  const { exposeDevLocaleSwitch, listenForDevLocaleLinks } =
+    require('./devLink') as typeof import('./devLink');
+  const apply = (target: DevLocaleTarget) => {
     devOverride = target === 'device' ? null : target;
     if (devOverride === null) followDevice();
     else show(devOverride);
-  });
+  };
+  listenForDevLocaleLinks(apply);
+  if (Platform.OS === 'web') exposeDevLocaleSwitch(apply);
 }
 
 export { i18n };

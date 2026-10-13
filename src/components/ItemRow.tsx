@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { memo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -41,8 +42,10 @@ export const ItemRow = memo(function ItemRow({
   onSetDeleted,
 }: Props) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const band = bandAt(colors, index);
+  const itemName = item.title;
 
   // `doneAt` records when the item was checked off; nothing here shows the time, only the fact.
   const done = item.doneAt !== null;
@@ -65,8 +68,11 @@ export const ItemRow = memo(function ItemRow({
       <View style={[styles.row, { backgroundColor: band.color }]}>
         <View style={styles.editor}>
           <AddBar
-            placeholder="Item name"
-            buttonLabel="Save"
+            placeholder={t({ comment: 'Placeholder of the field that renames an item on a shopping list.', message: 'Item name' })}
+            buttonLabel={t({
+              comment: 'Button beside a name being edited: saves the new name. Fits about 10 characters.',
+              message: 'Save',
+            })}
             initialValue={item.title}
             autoFocus
             onCancel={() => setEditing(false)}
@@ -95,7 +101,11 @@ export const ItemRow = memo(function ItemRow({
         accessibilityState={{ checked: done, disabled: !editable || deleted }}
         accessibilityLabel={item.title}
         accessibilityHint={
-          editable ? (done ? 'Marks this item as not done' : 'Marks this item as done') : undefined
+          editable
+            ? done
+              ? t({ comment: 'VoiceOver only: the hint on a ticked item, saying what a tap does.', message: 'Marks this item as not done' })
+              : t({ comment: 'VoiceOver only: the hint on an unticked item, saying what a tap does.', message: 'Marks this item as done' })
+            : undefined
         }
         disabled={inactive}
         onPress={() => onToggle(item.id)}
@@ -119,14 +129,33 @@ export const ItemRow = memo(function ItemRow({
           straight back `target_deleted`, and Restore is the one thing to offer it. No tag says it
           is deleted: the bin view shows nothing else. */}
       {onRename && !deleted ? (
-        <IconButton label={`Rename ${item.title}`} fill={band.iconFill} onPress={() => setEditing(true)}>
+        <IconButton
+          label={t({
+            comment:
+              "VoiceOver only: the pencil button on an item, which renames it. {itemName} is an item's name as the person typed it: never inflect it.",
+            message: `Rename ${itemName}`,
+          })}
+          fill={band.iconFill}
+          onPress={() => setEditing(true)}>
           <PencilIcon color={band.ink} size={16} />
         </IconButton>
       ) : null}
 
       {onSetDeleted ? (
         <IconButton
-          label={`${deleted ? 'Restore' : 'Delete'} ${item.title}`}
+          label={
+            deleted
+              ? t({
+                  comment:
+                    "VoiceOver only: the button that takes a deleted item out of the bin. {itemName} is an item's name as the person typed it: never inflect it.",
+                  message: `Restore ${itemName}`,
+                })
+              : t({
+                  comment:
+                    "VoiceOver only: the bin button on an item, which deletes it. {itemName} is an item's name as the person typed it: never inflect it.",
+                  message: `Delete ${itemName}`,
+                })
+          }
           fill={band.iconFill}
           onPress={() => onSetDeleted(item.id, !deleted)}>
           {deleted ? <RestoreIcon color={band.ink} size={16} /> : <TrashIcon color={band.ink} size={16} />}

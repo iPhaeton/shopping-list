@@ -1,3 +1,5 @@
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { ListRenderItemInfo } from 'react-native';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
@@ -20,7 +22,7 @@ import { ShowDeletedToggle } from '../components/ShowDeletedToggle';
 import { SkyFill } from '../components/Sky';
 import { SortButtons } from '../components/SortButtons';
 import { SyncBanner } from '../components/SyncBanner';
-import { coverageLine, NO_MATCHES_HINT, noMatchesTitle, searchSummary } from '../lib/searchCopy';
+import { coverageLine, noMatchesHint, noMatchesTitle, searchSummary } from '../lib/searchCopy';
 import type { ListDetailScreenProps } from '../navigation/types';
 import { arrangeItems, isDefaultSort, nextSort, type SortKey } from '../state/arrange';
 import { bandAt } from '../state/bands';
@@ -54,11 +56,16 @@ const SEARCH_SKY_H = 268;
 /** List detail's sort buttons, left to right in priority order. */
 const SORT_KEYS: readonly SortKey[] = ['todo', 'az', 'date'];
 
+/** How long the bin keeps an item before the nightly purge deletes it for good. */
+const PURGE_DAYS = 30;
+
 export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { listId } = route.params;
+  const days = PURGE_DAYS;
   const {
     lists,
     error,
@@ -200,8 +207,12 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // The screen draws its own header — `RootNavigator` hides the native one on every screen — so this
   // title is read only by the browser tab on web.
   useLayoutEffect(() => {
-    navigation.setOptions({ title: list?.name ?? 'List' });
-  }, [navigation, list?.name]);
+    navigation.setOptions({
+      title:
+        list?.name ??
+        t({ comment: "The browser tab's title on a list's screen while the list's name is not known yet.", message: 'List' }),
+    });
+  }, [navigation, list?.name, t]);
 
   // Ids in, so every row gets the same three functions and `ItemRow`'s `memo` holds across renders.
   const toggle = useCallback((itemId: string) => toggleItem(listId, itemId), [toggleItem, listId]);
@@ -243,7 +254,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     list && loaded && editable && !showDeleted && !(shownMode === 'create' && emptyAndComplete) ? (
       <ModeButton
         mode={shownMode}
-        newLabel="New item"
+        newLabel={t({ comment: 'VoiceOver only: the round + button that shows the field for adding an item.', message: 'New item' })}
         dot={arranged}
         summary={searchSummary(shownQuery, sort)}
         onPress={switchMode}
@@ -255,6 +266,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // list it is about.
   let slot = null;
   if (list && loaded) {
+    const listName = list.name;
     if (showDeleted && !binned) {
       // Nothing is added to the bin, and it is never searched, so it says what it is in the slot —
       // keeping the sort buttons' 44pt as sky when entered from search, so `Show deleted` stays
@@ -262,14 +274,23 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
       // it stays in either view.
       slot = (
         <>
-          <BarSentence>Deleted items, newest first.</BarSentence>
+          <BarSentence>
+            {t({
+              comment: "In place of the search field while a list's bin is shown: what the screen lists now.",
+              message: 'Deleted items, newest first.',
+            })}
+          </BarSentence>
           {shownMode === 'search' ? <View style={styles.sortSky} /> : null}
         </>
       );
     } else if (shownMode === 'search' && !binned) {
       slot = (
         <>
-          <SearchField placeholder="Search items" value={query} onChangeText={setQuery} />
+          <SearchField
+            placeholder={t({ comment: "Placeholder and label of the field that searches a list's items by name.", message: 'Search items' })}
+            value={query}
+            onChangeText={setQuery}
+          />
           <SortButtons
             sort={sort}
             keys={SORT_KEYS}
@@ -280,8 +301,11 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
     } else if (editable) {
       slot = (
         <AddBar
-          placeholder="Add an item"
-          buttonLabel="Add"
+          placeholder={t({ comment: 'Placeholder of the field where a new item is typed.', message: 'Add an item' })}
+          buttonLabel={t({
+            comment: 'Button (verb) beside the field: adds the item typed to the list. Fits about 10 characters.',
+            message: 'Add',
+          })}
           autoFocus={focusAdd}
           onSubmit={(title) => addItem(list.id, title)}
         />
@@ -295,14 +319,20 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
             six items with nothing on screen to say where they went.
           */}
           <Text style={styles.noticeText}>
-            This list is in the bin. Restoring it brings back everything except the items you
-            deleted separately — those are one tick of Show deleted away.
+            <Trans comment="On a deleted list's own screen. “Show deleted” is the switch of that name: use its translation.">
+              This list is in the bin. Restoring it brings back everything except the items you
+              deleted separately — those are one tick of Show deleted away.
+            </Trans>
           </Text>
           {canManageList(list.role) ? (
             <View style={styles.cardAction}>
               <PillButton
                 variant="filled"
-                label={`Restore ${list.name}`}
+                label={t({
+                  comment:
+                    "Takes a deleted list out of the bin: what VoiceOver reads for the icon on the Lists screen, and the visible label of the button on the list's own screen. {listName} is the list's name as typed: never inflect it.",
+                  message: `Restore ${listName}`,
+                })}
                 onPress={() => setListDeleted(listId, false)}
               />
             </View>
@@ -341,7 +371,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         </View>
 
         <View style={styles.headerRow}>
-          <IconButton label="Back" outline={colors.outline} onPress={() => navigation.goBack()}>
+          <IconButton label={t({ comment: 'VoiceOver only: the round arrow button that goes back to the previous screen.', message: 'Back' })} outline={colors.outline} onPress={() => navigation.goBack()}>
             <ChevronIcon direction="left" color={colors.text} size={18} />
           </IconButton>
           {/*
@@ -354,14 +384,23 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
               {modeButton}
               {manageable ? (
                 <PillButton
-                  label="Rename list"
-                  visibleLabel="Rename"
+                  label={t({ comment: 'VoiceOver only: the Rename button in a list\'s header.', message: 'Rename list' })}
+                  visibleLabel={t({
+                    comment: "Button (verb) in a list's header: renames the list. Fits about 10 characters, one of the header's buttons.",
+                    message: 'Rename',
+                  })}
                   onPress={() => setRenaming((open) => !open)}
                 />
               ) : null}
               <PillButton
-                label="Share list"
-                visibleLabel="Share"
+                label={t({
+                  comment: "VoiceOver only: the Share button in a list's header, which opens who has access to the list.",
+                  message: 'Share list',
+                })}
+                visibleLabel={t({
+                  comment: 'Button (verb): shares something through the system share sheet, or opens who a list is shared with. Fits about 10 characters.',
+                  message: 'Share',
+                })}
                 onPress={() => navigation.navigate('Sharing', { listId })}
               />
             </View>
@@ -373,8 +412,11 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         {list && renaming && manageable ? (
           <View style={styles.titleSlot}>
             <AddBar
-              placeholder="List name"
-              buttonLabel="Save"
+              placeholder={t({ comment: 'Placeholder of the field that renames a list.', message: 'List name' })}
+              buttonLabel={t({
+                comment: 'Button beside a name being edited: saves the new name. Fits about 10 characters.',
+                message: 'Save',
+              })}
               initialValue={list.name}
               onSubmit={(name) => {
                 renameList(list.id, name);
@@ -406,7 +448,12 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           />
         ) : null}
         {list && loaded && !editable && !binned ? (
-          <CoverageLine text="Read only — you can see this list but not change it." />
+          <CoverageLine
+            text={t({
+              comment: 'Under the search field on a list this person can only read.',
+              message: 'Read only — you can see this list but not change it.',
+            })}
+          />
         ) : null}
       </View>
 
@@ -427,26 +474,44 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
   // `ink`: on a band, `textMuted` falls short of AA for the hint.
   const empty = !list ? (
     lookup !== 'done' ? (
-      <ActivityIndicator accessibilityLabel="Loading list" color={last.ink} style={styles.loading} />
+      <ActivityIndicator
+        accessibilityLabel={t({ comment: 'VoiceOver only: a spinner while a list is looked up.', message: 'Loading list' })}
+        color={last.ink}
+        style={styles.loading}
+      />
     ) : (
       <EmptyState
-        title="List not found"
-        hint="Go back and pick a list from the list screen."
+        title={t({ comment: 'Title when the list asked for is not there any more (deleted, or access removed).', message: 'List not found' })}
+        hint={t({
+          comment: 'Under the title when the list asked for is not there any more.',
+          message: 'Go back and pick a list from the list screen.',
+        })}
         ink={last.ink}
       />
     )
   ) : !loaded ? (
     <ActivityIndicator
-      accessibilityLabel="Loading list items"
+      accessibilityLabel={t({ comment: "VoiceOver only: a spinner while a list's items load.", message: 'Loading list items' })}
       color={last.ink}
       style={styles.loading}
     />
   ) : showDeleted ? (
-    <EmptyState title="The bin is empty" hint="Deleted items wait here for 30 days." ink={last.ink} />
+    <EmptyState
+      title={t({ comment: 'Title when the bin (the deleted lists or items) is empty.', message: 'The bin is empty' })}
+      hint={t({
+        comment: "Under the title when a list's bin is empty: how long deleted items are kept. # is a number of days (30).",
+        message: plural(days, { other: 'Deleted items wait here for # days.' }),
+      })}
+      ink={last.ink}
+    />
   ) : live.length === 0 ? (
     <EmptyState
-      title="Nothing on this list"
-      hint={editable ? 'Add your first item above.' : 'Nobody has added anything yet.'}
+      title={t({ comment: 'Title of a list with no items yet.', message: 'Nothing on this list' })}
+      hint={
+        editable
+          ? t({ comment: 'Under the title of an empty list, for someone who can add to it.', message: 'Add your first item above.' })
+          : t({ comment: 'Under the title of an empty list, for someone who can only read it.', message: 'Nobody has added anything yet.' })
+      }
       ink={last.ink}
     />
   ) : (
@@ -459,7 +524,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
         partial: list.nextLive !== null,
         held: live.length,
       })}
-      hint={NO_MATCHES_HINT}
+      hint={noMatchesHint()}
       ink={last.ink}
     />
   );
@@ -495,7 +560,7 @@ export function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator
-                accessibilityLabel="Loading more items"
+                accessibilityLabel={t({ comment: 'VoiceOver only: a spinner while the next page of items loads.', message: 'Loading more items' })}
                 color={last.ink}
                 style={styles.footer}
               />

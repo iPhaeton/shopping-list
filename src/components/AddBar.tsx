@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { TextInputProps } from 'react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -55,6 +56,7 @@ export function AddBar({
   autoCapitalize,
 }: Props) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors, scheme } = useTheme();
   const [draft, setDraft] = useState(initialValue);
   const controlled = controlledValue !== undefined;
@@ -92,11 +94,18 @@ export function AddBar({
       {onCancel ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t({
+            comment: 'Button beside a text field being edited: closes the editor without saving.',
+            message: 'Cancel',
+          })}
           onPress={onCancel}
           hitSlop={4}
           style={({ pressed }) => [styles.cancel, pressed && styles.buttonPressed]}>
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>
+            <Trans comment="Button beside a text field being edited: closes the editor without saving.">
+              Cancel
+            </Trans>
+          </Text>
         </Pressable>
       ) : null}
       <Pressable

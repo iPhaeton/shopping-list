@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Pressable, Text, View } from 'react-native';
 
 import { themedStyles } from '../state/ThemeContext';
@@ -30,6 +31,7 @@ export function ShowDeletedToggle({
   onChange: (checked: boolean) => void;
 }) {
   const styles = useStyles();
+  const { t } = useLingui();
 
   return (
     <Pressable
@@ -37,14 +39,21 @@ export function ShowDeletedToggle({
       // iOS "on/off" setting, not a multi-select box to tick before submitting anything.
       accessibilityRole="switch"
       accessibilityState={{ checked }}
-      accessibilityLabel="Show deleted"
+      accessibilityLabel={t({
+        comment: 'A switch that shows only the deleted lists or items (the bin) instead of the live ones. Its label sits beside it on the screen.',
+        message: 'Show deleted',
+      })}
       onPress={() => onChange(!checked)}
       hitSlop={4}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <View style={[styles.track, checked && styles.trackChecked]}>
         <View style={[styles.knob, checked && styles.knobChecked]} />
       </View>
-      <Text style={styles.label}>Show deleted</Text>
+      <Text style={styles.label}>
+        <Trans comment="A switch that shows only the deleted lists or items (the bin) instead of the live ones. Its label sits beside it on the screen.">
+          Show deleted
+        </Trans>
+      </Text>
     </Pressable>
   );
 }

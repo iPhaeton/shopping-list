@@ -1,3 +1,5 @@
+import { plural, t } from '@lingui/core/macro';
+
 import type { ListCounts } from '../state/types';
 
 /**
@@ -21,11 +23,6 @@ export const LIMIT_CODES = {
   items: 'LM003',
 } as const;
 
-/** `1000` → `1,000`, without leaning on `Intl` being there in every JS engine the app runs in. */
-export function grouped(n: number): string {
-  return String(n).replace(/\B(?=(\d{3})+$)/g, ',');
-}
-
 /**
  * What the person holding the phone reads — on the Lists screen before the tap, in the red banner
  * when a queued write is refused, and on Notifications when accepting an invitation would take them
@@ -33,17 +30,42 @@ export function grouped(n: number): string {
  * somebody else ("they already own 100 lists") and reach only the Sharing screen, when an owner
  * promotes a member who is at a limit — an invitation no longer meets the limits when it is sent,
  * only when it is accepted.
+ *
+ * Functions rather than constants, so the sentence is in the language active when it is read, not
+ * the one active at import. Each is a plural on its limit (D6): English reads the same for every
+ * count, so it has only `other`, and `#` is the limit formatted for the language (`1,000` in `en`).
  */
-export const OWNED_LISTS_FULL = `You own ${grouped(MAX_OWNED_LISTS)} lists. Delete one or hand one over to make room.`;
-export const LISTS_FULL = `You're on ${grouped(MAX_LISTS)} lists. Delete or leave one to make room.`;
-export const ITEMS_FULL = `This list is full: ${grouped(MAX_ITEMS)} items at most.`;
+export function ownedListsFull(): string {
+  const max = MAX_OWNED_LISTS;
+  return t({
+    comment: 'Shown when the person owns the most lists allowed (# is that limit, 100).',
+    message: plural(max, { other: 'You own # lists. Delete one or hand one over to make room.' }),
+  });
+}
+
+export function listsFull(): string {
+  const max = MAX_LISTS;
+  return t({
+    comment:
+      'Shown when the person is a member of the most lists allowed, their own and shared ones (# is that limit, 1,000).',
+    message: plural(max, { other: "You're on # lists. Delete or leave one to make room." }),
+  });
+}
+
+export function itemsFull(): string {
+  const max = MAX_ITEMS;
+  return t({
+    comment: 'Shown when a list holds the most items allowed (# is that limit, 1,000).',
+    message: plural(max, { other: 'This list is full: # items at most.' }),
+  });
+}
 
 /**
  * The sentence for whichever list limit `counts` has reached, or `null` below both. The total
  * first, because the database checks it first, so the warning and a refusal never disagree.
  */
 export function listLimitSentence(counts: ListCounts): string | null {
-  if (counts.total >= MAX_LISTS) return LISTS_FULL;
-  if (counts.owned >= MAX_OWNED_LISTS) return OWNED_LISTS_FULL;
+  if (counts.total >= MAX_LISTS) return listsFull();
+  if (counts.owned >= MAX_OWNED_LISTS) return ownedListsFull();
   return null;
 }

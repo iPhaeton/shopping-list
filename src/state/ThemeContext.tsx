@@ -4,6 +4,7 @@ import { NunitoSans_400Regular } from '@expo-google-fonts/nunito-sans/400Regular
 import { NunitoSans_500Medium } from '@expo-google-fonts/nunito-sans/500Medium';
 import { NunitoSans_600SemiBold } from '@expo-google-fonts/nunito-sans/600SemiBold';
 import { SourceSerif4_400Regular } from '@expo-google-fonts/source-serif-4/400Regular';
+import { useLingui } from '@lingui/react';
 import { useFonts } from 'expo-font';
 import * as SystemUI from 'expo-system-ui';
 import {
@@ -104,6 +105,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const scheme = name === 'night' ? 'dark' : 'light';
   const colors = palettes[name];
   const nextAt = resolved.next?.at.getTime() ?? null;
+  // A context reader, so a change of language re-renders this provider and the hint is rebuilt in it.
+  useLingui();
   const nextChange = preference === 'auto' ? describeNextChange(resolved) : null;
 
   // Keyed on `clock` too, so every evaluation arms a fresh timer — including the one this fires.

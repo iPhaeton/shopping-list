@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,8 +25,6 @@ import { useSession } from '../state/SessionContext';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import { fonts, spacing } from '../theme';
 
-const OFFLINE_LOAD = "You need a connection to see who you've blocked.";
-const OFFLINE_ACTION = 'You need a connection to unblock someone.';
 
 /** A stable empty array while the first page loads, so the `FlatList`'s `data` never allocates one. */
 const NONE: BlockedUser[] = [];
@@ -47,6 +46,7 @@ const NONE: BlockedUser[] = [];
  */
 export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { refreshUnread } = useNotifications();
@@ -80,7 +80,14 @@ export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
     if (!live.current) return;
 
     if (!blocked) {
-      setLoadError(retryable ? OFFLINE_LOAD : error);
+      setLoadError(
+        retryable
+          ? t({
+              comment: 'Shown when the list of blocked people could not load for lack of a connection.',
+              message: "You need a connection to see who you've blocked.",
+            })
+          : error
+      );
       return;
     }
     show(blocked, next);
@@ -135,7 +142,14 @@ export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
     });
 
     if (result.error) {
-      setActionError(result.verdict === 'retryable' ? OFFLINE_ACTION : result.error);
+      setActionError(
+        result.verdict === 'retryable'
+          ? t({
+              comment: 'Shown when unblocking someone failed for lack of a connection.',
+              message: 'You need a connection to unblock someone.',
+            })
+          : result.error
+      );
       return;
     }
 
@@ -148,6 +162,7 @@ export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
 
   function renderCard(person: BlockedUser) {
     const pending = unblocking.has(person.userId);
+    const name = person.name;
     return (
       <Card style={styles.card}>
         <View style={styles.row}>
@@ -155,8 +170,19 @@ export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
           {/* Wraps, never cut: `set_name` has no upper bound. */}
           <Text style={styles.name}>{person.name}</Text>
           <PillButton
-            label={`Unblock ${person.name}`}
-            visibleLabel={pending ? 'Unblocking…' : 'Unblock'}
+            label={t({
+              comment:
+                "VoiceOver only: the Unblock button beside a blocked person. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.",
+              message: `Unblock ${name}`,
+            })}
+            visibleLabel={
+              pending
+                ? t({ comment: 'The Unblock button while the unblock is being sent. Fits about 12 characters.', message: 'Unblocking…' })
+                : t({
+                    comment: 'Button (verb) beside a blocked person: lets their invitations through again. Fits about 12 characters.',
+                    message: 'Unblock',
+                  })
+            }
             disabled={pending}
             onPress={() => void unblock(person)}
           />
@@ -184,18 +210,32 @@ export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
         extraData={unblocking}
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={<ScreenHeader title="Blocked people" onBack={() => navigation.goBack()} />}
+        ListHeaderComponent={
+          <ScreenHeader
+            title={t({
+              comment: 'The Blocked people screen: its title, and the buttons that open it from Account and Notifications.',
+              message: 'Blocked people',
+            })}
+            onBack={() => navigation.goBack()}
+          />
+        }
         ListEmptyComponent={
           rows === null ? (
             loadError ? null : (
               <View style={styles.loading}>
-                <ActivityIndicator accessibilityLabel="Loading blocked people" color={colors.text} />
+                <ActivityIndicator
+                  accessibilityLabel={t({ comment: 'VoiceOver only: a spinner while the blocked people load.', message: 'Loading blocked people' })}
+                  color={colors.text}
+                />
               </View>
             )
           ) : cursor === null ? (
             <EmptyState
-              title="You haven't blocked anyone"
-              hint="People you block from Notifications show up here."
+              title={t({ comment: 'Title of the Blocked people screen when nobody is blocked.', message: "You haven't blocked anyone" })}
+              hint={t({
+                comment: 'Under the title when nobody is blocked. "Notifications" is the name of that screen.',
+                message: 'People you block from Notifications show up here.',
+              })}
               ink={colors.text}
             />
           ) : null
@@ -206,7 +246,10 @@ export function BlockedPeopleScreen({ navigation }: BlockedPeopleScreenProps) {
           <View style={styles.footer}>
             {loadingMore ? (
               <ActivityIndicator
-                accessibilityLabel="Loading more blocked people"
+                accessibilityLabel={t({
+                  comment: 'VoiceOver only: a spinner while the next page of blocked people loads.',
+                  message: 'Loading more blocked people',
+                })}
                 color={colors.text}
                 style={styles.loadingMore}
               />

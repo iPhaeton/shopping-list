@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useRef, useState } from 'react';
 import { ScrollView, Share, Text, View, type LayoutChangeEvent } from 'react-native';
 
@@ -16,15 +17,6 @@ import type { AccountScreenProps } from '../navigation/types';
 import { useSession } from '../state/SessionContext';
 import { themedStyles, useTheme } from '../state/ThemeContext';
 import { fonts, spacing } from '../theme';
-
-const APPEARANCES: SegmentedOption<ThemePreference>[] = [
-  { value: 'day', title: 'Day' },
-  { value: 'night', title: 'Night' },
-  { value: 'auto', title: 'Auto' },
-];
-
-const appearanceLabel = (preference: ThemePreference) =>
-  APPEARANCES.find((option) => option.value === preference)?.title ?? preference;
 
 /**
  * Only Apple issues addresses in this domain: Hide My Email's relay. The test is the address, not an
@@ -47,6 +39,7 @@ const isRelayAddress = (email: string | undefined): email is string =>
  */
 export function AccountScreen({ navigation }: AccountScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { preference, nextChange, setPreference } = useTheme();
   const { state, signOut, signOutEverywhere, deleteAccount, setName } = useSession();
   const scroll = useScrollReveal();
@@ -75,6 +68,37 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
   // `state.session`/`state.name` for everything below instead of an `!` on each use.
   if (state.status !== 'signedIn') return null;
 
+  const appearances: SegmentedOption<ThemePreference>[] = [
+    {
+      value: 'day',
+      title: t({
+        comment: 'Appearance picker option: the light theme. Fits about 9 characters, one of three equal segments.',
+        message: 'Day',
+      }),
+    },
+    {
+      value: 'night',
+      title: t({
+        comment: 'Appearance picker option: the dark theme. Fits about 9 characters, one of three equal segments.',
+        message: 'Night',
+      }),
+    },
+    {
+      value: 'auto',
+      title: t({
+        comment:
+          'Appearance picker option: switches between the light and dark themes at sunrise and sunset. Fits about 9 characters, one of three equal segments.',
+        message: 'Auto',
+      }),
+    },
+  ];
+  const appearanceLabel = (choice: ThemePreference) =>
+    appearances.find((option) => option.value === choice)?.title ?? choice;
+  const saveNameLabel = t({
+    comment: 'Button: saves the name being edited. Fits about 12 characters, half of a row of two buttons.',
+    message: 'Save name',
+  });
+
   const { email } = state.session.user;
   const relay = isRelayAddress(email);
   const canSaveName = nameDraft.trim().length >= 3 && !namePending;
@@ -102,7 +126,11 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
         void signOut('revoked');
         return;
       }
-      setNameError(verdict === 'retryable' ? 'You need a connection to change your name.' : failure);
+      setNameError(
+        verdict === 'retryable'
+          ? t({ comment: 'Shown when saving a new name failed for lack of a connection.', message: 'You need a connection to change your name.' })
+          : failure
+      );
       setNamePending(false);
       return;
     }
@@ -157,7 +185,11 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
       return;
     }
 
-    setDeleteError(verdict === 'retryable' ? 'You need a connection to delete your account.' : failure);
+    setDeleteError(
+      verdict === 'retryable'
+        ? t({ comment: 'Shown when deleting the account failed for lack of a connection.', message: 'You need a connection to delete your account.' })
+        : failure
+    );
     setPendingDelete(false);
     setConfirmingDelete(false);
   }
@@ -185,7 +217,10 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets>
-        <ScreenHeader title="Account" onBack={() => navigation.goBack()} />
+        <ScreenHeader
+          title={t({ comment: "The Account screen's title, and the label of the button that opens it.", message: 'Account' })}
+          onBack={() => navigation.goBack()}
+        />
 
         {error ? <ErrorBanner message={error} /> : null}
 
@@ -200,26 +235,38 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
                 {/* The address wraps between letters rather than ever being cut off (task 26 step 1). */}
                 <View style={styles.nameRow}>
                   <View style={styles.nameText}>
-                    <Text style={styles.label}>Email</Text>
+                    <Text style={styles.label}>
+                      <Trans comment="Label (noun) above the account's email address.">Email</Trans>
+                    </Text>
                     <Text style={styles.value}>{email}</Text>
                   </View>
                   {/* A browser without the Web Share API rejects (react-native-web); the press then
                       does nothing rather than throwing unhandled. */}
                   <PillButton
-                    label="Share email address"
-                    visibleLabel="Share"
+                    label={t({
+                      comment: 'VoiceOver only: the Share button beside the email address, which opens the system share sheet.',
+                      message: 'Share email address',
+                    })}
+                    visibleLabel={t({
+                      comment: 'Button (verb): shares something through the system share sheet, or opens who a list is shared with. Fits about 10 characters.',
+                      message: 'Share',
+                    })}
                     onPress={() => void Share.share({ message: email }).catch(() => {})}
                   />
                 </View>
                 <Text style={[styles.confirmText, styles.relayNote]}>
-                  This address hides your real email. On another iPhone, use Sign in with Apple. On
-                  Android or the web, sign in with this address, and Apple forwards the code to your
-                  inbox.
+                  <Trans comment="Under an Apple Hide My Email address. “Sign in with Apple” is Apple's feature: use the name Apple uses in this language.">
+                    This address hides your real email. On another iPhone, use Sign in with Apple. On
+                    Android or the web, sign in with this address, and Apple forwards the code to your
+                    inbox.
+                  </Trans>
                 </Text>
               </>
             ) : (
               <>
-                <Text style={styles.label}>Email</Text>
+                <Text style={styles.label}>
+                  <Trans comment="Label (noun) above the account's email address.">Email</Trans>
+                </Text>
                 <Text style={styles.value}>{email}</Text>
               </>
             )}
@@ -228,30 +275,36 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
 
             {editingName ? (
               <>
-                <Text style={styles.label}>Name</Text>
+                <Text style={styles.label}>
+                  <Trans comment="A person's name: the label of a field or a value on screen.">Name</Trans>
+                </Text>
                 {nameError ? <ErrorBanner message={nameError} style={styles.nameError} /> : null}
                 <TextField
                   style={styles.nameField}
                   value={nameDraft}
                   onChangeText={setNameDraft}
-                  placeholder="Your name"
-                  accessibilityLabel="Your name"
+                  placeholder={t({ comment: 'Placeholder and label of the field holding the name other people see for this account.', message: 'Your name' })}
+                  accessibilityLabel={t({ comment: 'Placeholder and label of the field holding the name other people see for this account.', message: 'Your name' })}
                   autoCapitalize="words"
                   autoCorrect={false}
                   editable={!namePending}
                 />
                 <View style={styles.actions}>
                   <PillButton
-                    label="Cancel editing name"
-                    visibleLabel="Cancel"
+                    label={t({ comment: 'VoiceOver only: the Cancel button under the name being edited.', message: 'Cancel editing name' })}
+                    visibleLabel={t({ comment: 'Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.', message: 'Cancel' })}
                     size="md"
                     disabled={namePending}
                     onPress={cancelEditingName}
                     style={styles.half}
                   />
                   <PillButton
-                    label="Save name"
-                    visibleLabel={namePending ? 'Saving…' : 'Save name'}
+                    label={saveNameLabel}
+                    visibleLabel={
+                      namePending
+                        ? t({ comment: 'The Save name button while the new name is being saved. Fits about 12 characters.', message: 'Saving…' })
+                        : saveNameLabel
+                    }
                     variant="filled"
                     size="md"
                     disabled={!canSaveName}
@@ -263,12 +316,20 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
             ) : (
               <View style={styles.nameRow}>
                 <View style={styles.nameText}>
-                  <Text style={styles.label}>Name</Text>
-                  <Text style={styles.value}>{state.name ?? 'Not set'}</Text>
+                  <Text style={styles.label}>
+                    <Trans comment="A person's name: the label of a field or a value on screen.">Name</Trans>
+                  </Text>
+                  <Text style={styles.value}>
+                    {state.name ??
+                      t({ comment: "Shown in place of the account's name while it has none yet.", message: 'Not set' })}
+                  </Text>
                 </View>
                 <PillButton
-                  label="Edit name"
-                  visibleLabel="Edit"
+                  label={t({ comment: 'VoiceOver only: the Edit button beside the name.', message: 'Edit name' })}
+                  visibleLabel={t({
+                    comment: 'Button (verb) beside the name: opens it for editing. Fits about 8 characters.',
+                    message: 'Edit',
+                  })}
                   disabled={state.name === null}
                   onPress={startEditingName}
                 />
@@ -279,13 +340,17 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
           {/* Per device, not per account: it applies before sign-in too, and outlives this account. */}
           <Card style={[styles.card, styles.appearanceCard]}>
             <View style={styles.appearanceRow}>
-              <Text style={styles.label}>Appearance</Text>
+              <Text style={styles.label}>
+                <Trans comment="Label (noun) of the picker that chooses the light theme, the dark theme, or Auto.">
+                  Appearance
+                </Trans>
+              </Text>
               {/* Under Auto: when it next switches, which also shows how rough the time-zone sunset is. */}
               {nextChange ? <Text style={styles.label}>{nextChange}</Text> : null}
             </View>
             <View style={styles.picker}>
               <SegmentedPicker
-                options={APPEARANCES}
+                options={appearances}
                 value={preference}
                 labelFor={appearanceLabel}
                 onChange={setPreference}
@@ -296,7 +361,10 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
           {/* Its own card between Appearance and signing out, as the task 28 mockup places it. */}
           <Card style={[styles.card, styles.pillCard]}>
             <PillButton
-              label="Blocked people"
+              label={t({
+                comment: 'The Blocked people screen: its title, and the buttons that open it from Account and Notifications.',
+                message: 'Blocked people',
+              })}
               size="lg"
               onPress={() => navigation.navigate('BlockedPeople')}
             />
@@ -304,7 +372,7 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
 
           <Card style={[styles.card, styles.pillCard]}>
             <PillButton
-              label="Sign out"
+              label={t({ comment: 'Button: signs out of this device only. A full-width button.', message: 'Sign out' })}
               size="lg"
               disabled={pending || pendingDelete}
               onPress={() => void pressSignOut()}
@@ -312,7 +380,7 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
 
             {!confirming ? (
               <PillButton
-                label="Sign out of all devices"
+                label={t({ comment: 'Button: signs out of every device at once. A full-width button.', message: 'Sign out of all devices' })}
                 size="lg"
                 tone="danger"
                 disabled={pendingDelete}
@@ -320,10 +388,14 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
               />
             ) : (
               <View>
-                <Text style={styles.confirmText}>This signs every device out, not just this one.</Text>
+                <Text style={styles.confirmText}>
+                  <Trans comment="The confirm under Sign out of all devices: what it does.">
+                    This signs every device out, not just this one.
+                  </Trans>
+                </Text>
                 <View style={styles.actions}>
                   <PillButton
-                    label="Cancel"
+                    label={t({ comment: 'Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.', message: 'Cancel' })}
                     size="md"
                     disabled={pendingEverywhere}
                     onPress={() => setConfirming(false)}
@@ -332,8 +404,15 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
                   {/* The label stays fixed while the visible text toggles during the request, same
                       convention as SignInScreen's "Resend code" countdown. */}
                   <PillButton
-                    label="Confirm sign out of all devices"
-                    visibleLabel={pendingEverywhere ? 'Signing out…' : 'Yes, sign out everywhere'}
+                    label={t({
+                      comment: 'VoiceOver only: the button that confirms signing out of every device.',
+                      message: 'Confirm sign out of all devices',
+                    })}
+                    visibleLabel={
+                      pendingEverywhere
+                        ? t({ comment: 'The confirm button while every device is being signed out.', message: 'Signing out…' })
+                        : t({ comment: 'Button: confirms signing out of every device. Shares a row with Cancel.', message: 'Yes, sign out everywhere' })
+                    }
                     variant="danger"
                     size="md"
                     disabled={pendingEverywhere}
@@ -350,7 +429,10 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
 
             {!confirmingDelete ? (
               <PillButton
-                label="Delete account"
+                label={t({
+                  comment: 'Button: starts deleting the account (a confirm follows). A full-width button.',
+                  message: 'Delete account',
+                })}
                 size="lg"
                 tone="danger"
                 disabled={pending || pendingEverywhere}
@@ -359,22 +441,28 @@ export function AccountScreen({ navigation }: AccountScreenProps) {
             ) : (
               <View>
                 <Text style={styles.confirmText}>
-                  Deleting your account can't be undone. Lists you're the only owner of will be
-                  deleted, including for anyone you shared them with. Lists that have another owner
-                  will stay with their members.
+                  <Trans comment="The confirm under Delete account: what deleting costs.">
+                    Deleting your account can't be undone. Lists you're the only owner of will be
+                    deleted, including for anyone you shared them with. Lists that have another owner
+                    will stay with their members.
+                  </Trans>
                 </Text>
                 <View style={styles.actions}>
                   <PillButton
-                    label="Cancel deleting account"
-                    visibleLabel="Cancel"
+                    label={t({ comment: 'VoiceOver only: the Cancel button under the Delete account confirm.', message: 'Cancel deleting account' })}
+                    visibleLabel={t({ comment: 'Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.', message: 'Cancel' })}
                     size="md"
                     disabled={pendingDelete}
                     onPress={() => setConfirmingDelete(false)}
                     style={styles.snug}
                   />
                   <PillButton
-                    label="Confirm delete account"
-                    visibleLabel={pendingDelete ? 'Deleting…' : 'Yes, delete my account'}
+                    label={t({ comment: 'VoiceOver only: the button that confirms deleting the account.', message: 'Confirm delete account' })}
+                    visibleLabel={
+                      pendingDelete
+                        ? t({ comment: 'The confirm button while the account is being deleted.', message: 'Deleting…' })
+                        : t({ comment: 'Button: confirms deleting the account. Shares a row with Cancel.', message: 'Yes, delete my account' })
+                    }
                     variant="danger"
                     size="md"
                     disabled={pendingDelete}

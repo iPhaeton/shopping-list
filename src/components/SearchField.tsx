@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { themedStyles, useTheme } from '../state/ThemeContext';
@@ -24,6 +25,7 @@ export function SearchField({
   onChangeText: (text: string) => void;
 }) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors, scheme } = useTheme();
 
   return (
@@ -45,7 +47,10 @@ export function SearchField({
       {value ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Clear search"
+          accessibilityLabel={t({
+            comment: 'VoiceOver only: the × button in the search field, which empties it.',
+            message: 'Clear search',
+          })}
           onPress={() => onChangeText('')}
           hitSlop={4}
           style={({ pressed }) => [styles.clear, pressed && styles.pressed]}>

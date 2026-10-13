@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import { LISTS_FULL } from '../lib/limits';
+import { listsFull } from '../lib/limits';
 import { fetchLists } from '../lib/listsApi';
 import { subscribeToChanges } from '../lib/listsChannel';
 import {
@@ -429,12 +429,12 @@ describe('answering an invitation', () => {
   /** `acceptInvitation` already turned the database's "they …" into the second person. */
   it('shows a limit refusal in the second person, and re-reads', async () => {
     server = [invitation('n1')];
-    jest.mocked(acceptInvitation).mockResolvedValue({ error: LISTS_FULL, verdict: 'permanent' });
+    jest.mocked(acceptInvitation).mockResolvedValue({ error: listsFull(), verdict: 'permanent' });
 
     await renderScreen();
     await fireEvent.press(await screen.findByLabelText('Accept invitation to Weekend BBQ'));
 
-    expect(await screen.findByText(LISTS_FULL)).toBeOnTheScreen();
+    expect(await screen.findByText(listsFull())).toBeOnTheScreen();
     expect(reloads()).toHaveLength(2);
     expect(screen.getByLabelText('Accept invitation to Weekend BBQ')).not.toBeDisabled();
   });

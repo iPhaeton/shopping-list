@@ -1,5 +1,7 @@
+import { t } from '@lingui/core/macro';
+
 import type { BinCursor, Cursor, CursorOf, Item, List, ListCounts, Role, Stream } from '../state/types';
-import { ITEMS_FULL, LIMIT_CODES, LISTS_FULL, OWNED_LISTS_FULL } from './limits';
+import { itemsFull, LIMIT_CODES, listsFull, ownedListsFull } from './limits';
 import { supabase } from './supabase';
 
 /**
@@ -475,21 +477,27 @@ function humanize(error: NonNullable<Failure>): string {
   switch (error.code) {
     // Row-level security, or a definer function repeating a policy's predicate.
     case '42501':
-      return 'You no longer have permission to make that change.';
+      return t({
+        comment: 'A change made earlier, refused when it reached the server: the role changed meanwhile.',
+        message: 'You no longer have permission to make that change.',
+      });
 
     // The only check constraint a queued write can reach is `length(trim(...)) > 0`.
     case '23514':
-      return 'That change is no longer valid.';
+      return t({
+        comment: 'A change made earlier, refused when it reached the server.',
+        message: 'That change is no longer valid.',
+      });
 
     // The three limits. The database's words are about somebody else — they are written for an
     // owner promoting a member on the Sharing screen, which shows them as they are — so a list you
     // created or restored, or an item you added, is told about in the second person instead.
     case LIMIT_CODES.ownedLists:
-      return OWNED_LISTS_FULL;
+      return ownedListsFull();
     case LIMIT_CODES.lists:
-      return LISTS_FULL;
+      return listsFull();
     case LIMIT_CODES.items:
-      return ITEMS_FULL;
+      return itemsFull();
 
     default:
       return error.message;

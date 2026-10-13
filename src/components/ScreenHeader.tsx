@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,13 +31,17 @@ export function ScreenHeader({
   right?: ReactNode;
 }) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
     <View style={{ paddingTop: insets.top + HEADER_GAP }}>
       <View style={styles.row}>
-        <IconButton label="Back" outline={colors.outline} onPress={onBack}>
+        <IconButton
+          label={t({ comment: 'VoiceOver only: the round arrow button that goes back to the previous screen.', message: 'Back' })}
+          outline={colors.outline}
+          onPress={onBack}>
           <ChevronIcon direction="left" color={colors.text} size={18} />
         </IconButton>
         {right}

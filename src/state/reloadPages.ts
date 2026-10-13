@@ -1,3 +1,5 @@
+import { t } from '@lingui/core/macro';
+
 import { initialState, listsReducer } from './listsReducer';
 import type { CursorOf, Item, List, ListCursors, Stream, StreamPage } from './types';
 
@@ -55,7 +57,7 @@ export async function reloadListPages(
       // Annotated: `next` is fed from this page, so TypeScript cannot infer the one from the other.
       const page: { lists: List[] | null; next: CursorOf<S> | null; error: string | null } =
         await fetchPage(stream, next);
-      if (page.lists === null) return page.error ?? 'Could not load your lists.';
+      if (page.lists === null) return page.error ?? t({ comment: 'Shown when the lists could not be read.', message: 'Could not load your lists.' });
       pages.push({ lists: page.lists, stream: streamPage(stream, page.next) });
       held += stampedLists(page.lists, stream);
       next = page.next;

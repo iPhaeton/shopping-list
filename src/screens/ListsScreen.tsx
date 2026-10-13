@@ -1,3 +1,5 @@
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useMemo, useState } from 'react';
 import type { ListRenderItemInfo } from 'react-native';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
@@ -21,7 +23,7 @@ import { Sky } from '../components/Sky';
 import { SortButtons } from '../components/SortButtons';
 import { SyncBanner } from '../components/SyncBanner';
 import { listLimitSentence } from '../lib/limits';
-import { coverageLine, NO_MATCHES_HINT, noMatchesTitle, searchSummary } from '../lib/searchCopy';
+import { coverageLine, noMatchesHint, noMatchesTitle, searchSummary } from '../lib/searchCopy';
 import type { ListsScreenProps } from '../navigation/types';
 import { arrangeLists, isDefaultSort, nextSort, type SortKey } from '../state/arrange';
 import { bandAt } from '../state/bands';
@@ -46,11 +48,15 @@ const NONE: List[] = [];
  */
 const SKY_HEIGHT = 520;
 
+/** How long the bin keeps a list before the nightly purge deletes it for good. */
+const PURGE_DAYS = 30;
+
 /** Lists' sort buttons, left to right in priority order. */
 const SORT_KEYS: readonly SortKey[] = ['az', 'date'];
 
 export function ListsScreen({ navigation }: ListsScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const {
@@ -152,6 +158,8 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   const openNotifications = useCallback(() => navigation.navigate('Notifications'), [navigation]);
   // `null` until the count is first read: no dot and no value, rather than a guess.
   const anyUnread = unread !== null && unread > 0;
+  const unreadCount = unread ?? 0;
+  const days = PURGE_DAYS;
 
   const switchMode = () => {
     if (shownMode === 'search') setFocusCreate(true);
@@ -164,7 +172,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
     !loading && !showDeleted && !(shownMode === 'create' && emptyAndComplete) ? (
       <ModeButton
         mode={shownMode}
-        newLabel="New list"
+        newLabel={t({ comment: 'VoiceOver only: the round + button that shows the field for naming a new list.', message: 'New list' })}
         dot={arranged}
         summary={searchSummary(query, listSort)}
         onPress={switchMode}
@@ -178,14 +186,23 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   if (showDeleted) {
     slot = (
       <>
-        <BarSentence>Deleted lists, newest first.</BarSentence>
+        <BarSentence>
+          {t({
+            comment: 'In place of the search field while the bin is shown: what the screen lists now.',
+            message: 'Deleted lists, newest first.',
+          })}
+        </BarSentence>
         {shownMode === 'search' ? <View style={styles.sortSky} /> : null}
       </>
     );
   } else if (shownMode === 'search') {
     slot = (
       <>
-        <SearchField placeholder="Search lists" value={query} onChangeText={setQuery} />
+        <SearchField
+          placeholder={t({ comment: 'Placeholder and label of the field that searches the lists by name.', message: 'Search lists' })}
+          value={query}
+          onChangeText={setQuery}
+        />
         <SortButtons
           sort={listSort}
           keys={SORT_KEYS}
@@ -198,8 +215,11 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
   } else {
     slot = (
       <AddBar
-        placeholder="New list name"
-        buttonLabel="Create"
+        placeholder={t({ comment: 'Placeholder of the field where a new list is named.', message: 'New list name' })}
+        buttonLabel={t({
+          comment: 'Button (verb) beside the field: creates a list with the name typed. Fits about 10 characters.',
+          message: 'Create',
+        })}
         autoFocus={focusCreate}
         onSubmit={(name) => createList(name)}
       />
@@ -232,28 +252,44 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
       </View>
       <View style={[styles.titleRow, { paddingTop: insets.top + spacing.lg }]}>
         <Text accessibilityRole="header" style={styles.title}>
-          My Lists
+          <Trans comment="Title (heading) of the app's main screen, which shows every list of the person's.">My Lists</Trans>
         </Text>
         {/* Three round 36pt buttons (task 28, D7): the mode button, the bell, and the person. Glyphs
             only, so each says what it is through its label alone — `Account` kept from the pill. */}
         <View style={styles.titleActions}>
           {modeButton}
           <IconButton
-            label="Notifications"
-            value={anyUnread ? `${unread} unread` : undefined}
+            label={t({
+              comment: 'The Notifications screen: its title, and the label of the bell button that opens it.',
+              message: 'Notifications',
+            })}
+            value={
+              anyUnread
+                ? t({
+                    comment: 'VoiceOver only: the bell button\'s value, how many notifications are unread. # is that number.',
+                    message: plural(unreadCount, { other: '# unread' }),
+                  })
+                : undefined
+            }
             outline={colors.outline}
             dot={anyUnread}
             onPress={openNotifications}>
             <BellIcon color={colors.text} />
           </IconButton>
-          <IconButton label="Account" outline={colors.outline} onPress={openAccount}>
+          <IconButton
+            label={t({ comment: "The Account screen's title, and the label of the button that opens it.", message: 'Account' })}
+            outline={colors.outline}
+            onPress={openAccount}>
             <PersonIcon color={colors.text} />
           </IconButton>
         </View>
       </View>
       {loading ? (
         <View style={styles.loadingBlock}>
-          <ActivityIndicator accessibilityLabel="Loading your lists" color={colors.text} />
+          <ActivityIndicator
+            accessibilityLabel={t({ comment: 'VoiceOver only: a spinner while the lists load.', message: 'Loading your lists' })}
+            color={colors.text}
+          />
         </View>
       ) : (
         <>
@@ -330,14 +366,20 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
           <Band index={0} style={styles.footer}>
             {loading ? null : showDeleted ? (
               <EmptyState
-                title="The bin is empty"
-                hint="Deleted lists wait here for 30 days."
+                title={t({ comment: 'Title when the bin (the deleted lists or items) is empty.', message: 'The bin is empty' })}
+                hint={t({
+                  comment: 'Under the title when the bin of lists is empty: how long deleted lists are kept. # is a number of days (30).',
+                  message: plural(days, { other: 'Deleted lists wait here for # days.' }),
+                })}
                 ink={bandAt(colors, 0).ink}
               />
             ) : live.length === 0 ? (
               <EmptyState
-                title="No lists yet"
-                hint="Name your first list above — for example, Groceries."
+                title={t({ comment: 'Title of the Lists screen before the person has any list.', message: 'No lists yet' })}
+                hint={t({
+                  comment: 'Under the title before the person has any list. "Groceries" is an example name for a shopping list.',
+                  message: 'Name your first list above — for example, Groceries.',
+                })}
                 ink={bandAt(colors, 0).ink}
               />
             ) : (
@@ -350,7 +392,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
                   partial: listCursors.live !== null,
                   held: live.length,
                 })}
-                hint={NO_MATCHES_HINT}
+                hint={noMatchesHint()}
                 ink={bandAt(colors, 0).ink}
               />
             )}
@@ -365,7 +407,7 @@ export function ListsScreen({ navigation }: ListsScreenProps) {
           <View style={[styles.footer, { backgroundColor: groundColor }]}>
             {loadingMore ? (
               <ActivityIndicator
-                accessibilityLabel="Loading more lists"
+                accessibilityLabel={t({ comment: 'VoiceOver only: a spinner while the next page of lists loads.', message: 'Loading more lists' })}
                 color={ground.ink}
                 style={styles.loadingMore}
               />

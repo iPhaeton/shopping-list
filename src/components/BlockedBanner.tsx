@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { Text, View } from 'react-native';
 
 import { blockedList, restorePlan, type Blocked } from '../state/restorePlan';
@@ -32,6 +33,7 @@ export function BlockedBanner({
   onDiscard: () => void;
 }) {
   const styles = useStyles();
+  const { t } = useLingui();
 
   if (restorePlan(lists, blocked).length === 0) return null;
 
@@ -39,12 +41,32 @@ export function BlockedBanner({
     <View accessibilityRole="alert" style={styles.banner}>
       <Text style={styles.text}>
         {blockedList(lists, blocked)
-          ? 'That list is in the bin. Restore it and keep your change?'
-          : 'That item is in the bin. Restore it and keep your change?'}
+          ? t({
+              comment: 'A change made earlier is waiting: the list it was made to has since been deleted (put in the bin).',
+              message: 'That list is in the bin. Restore it and keep your change?',
+            })
+          : t({
+              comment: 'A change made earlier is waiting: the item it was made to has since been deleted (put in the bin).',
+              message: 'That item is in the bin. Restore it and keep your change?',
+            })}
       </Text>
       <View style={styles.actions}>
-        <PillButton variant="filled" label="Restore and keep my change" onPress={onRestore} />
-        <PillButton label="Discard my change" visibleLabel="Discard" onPress={onDiscard} />
+        <PillButton
+          variant="filled"
+          label={t({
+            comment: 'Button: takes the deleted list or item out of the bin and sends the waiting change.',
+            message: 'Restore and keep my change',
+          })}
+          onPress={onRestore}
+        />
+        <PillButton
+          label={t({ comment: 'VoiceOver only: the Discard button, which drops the waiting change.', message: 'Discard my change' })}
+          visibleLabel={t({
+            comment: 'Button (verb): drops the waiting change. Fits about 10 characters, beside "Restore and keep my change".',
+            message: 'Discard',
+          })}
+          onPress={onDiscard}
+        />
       </View>
     </View>
   );

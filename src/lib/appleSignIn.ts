@@ -1,3 +1,4 @@
+import { plural, t } from '@lingui/core/macro';
 import {
   AppleAuthenticationScope,
   formatFullName,
@@ -23,9 +24,24 @@ export {
 export type Result = { error: string | null };
 
 /** The recovery below revoked the authorization, and the device needs a few minutes to notice. */
-const RESET_STARTED = 'Sign in with Apple needs a few minutes to reset. Try again in 5 minutes.';
+function resetStarted(): string {
+  const minutes = 5;
+  return t({
+    comment:
+      "\"Sign in with Apple\" is Apple's feature: use the name Apple uses in this language. # is a number of minutes (5).",
+    message: plural(minutes, {
+      other: 'Sign in with Apple needs a few minutes to reset. Try again in # minutes.',
+    }),
+  });
+}
+
 /** The recovery could not revoke. The next tap runs it again. */
-const RESET_FAILED = "Apple sign-in couldn't finish. Try again in a minute.";
+function resetFailed(): string {
+  return t({
+    comment: 'Shown when Apple sign-in failed and could not recover by itself; trying again later may work.',
+    message: "Apple sign-in couldn't finish. Try again in a minute.",
+  });
+}
 
 /**
  * The whole native round trip, iOS only: Apple's sheet, then handing the identity token it returns
@@ -65,7 +81,14 @@ export async function signInWithApple(): Promise<Result> {
   }
 
   const { identityToken } = credential;
-  if (!identityToken) return { error: 'Sign-in did not return an identity token' };
+  if (!identityToken) {
+    return {
+      error: t({
+        comment: 'Shown when Apple or Google sign-in finished but sent back nothing to sign in with.',
+        message: 'Sign-in did not return an identity token',
+      }),
+    };
+  }
 
   const { error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
@@ -102,11 +125,11 @@ function carriesEmail(identityToken: string): boolean {
 /** Revokes the authorization the sheet just made, and says what to do next. Called with no
  * session, through the same client. */
 async function resetAppleSignIn(authorizationCode: string | null): Promise<string> {
-  if (!authorizationCode) return RESET_FAILED;
+  if (!authorizationCode) return resetFailed();
   const { error } = await supabase.functions.invoke('reset-apple-sign-in', {
     body: { authorizationCode },
   });
-  return error ? RESET_FAILED : RESET_STARTED;
+  return error ? resetFailed() : resetStarted();
 }
 
 /**

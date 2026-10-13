@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { supabase } from './supabase';
@@ -41,7 +42,14 @@ export async function signInWithGoogle(): Promise<Result> {
   if (result.type === 'cancelled') return { error: null };
 
   const idToken = result.data?.idToken;
-  if (!idToken) return { error: 'Sign-in did not return an identity token' };
+  if (!idToken) {
+    return {
+      error: t({
+        comment: 'Shown when Apple or Google sign-in finished but sent back nothing to sign in with.',
+        message: 'Sign-in did not return an identity token',
+      }),
+    };
+  }
 
   const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
   return { error: error?.message ?? null };

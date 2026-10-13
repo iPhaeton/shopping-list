@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -44,9 +45,6 @@ import { themedStyles, useTheme } from '../state/ThemeContext';
 import type { Role } from '../state/types';
 import { fonts, radius, spacing } from '../theme';
 
-/** The wording the `keep_last_owner` trigger raises, so the app and the database agree on one. */
-const LAST_OWNER = 'A list must keep at least one owner.';
-
 /** How far the sky reaches above the header — past any pull-down bounce, as on List detail. */
 const OVERSCROLL_SKY = 1000;
 
@@ -76,6 +74,7 @@ function displayNameFor(member: Member): string {
  */
 export function SharingScreen({ navigation, route }: SharingScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { listId } = route.params;
@@ -134,6 +133,51 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
   // two clients can race, so its refusal is still rendered when it comes.
   const soleOwner = owners.length === 1 && owners[0].userId === userId;
 
+  const leaveListLabel = t({
+    comment: 'Button: leaves the list, for a member who is not an owner. Fits about 12 characters in its confirm, half of a row.',
+    message: 'Leave list',
+  });
+  const loseAccess = t({
+    comment: 'The confirm before leaving a list, or removing yourself from it: what it costs.',
+    message: "You'll lose access to this list until someone invites you again.",
+  });
+
+  /** A role as the badge on a member's or an invitation's row shows it: lowercase, capitalized by its style. */
+  function roleBadge(role: Role): string {
+    switch (role) {
+      case 'reader':
+        return t({ context: 'badge', comment: "A member's role, on a badge: can only see the list. Lowercase; the badge capitalizes the first letter.", message: 'reader' });
+      case 'writer':
+        return t({ context: 'badge', comment: "A member's role, on a badge: can add and change items. Lowercase; the badge capitalizes the first letter.", message: 'writer' });
+      case 'owner':
+        return t({ context: 'badge', comment: "A member's role, on a badge: can also share, rename and delete the list. Lowercase; the badge capitalizes the first letter.", message: 'owner' });
+    }
+  }
+
+  /** The invite role picker's options, as VoiceOver names them. */
+  function inviteAs(role: Role): string {
+    switch (role) {
+      case 'reader':
+        return t({ comment: 'VoiceOver only: the Reader option of the role a new person is invited with.', message: 'Invite as reader' });
+      case 'writer':
+        return t({ comment: 'VoiceOver only: the Writer option of the role a new person is invited with.', message: 'Invite as writer' });
+      case 'owner':
+        return t({ comment: 'VoiceOver only: the Owner option of the role a new person is invited with.', message: 'Invite as owner' });
+    }
+  }
+
+  /** A member row's role picker options, as VoiceOver names them. */
+  function setRoleOf(name: string, role: Role): string {
+    switch (role) {
+      case 'reader':
+        return t({ comment: "VoiceOver only: the Reader option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.", message: `Set ${name} to reader` });
+      case 'writer':
+        return t({ comment: "VoiceOver only: the Writer option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.", message: `Set ${name} to writer` });
+      case 'owner':
+        return t({ comment: "VoiceOver only: the Owner option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.", message: `Set ${name} to owner` });
+    }
+  }
+
   /**
    * Every membership write goes through here: disable the controls, send, then either say what went
    * wrong or re-read both the roster and the lists. Returns whether the write went through, which
@@ -157,7 +201,14 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
 
       // `verdict` rather than the status: `P0002` — "that account no longer exists" — arrives as a
       // 500 and is classified by its SQLSTATE, so a vanished target does not read as an outage.
-      setError(verdict === 'retryable' ? 'You need a connection to change who has access.' : failure);
+      setError(
+        verdict === 'retryable'
+          ? t({
+              comment: 'Shown when a change to who has access failed for lack of a connection.',
+              message: 'You need a connection to change who has access.',
+            })
+          : failure
+      );
       setPending(false);
       return false;
     }
@@ -209,7 +260,17 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
     <View style={styles.confirm}>
       <Text style={styles.confirmText}>{sentence}</Text>
       <View style={styles.confirmActions}>
-        <PillButton label="Cancel" size="md" disabled={pending} onPress={onCancel} style={styles.half} />
+        <PillButton
+          label={t({
+            comment:
+              'Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.',
+            message: 'Cancel',
+          })}
+          size="md"
+          disabled={pending}
+          onPress={onCancel}
+          style={styles.half}
+        />
         {/* The label stays fixed while the visible text toggles during the request, same
             convention as AccountScreen's "Sign out of all devices" confirm. */}
         <PillButton
@@ -253,12 +314,17 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
         </View>
 
         <View style={styles.headerRow}>
-          <IconButton label="Back" outline={colors.outline} onPress={() => navigation.goBack()}>
+          <IconButton
+            label={t({ comment: 'VoiceOver only: the round arrow button that goes back to the previous screen.', message: 'Back' })}
+            outline={colors.outline}
+            onPress={() => navigation.goBack()}>
             <ChevronIcon direction="left" color={colors.text} size={18} />
           </IconButton>
         </View>
         <Text accessibilityRole="header" style={styles.title} numberOfLines={1}>
-          Sharing
+          <Trans comment="Title (heading) of the screen that shows who has access to a list, and lets an owner invite people.">
+            Sharing
+          </Trans>
         </Text>
 
         {/* Where List detail puts its Add bar. */}
@@ -292,7 +358,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
           <View style={styles.invitePicker}>
             <RolePicker
               value={inviteRole}
-              labelFor={(role) => `Invite as ${role}`}
+              labelFor={inviteAs}
               disabled={pending}
               track="surface"
               size="small"
@@ -324,19 +390,22 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
 
           {!list ? (
             <EmptyState
-              title="List not found"
-              hint="Go back and pick a list from the list screen."
+              title={t({ comment: 'Title when the list asked for is not there any more (deleted, or access removed).', message: 'List not found' })}
+              hint={t({
+                comment: 'Under the title when the list asked for is not there any more.',
+                message: 'Go back and pick a list from the list screen.',
+              })}
               ink={ground.ink}
             />
           ) : (
             <View style={styles.body}>
               <Text accessibilityRole="header" style={styles.heading}>
-                People with access
+                <Trans comment="Heading over the members of a list on the Sharing screen.">People with access</Trans>
               </Text>
 
               {members === null ? (
                 <ActivityIndicator
-                  accessibilityLabel="Loading who has access"
+                  accessibilityLabel={t({ comment: "VoiceOver only: a spinner while a list's members load.", message: 'Loading who has access' })}
                   color={colors.primary}
                   style={styles.loading}
                 />
@@ -353,13 +422,22 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                         <View style={styles.memberRow}>
                           <Avatar id={member.userId} name={name} />
                           <Text style={styles.name} numberOfLines={1}>
-                            {you ? `${name} (you)` : name}
+                            {you
+                              ? t({
+                                  comment:
+                                    "The person's own row among a list's members. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.",
+                                  message: `${name} (you)`,
+                                })
+                              : name}
                           </Text>
 
                           {manageable ? (
                             confirmingRemove ? null : (
                               <IconButton
-                                label={`Remove ${displayNameFor(member)}`}
+                                label={t({
+                                  comment: "VoiceOver only: the bin button on a member's row, which removes them from the list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.",
+                                  message: `Remove ${name}`,
+                                })}
                                 fill={colors.controlFill}
                                 disabled={locked}
                                 onPress={() => setConfirmingRemoveUserId(member.userId)}>
@@ -369,7 +447,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                           ) : you ? (
                             confirmingLeave ? null : (
                               <PillButton
-                                label="Leave list"
+                                label={leaveListLabel}
                                 tone="danger"
                                 disabled={pending}
                                 onPress={() => setConfirmingLeave(true)}
@@ -377,7 +455,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                             )
                           ) : (
                             <View style={styles.badge}>
-                              <Text style={styles.badgeText}>{member.role}</Text>
+                              <Text style={styles.badgeText}>{roleBadge(member.role)}</Text>
                             </View>
                           )}
                         </View>
@@ -386,10 +464,21 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                           confirmingRemove ? (
                             confirm(
                               you
-                                ? "You'll lose access to this list until someone invites you again."
-                                : `${name} will lose access to this list until someone invites them again.`,
-                              `Confirm remove ${displayNameFor(member)}`,
-                              pending ? 'Removing…' : 'Remove',
+                                ? loseAccess
+                                : t({
+                                    comment: "The confirm before removing someone from a list: what it costs them. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.",
+                                    message: `${name} will lose access to this list until someone invites them again.`,
+                                  }),
+                              t({
+                                comment: "VoiceOver only: the button that confirms removing someone from a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.",
+                                message: `Confirm remove ${name}`,
+                              }),
+                              pending
+                                ? t({ comment: 'The Remove button while the removal is being sent. Fits about 12 characters.', message: 'Removing…' })
+                                : t({
+                                    comment: 'Button (verb) in a confirm: removes the member from the list. Fits about 12 characters, half of a row.',
+                                    message: 'Remove',
+                                  }),
                               () => {
                                 // Cleared either way, not just on refusal: on success this member's row
                                 // is simply gone next render, but the id would otherwise sit in state
@@ -405,7 +494,7 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                             <View style={styles.memberPicker}>
                               <RolePicker
                                 value={member.role}
-                                labelFor={(role) => `Set ${displayNameFor(member)} to ${role}`}
+                                labelFor={(role) => setRoleOf(name, role)}
                                 disabled={locked}
                                 size="compact"
                                 onChange={(role) => void run(() => setMemberRole(listId, member.userId, role))}
@@ -414,9 +503,11 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                           )
                         ) : you && confirmingLeave ? (
                           confirm(
-                            "You'll lose access to this list until someone invites you again.",
-                            'Confirm leave list',
-                            pending ? 'Leaving…' : 'Leave list',
+                            loseAccess,
+                            t({ comment: 'VoiceOver only: the button that confirms leaving a list.', message: 'Confirm leave list' }),
+                            pending
+                              ? t({ comment: 'The Leave list button while leaving is being sent. Fits about 12 characters.', message: 'Leaving…' })
+                              : leaveListLabel,
                             () => {
                               void run(() => leaveList(listId)).then((ok) => {
                                 if (!ok) setConfirmingLeave(false);
@@ -432,11 +523,17 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
               )}
 
               {manageable && soleOwner ? (
-                <Text style={[styles.hint, { color: hintColor }]}>{LAST_OWNER}</Text>
+                <Text style={[styles.hint, { color: hintColor }]}>
+                  <Trans comment="Under the members, for a list's only owner: why they cannot leave or step down.">
+                    A list must keep at least one owner.
+                  </Trans>
+                </Text>
               ) : null}
               {manageable ? null : (
                 <Text style={[styles.hint, { color: hintColor }]}>
-                  Only an owner can change who has access.
+                  <Trans comment="Under the members, for someone who is not an owner of the list.">
+                    Only an owner can change who has access.
+                  </Trans>
                 </Text>
               )}
 
@@ -445,11 +542,15 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
               {manageable && invitations.length > 0 ? (
                 <>
                   <Text accessibilityRole="header" style={[styles.heading, styles.invitedHeading]}>
-                    Invited
+                    <Trans comment="Heading (adjective, plural) over the people invited to a list who have not answered yet.">
+                      Invited
+                    </Trans>
                   </Text>
                   <View style={styles.members}>
                     {invitations.map((invitation) => {
                       const confirmingWithdraw = confirmingWithdrawId === invitation.invitationId;
+                      const name = invitation.name;
+                      const age = ago(invitation.createdAt, now);
 
                       return (
                         <Card key={invitation.invitationId} style={styles.member}>
@@ -460,15 +561,23 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
                                 {invitation.name}
                               </Text>
                               <Text style={styles.invitedAge}>
-                                {`Invited ${ago(invitation.createdAt, now)}`}
+                                {t({
+                                  comment:
+                                    'Under the name of someone invited to a list. {age} is how long ago, a whole phrase such as "5 min ago" or "just now". Avoid a participle that shows the gender of the person invited: their gender is unknown.',
+                                  message: `Invited ${age}`,
+                                })}
                               </Text>
                             </View>
                             <View style={styles.badge}>
-                              <Text style={styles.badgeText}>{invitation.role}</Text>
+                              <Text style={styles.badgeText}>{roleBadge(invitation.role)}</Text>
                             </View>
                             {confirmingWithdraw ? null : (
                               <IconButton
-                                label={`Withdraw ${invitation.name}'s invitation`}
+                                label={t({
+                                  comment:
+                                    "VoiceOver only: the × button on an invitation, which withdraws it. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending, e.g. \"Withdraw the invitation for {name}\".",
+                                  message: `Withdraw ${name}'s invitation`,
+                                })}
                                 fill={colors.controlFill}
                                 disabled={pending}
                                 onPress={() => setConfirmingWithdrawId(invitation.invitationId)}>
@@ -479,9 +588,22 @@ export function SharingScreen({ navigation, route }: SharingScreenProps) {
 
                           {confirmingWithdraw
                             ? confirm(
-                                `${invitation.name}'s invitation will be withdrawn.`,
-                                `Confirm withdraw ${invitation.name}'s invitation`,
-                                pending ? 'Withdrawing…' : 'Withdraw',
+                                t({
+                                  comment:
+                                    "The confirm before withdrawing an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending.",
+                                  message: `${name}'s invitation will be withdrawn.`,
+                                }),
+                                t({
+                                  comment:
+                                    "VoiceOver only: the button that confirms withdrawing an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending.",
+                                  message: `Confirm withdraw ${name}'s invitation`,
+                                }),
+                                pending
+                                  ? t({ comment: 'The Withdraw button while the withdrawal is being sent. Fits about 12 characters.', message: 'Withdrawing…' })
+                                  : t({
+                                      comment: 'Button (verb) in a confirm: withdraws the invitation. Fits about 12 characters, half of a row.',
+                                      message: 'Withdraw',
+                                    }),
                                 () => {
                                   // Cleared either way, as a removal's confirm is.
                                   void run(() => withdrawInvitation(invitation.invitationId)).then(() => {

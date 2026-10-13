@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { memo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -25,11 +26,23 @@ export const ListRow = memo(function ListRow({
   onSetDeleted?: (listId: string, deleted: boolean) => void;
 }) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { colors } = useTheme();
   const band = bandAt(colors, index);
+  const listName = list.name;
   const deleted = list.deletedAt !== null;
   const shared = list.role !== 'owner';
-  const subtitle = shared ? (canEditItems(list.role) ? 'Shared with you · can edit' : 'Shared with you · view only') : null;
+  const subtitle = shared
+    ? canEditItems(list.role)
+      ? t({
+          comment: "Under a list's name on the Lists screen: someone else's list that this person can change.",
+          message: 'Shared with you · can edit',
+        })
+      : t({
+          comment: "Under a list's name on the Lists screen: someone else's list that this person can only read.",
+          message: 'Shared with you · view only',
+        })
+    : null;
 
   return (
     <Band index={index}>
@@ -37,7 +50,15 @@ export const ListRow = memo(function ListRow({
         accessibilityRole="button"
         // The label stays exactly `name` / `name, shared with you` regardless of role — the
         // visible subtitle is what splits into "can edit"/"view only" below.
-        accessibilityLabel={shared ? `${list.name}, shared with you` : list.name}
+        accessibilityLabel={
+          shared
+            ? t({
+                comment:
+                  "VoiceOver only: a list someone else shared with this person. {listName} is the list's name as typed: never inflect it.",
+                message: `${listName}, shared with you`,
+              })
+            : listName
+        }
         onPress={() => onOpen(list.id)}
         style={({ pressed }) => [styles.tap, pressed && styles.rowPressed]}>
         <View style={styles.text}>
@@ -55,7 +76,19 @@ export const ListRow = memo(function ListRow({
       {onSetDeleted ? (
         <View style={styles.action} pointerEvents="box-none">
           <IconButton
-            label={`${deleted ? 'Restore' : 'Delete'} ${list.name}`}
+            label={
+              deleted
+                ? t({
+                    comment:
+                      "Takes a deleted list out of the bin: what VoiceOver reads for the icon on the Lists screen, and the visible label of the button on the list's own screen. {listName} is the list's name as typed: never inflect it.",
+                    message: `Restore ${listName}`,
+                  })
+                : t({
+                    comment:
+                      "VoiceOver only: the bin button on a list, which deletes it. {listName} is the list's name as typed: never inflect it.",
+                    message: `Delete ${listName}`,
+                  })
+            }
             fill={band.iconFill}
             onPress={() => onSetDeleted(list.id, !deleted)}>
             {deleted ? (

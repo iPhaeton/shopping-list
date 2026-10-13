@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { useCallback, type Dispatch } from 'react';
 
 import { newId } from '../lib/ids';
@@ -48,7 +49,7 @@ export function useListWrites({
       const list = lists.find((candidate) => candidate.id === listId);
       if (!list) return;
       if (!canManageList(list.role)) {
-        setError('Only an owner can rename this list.');
+        setError(t({ comment: 'Shown when someone who is not an owner of a list tries to rename it.', message: 'Only an owner can rename this list.' }));
         return;
       }
 
@@ -67,7 +68,7 @@ export function useListWrites({
       const list = lists.find((candidate) => candidate.id === listId);
       if (!list) return;
       if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
+        setError(t({ comment: 'Shown when someone who can only read a list tries to change it.', message: 'You have read-only access to this list.' }));
         return;
       }
 
@@ -92,7 +93,7 @@ export function useListWrites({
       const item = list?.items.find((candidate) => candidate.id === itemId);
       if (!list || !item) return;
       if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
+        setError(t({ comment: 'Shown when someone who can only read a list tries to change it.', message: 'You have read-only access to this list.' }));
         return;
       }
 
@@ -112,7 +113,7 @@ export function useListWrites({
       // Unreachable from the UI, which hides the controls a reader may not use. Written anyway,
       // because the next screen to call these will not remember the rule.
       if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
+        setError(t({ comment: 'Shown when someone who can only read a list tries to change it.', message: 'You have read-only access to this list.' }));
         return;
       }
 
@@ -145,7 +146,12 @@ export function useListWrites({
       const list = lists.find((candidate) => candidate.id === listId);
       if (!list) return;
       if (!canManageList(list.role)) {
-        setError('Only an owner can delete or restore this list.');
+        setError(
+          t({
+            comment: 'Shown when someone who is not an owner of a list tries to delete it or restore it from the bin.',
+            message: 'Only an owner can delete or restore this list.',
+          })
+        );
         return;
       }
 
@@ -168,7 +174,7 @@ export function useListWrites({
       if (!list || !item) return;
 
       if (!canEditItems(list.role)) {
-        setError('You have read-only access to this list.');
+        setError(t({ comment: 'Shown when someone who can only read a list tries to change it.', message: 'You have read-only access to this list.' }));
         return;
       }
 

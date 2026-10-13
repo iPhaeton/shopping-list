@@ -1,5 +1,5 @@
 import type { Role } from '../state/types';
-import { LIMIT_CODES, LISTS_FULL, OWNED_LISTS_FULL } from './limits';
+import { LIMIT_CODES, listsFull, ownedListsFull } from './limits';
 import { MAX_ROWS, resultFor, type Result } from './listsApi';
 import { supabase } from './supabase';
 
@@ -157,7 +157,7 @@ export async function markNotificationsRead(ids: string[]): Promise<Result> {
  *
  * **A limit refusal is rephrased here.** The database's words are about somebody else — "they are
  * already on 1,000 lists" — written for an owner promoting a member on Sharing. Here the person who
- * would go over is the one holding the phone, so they read `LISTS_FULL` or `OWNED_LISTS_FULL`, the
+ * would go over is the one holding the phone, so they read `listsFull()` or `ownedListsFull()`, the
  * sentences the Lists screen already uses. The verdict stays `permanent`.
  */
 export async function acceptInvitation(invitationId: string): Promise<Result & { listId?: string }> {
@@ -166,8 +166,8 @@ export async function acceptInvitation(invitationId: string): Promise<Result & {
   });
   const result = resultFor(error, status);
 
-  if (error?.code === LIMIT_CODES.ownedLists) return { ...result, error: OWNED_LISTS_FULL };
-  if (error?.code === LIMIT_CODES.lists) return { ...result, error: LISTS_FULL };
+  if (error?.code === LIMIT_CODES.ownedLists) return { ...result, error: ownedListsFull() };
+  if (error?.code === LIMIT_CODES.lists) return { ...result, error: listsFull() };
   if (error) return result;
   return typeof data === 'string' ? { ...result, listId: data } : result;
 }

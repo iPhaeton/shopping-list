@@ -1,4 +1,4 @@
-import { ITEMS_FULL, LISTS_FULL, OWNED_LISTS_FULL } from './limits';
+import { itemsFull, listsFull, ownedListsFull } from './limits';
 import {
   addItem,
   fetchItem,
@@ -630,9 +630,9 @@ describe('fetchListCounts', () => {
  */
 describe('the three limits', () => {
   const cases = [
-    { code: 'LM001', message: 'they already own 100 lists', sentence: OWNED_LISTS_FULL },
-    { code: 'LM002', message: 'they are already on 1,000 lists', sentence: LISTS_FULL },
-    { code: 'LM003', message: 'this list already has 1,000 items', sentence: ITEMS_FULL },
+    { code: 'LM001', message: 'they already own 100 lists', sentence: ownedListsFull() },
+    { code: 'LM002', message: 'they are already on 1,000 lists', sentence: listsFull() },
+    { code: 'LM003', message: 'this list already has 1,000 items', sentence: itemsFull() },
   ];
 
   it.each(cases)('classifies $code as permanent whatever the status', async ({ code, message }) => {
