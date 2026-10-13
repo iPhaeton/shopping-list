@@ -82,7 +82,8 @@ function describe(
         face:
           todo === 'last'
             ? t({
-                comment: 'Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.',
+                comment:
+                  'Sort button (lit): items still to do go last, so done items come first. Fits about 10 characters, one of three equal buttons.',
                 message: 'To Do Last',
               })
             : t({

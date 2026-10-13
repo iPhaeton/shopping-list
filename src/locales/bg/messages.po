@@ -495,7 +495,7 @@ msgstr "Ден"
 #. Under the Appearance picker with Auto on, in a polar summer: the light theme stays on all day. "Day" is the name of the light theme in the picker.
 #: src/state/resolveTheme.ts
 msgid "Day all day today"
-msgstr "Ден през цялото денонощие"
+msgstr "Днес през целия ден: Ден"
 
 #. Under the Appearance picker with Auto on: when the light theme ("Day" in the picker) comes on next. {time} is a clock time, e.g. 06:48. Short: it shares a line with the "Appearance" label.
 #: src/state/resolveTheme.ts
@@ -785,7 +785,7 @@ msgstr "Нощ"
 #. Under the Appearance picker with Auto on, in a polar winter: the dark theme stays on all day. "Night" is the name of the dark theme in the picker.
 #: src/state/resolveTheme.ts
 msgid "Night all day today"
-msgstr "Нощ през цялото денонощие"
+msgstr "Днес през целия ден: Нощ"
 
 #. Under the Appearance picker with Auto on: when the dark theme ("Night" in the picker) comes on next. {time} is a clock time, e.g. 19:12. Short: it shares a line with the "Appearance" label.
 #: src/state/resolveTheme.ts
@@ -983,7 +983,7 @@ msgstr "Премахва се…"
 #. Button (verb) in a list's header: renames the list. Fits about 10 characters, one of the header's buttons.
 #: src/screens/ListDetailScreen.tsx
 msgid "Rename"
-msgstr "Ново име"
+msgstr "Преименуване"
 
 #. VoiceOver only: the pencil button on an item, which renames it. {itemName} is an item's name as the person typed it: never inflect it.
 #: src/components/ItemRow.tsx
@@ -1295,7 +1295,7 @@ msgstr "чакащите накрая"
 msgid "To do last"
 msgstr "Чакащите накрая"
 
-#. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
+#. Sort button (lit): items still to do go last, so done items come first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do Last"
 msgstr "Чакащи накрая"

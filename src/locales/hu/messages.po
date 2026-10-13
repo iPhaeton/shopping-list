@@ -1295,7 +1295,7 @@ msgstr "teendők hátul"
 msgid "To do last"
 msgstr "Teendők hátul"
 
-#. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
+#. Sort button (lit): items still to do go last, so done items come first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do Last"
 msgstr "Teendő hátul"

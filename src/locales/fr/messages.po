@@ -560,7 +560,7 @@ msgstr "Suppression…"
 #. Button (verb): drops the waiting change. Fits about 10 characters, beside "Restore and keep my change".
 #: src/components/BlockedBanner.tsx
 msgid "Discard"
-msgstr "Ignorer"
+msgstr "Abandonner"
 
 #. VoiceOver only: the Discard button, which drops the waiting change.
 #: src/components/BlockedBanner.tsx
@@ -1283,7 +1283,7 @@ msgstr "À faire en premier"
 #. Sort button: items still to do go first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do First"
-msgstr "À faire"
+msgstr "À faire en haut"
 
 #. VoiceOver only: a sort order in force, done items before those still to do.
 #: src/lib/searchCopy.ts
@@ -1295,10 +1295,10 @@ msgstr "à faire en dernier"
 msgid "To do last"
 msgstr "À faire en dernier"
 
-#. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
+#. Sort button (lit): items still to do go last, so done items come first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do Last"
-msgstr "Terminés"
+msgstr "À faire en bas"
 
 #. Under the code field on the sign-in screen: the six-digit code typed was wrong, or too old. The English is the server's own words, with no full stop: write it as your language's UI would.
 #: src/lib/serverMessages.ts

@@ -983,7 +983,7 @@ msgstr "Вилучення…"
 #. Button (verb) in a list's header: renames the list. Fits about 10 characters, one of the header's buttons.
 #: src/screens/ListDetailScreen.tsx
 msgid "Rename"
-msgstr "Змінити"
+msgstr "Перейменувати"
 
 #. VoiceOver only: the pencil button on an item, which renames it. {itemName} is an item's name as the person typed it: never inflect it.
 #: src/components/ItemRow.tsx
@@ -1283,7 +1283,7 @@ msgstr "Спочатку невиконані"
 #. Sort button: items still to do go first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do First"
-msgstr "Невиконані"
+msgstr "Виконані внизу"
 
 #. VoiceOver only: a sort order in force, done items before those still to do.
 #: src/lib/searchCopy.ts
@@ -1295,10 +1295,10 @@ msgstr "спочатку виконані"
 msgid "To do last"
 msgstr "Спочатку виконані"
 
-#. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
+#. Sort button (lit): items still to do go last, so done items come first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do Last"
-msgstr "Виконані"
+msgstr "Виконані вгорі"
 
 #. Under the code field on the sign-in screen: the six-digit code typed was wrong, or too old. The English is the server's own words, with no full stop: write it as your language's UI would.
 #: src/lib/serverMessages.ts

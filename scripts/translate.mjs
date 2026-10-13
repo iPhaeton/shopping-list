@@ -11,7 +11,7 @@
  *   node scripts/translate.mjs                  glossary entries still missing, then translations
  *   node scripts/translate.mjs --review         back-translates and compares; writes the review report
  *
- *   --locale <tag>               one catalog only
+ *   --locale <tag>               only this catalog (repeatable)
  *   --force <id> [--note <text>] translate a message again, though it has a translation (repeatable)
  *   --message <id>               with --review: review only these messages (repeatable)
  *
@@ -78,7 +78,7 @@ const { values: args } = parseArgs({
     'dry-run': { type: 'boolean', default: false },
     'glossary-only': { type: 'boolean', default: false },
     review: { type: 'boolean', default: false },
-    locale: { type: 'string' },
+    locale: { type: 'string', multiple: true, default: [] },
     force: { type: 'string', multiple: true, default: [] },
     note: { type: 'string' },
     message: { type: 'string', multiple: true, default: [] },
@@ -92,12 +92,14 @@ const english = readCatalog(read(catalogPath('en')));
 const englishById = new Map(english.map((entry) => [entry.id, entry]));
 const allTargets = targetLocales(read(path.join(ROOT, 'src/i18n/locales.ts')));
 
-if (args.locale === 'sr-Latn') fail('sr-Latn is generated from sr-Cyrl: translate sr-Cyrl instead.');
-if (args.locale && !allTargets.includes(args.locale)) fail(`Not a translated catalog: ${args.locale}`);
+for (const locale of args.locale) {
+  if (locale === 'sr-Latn') fail('sr-Latn is generated from sr-Cyrl: translate sr-Cyrl instead.');
+  if (!allTargets.includes(locale)) fail(`Not a translated catalog: ${locale}`);
+}
 if (args.note && args.force.length === 0) fail('--note goes with --force.');
 for (const id of [...args.force, ...args.message]) if (!englishById.has(id)) fail(`No message with id ${id}.`);
 
-const targets = args.locale ? [args.locale] : allTargets;
+const targets = args.locale.length ? allTargets.filter((locale) => args.locale.includes(locale)) : allTargets;
 const glossary = existsSync(GLOSSARY) ? JSON.parse(read(GLOSSARY)) : {};
 
 function fail(message) {

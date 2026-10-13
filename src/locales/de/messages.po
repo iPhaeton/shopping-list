@@ -1295,7 +1295,7 @@ msgstr "offene zuletzt"
 msgid "To do last"
 msgstr "Offene zuletzt"
 
-#. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
+#. Sort button (lit): items still to do go last, so done items come first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do Last"
 msgstr "Offen unten"
@@ -1318,7 +1318,7 @@ msgstr "Die E-Mail-Adresse ist ungültig."
 #. Button (verb) beside a blocked person: lets their invitations through again. Fits about 12 characters.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Unblock"
-msgstr "Freigeben"
+msgstr "Entsperren"
 
 #. VoiceOver only: the Unblock button beside a blocked person. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.
 #: src/screens/BlockedPeopleScreen.tsx
@@ -1328,7 +1328,7 @@ msgstr "{name} nicht mehr blockieren"
 #. The Unblock button while the unblock is being sent. Fits about 12 characters.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Unblocking…"
-msgstr "Freigeben …"
+msgstr "Entsperren…"
 
 #. VoiceOver only: the dot on an avatar that marks a notification not seen before.
 #: src/screens/NotificationsScreen.tsx
