@@ -1,0 +1,382 @@
+{
+  "de": {
+    "address": "informal du",
+    "example": "Du verlierst den Zugriff auf diese Liste, bis dich jemand erneut einlädt.",
+    "terms": {
+      "list": "Liste",
+      "item": "Artikel",
+      "bin": "Papierkorb",
+      "owner": "Inhaber",
+      "writer": "Autor",
+      "reader": "Leser",
+      "invitation": "Einladung",
+      "notification": "Mitteilung",
+      "block": "blockieren",
+      "Day": "Tag",
+      "Night": "Nacht",
+      "Auto": "Auto",
+      "sign in": "anmelden",
+      "code": "Code"
+    }
+  },
+  "fr": {
+    "address": "formal vous",
+    "example": "Nous vous avons envoyé un code à six chiffres à {address}.",
+    "terms": {
+      "list": "liste",
+      "item": "article",
+      "bin": "corbeille",
+      "owner": "propriétaire",
+      "writer": "éditeur",
+      "reader": "lecteur",
+      "invitation": "invitation",
+      "notification": "notification",
+      "block": "bloquer",
+      "Day": "Jour",
+      "Night": "Nuit",
+      "Auto": "Auto",
+      "sign in": "se connecter",
+      "code": "code"
+    }
+  },
+  "es": {
+    "address": "informal tú",
+    "example": "Te enviaremos un código de seis dígitos por correo electrónico. No necesitas contraseña.",
+    "terms": {
+      "list": "lista",
+      "item": "artículo",
+      "bin": "papelera",
+      "owner": "propietario",
+      "writer": "editor",
+      "reader": "lector",
+      "invitation": "invitación",
+      "notification": "notificación",
+      "block": "bloquear",
+      "Day": "Día",
+      "Night": "Noche",
+      "Auto": "Automático",
+      "sign in": "iniciar sesión",
+      "code": "código"
+    }
+  },
+  "it": {
+    "address": "informal tu",
+    "example": "Ti invieremo via email un codice di sei cifre. Non serve nessuna password.",
+    "terms": {
+      "list": "lista",
+      "item": "articolo",
+      "bin": "Cestino",
+      "owner": "proprietario",
+      "writer": "editor",
+      "reader": "lettore",
+      "invitation": "invito",
+      "notification": "notifica",
+      "block": "bloccare",
+      "Day": "Giorno",
+      "Night": "Notte",
+      "Auto": "Automatico",
+      "sign in": "accedere (Accedi)",
+      "code": "codice"
+    }
+  },
+  "pt-PT": {
+    "address": "formal third person (o seu, você implied but not written)",
+    "example": "Vamos enviar-lhe um código de seis dígitos por e-mail. Não precisa de palavra-passe.",
+    "terms": {
+      "list": "lista",
+      "item": "artigo",
+      "bin": "lixo",
+      "owner": "proprietário",
+      "writer": "editor",
+      "reader": "leitor",
+      "invitation": "convite",
+      "notification": "notificação",
+      "block": "bloquear",
+      "Day": "Dia",
+      "Night": "Noite",
+      "Auto": "Auto",
+      "sign in": "iniciar sessão",
+      "code": "código"
+    }
+  },
+  "sv": {
+    "address": "informal du",
+    "example": "Du förlorar åtkomsten till den här listan tills någon bjuder in dig igen.",
+    "terms": {
+      "list": "lista",
+      "item": "vara",
+      "bin": "papperskorg",
+      "owner": "ägare",
+      "writer": "redigerare",
+      "reader": "läsare",
+      "invitation": "inbjudan",
+      "notification": "notis",
+      "block": "blockera",
+      "Day": "Dag",
+      "Night": "Natt",
+      "Auto": "Auto",
+      "sign in": "logga in",
+      "code": "kod"
+    }
+  },
+  "nb": {
+    "address": "informal du",
+    "example": "Vi sender deg en sekssifret kode på e-post. Du trenger ikke passord.",
+    "terms": {
+      "list": "liste",
+      "item": "vare",
+      "bin": "papirkurv",
+      "owner": "eier",
+      "writer": "redaktør",
+      "reader": "leser",
+      "invitation": "invitasjon",
+      "notification": "varsel",
+      "block": "blokkere",
+      "Day": "Dag",
+      "Night": "Natt",
+      "Auto": "Auto",
+      "sign in": "logge på",
+      "code": "kode"
+    }
+  },
+  "fi": {
+    "address": "informal sinä (2nd person singular)",
+    "example": "Tarvitset verkkoyhteyden, jotta voit vastata kutsuun.",
+    "terms": {
+      "list": "lista",
+      "item": "tuote",
+      "bin": "roskakori",
+      "owner": "omistaja",
+      "writer": "muokkaaja",
+      "reader": "lukija",
+      "invitation": "kutsu",
+      "notification": "ilmoitus",
+      "block": "estää",
+      "Day": "Päivä",
+      "Night": "Yö",
+      "Auto": "Automaatti",
+      "sign in": "kirjautua sisään",
+      "code": "koodi"
+    }
+  },
+  "pl": {
+    "address": "informal ty (second person singular, imperatives)",
+    "example": "Wyślemy Ci e-mailem sześciocyfrowy kod. Nie potrzebujesz hasła.",
+    "terms": {
+      "list": "lista",
+      "item": "pozycja",
+      "bin": "kosz",
+      "owner": "właściciel",
+      "writer": "edytor",
+      "reader": "czytelnik",
+      "invitation": "zaproszenie",
+      "notification": "powiadomienie",
+      "block": "zablokować",
+      "Day": "Dzień",
+      "Night": "Noc",
+      "Auto": "Auto",
+      "sign in": "zalogować się",
+      "code": "kod"
+    }
+  },
+  "cs": {
+    "address": "formal vy (vykání), as in Czech iOS",
+    "example": "Ztratíte přístup k tomuto seznamu, dokud vás někdo znovu nepozve.",
+    "terms": {
+      "list": "seznam",
+      "item": "položka",
+      "bin": "koš",
+      "owner": "vlastník",
+      "writer": "editor",
+      "reader": "čtenář",
+      "invitation": "pozvánka",
+      "notification": "oznámení",
+      "block": "blokovat",
+      "Day": "Den",
+      "Night": "Noc",
+      "Auto": "Auto",
+      "sign in": "přihlásit se",
+      "code": "kód"
+    }
+  },
+  "sk": {
+    "address": "formal vy (vykanie), as in Slovak iOS",
+    "example": "Na zmenu mena potrebujete pripojenie.",
+    "terms": {
+      "list": "zoznam",
+      "item": "položka",
+      "bin": "kôš",
+      "owner": "vlastník",
+      "writer": "editor",
+      "reader": "čitateľ",
+      "invitation": "pozvánka",
+      "notification": "hlásenie",
+      "block": "zablokovať",
+      "Day": "Deň",
+      "Night": "Noc",
+      "Auto": "Auto",
+      "sign in": "prihlásiť sa",
+      "code": "kód"
+    }
+  },
+  "sl": {
+    "address": "formal vi (vikanje)",
+    "example": "Po e-pošti vam bomo poslali šestmestno kodo. Geslo ni potrebno.",
+    "terms": {
+      "list": "seznam",
+      "item": "artikel",
+      "bin": "koš",
+      "owner": "lastnik",
+      "writer": "urednik",
+      "reader": "bralec",
+      "invitation": "povabilo",
+      "notification": "obvestilo",
+      "block": "blokirati",
+      "Day": "Dan",
+      "Night": "Noč",
+      "Auto": "Samodejno",
+      "sign in": "prijaviti se (zaslon: Prijava)",
+      "code": "koda"
+    }
+  },
+  "hr": {
+    "address": "formal/plural vi (2nd person plural)",
+    "example": "Poslat ćemo vam šesteroznamenkasti kôd e-poštom. Lozinka nije potrebna.",
+    "terms": {
+      "list": "popis",
+      "item": "stavka",
+      "bin": "smeće",
+      "owner": "vlasnik",
+      "writer": "urednik",
+      "reader": "čitatelj",
+      "invitation": "pozivnica",
+      "notification": "obavijest",
+      "block": "blokirati",
+      "Day": "Dan",
+      "Night": "Noć",
+      "Auto": "Auto",
+      "sign in": "prijaviti se (zaslon: Prijava)",
+      "code": "kôd"
+    }
+  },
+  "hu": {
+    "address": "informal te (tegeződés)",
+    "example": "Elveszíted a hozzáférést ehhez a listához, amíg valaki újra meg nem hív.",
+    "terms": {
+      "list": "lista",
+      "item": "tétel",
+      "bin": "kuka",
+      "owner": "tulajdonos",
+      "writer": "szerkesztő",
+      "reader": "olvasó",
+      "invitation": "meghívás",
+      "notification": "értesítés",
+      "block": "letilt",
+      "Day": "Nappal",
+      "Night": "Éjszaka",
+      "Auto": "Auto",
+      "sign in": "bejelentkezés",
+      "code": "kód"
+    }
+  },
+  "sr-Cyrl": {
+    "address": "formal Ви (second-person plural forms)",
+    "example": "Потребна вам је интернет веза да бисте одговорили на позивницу.",
+    "terms": {
+      "list": "листа",
+      "item": "ставка",
+      "bin": "отпад",
+      "owner": "власник",
+      "writer": "уредник",
+      "reader": "читалац",
+      "invitation": "позивница",
+      "notification": "обавештење",
+      "block": "блокирати",
+      "Day": "Дан",
+      "Night": "Ноћ",
+      "Auto": "Ауто",
+      "sign in": "пријавити се (екран: Пријава)",
+      "code": "код"
+    }
+  },
+  "be": {
+    "address": "formal вы (iOS has no Belarusian UI; Belarusian apps use вы)",
+    "example": "Вы страціце доступ да гэтага спіса, пакуль хтосьці зноў вас не запросіць.",
+    "terms": {
+      "list": "спіс",
+      "item": "пазіцыя",
+      "bin": "кошык",
+      "owner": "уладальнік",
+      "writer": "рэдактар",
+      "reader": "чытач",
+      "invitation": "запрашэнне",
+      "notification": "апавяшчэнне",
+      "block": "заблакіраваць",
+      "Day": "Дзень",
+      "Night": "Ноч",
+      "Auto": "Аўта",
+      "sign in": "увайсці",
+      "code": "код"
+    }
+  },
+  "ru": {
+    "address": "formal Вы, capitalized, as iOS uses",
+    "example": "Вы потеряете доступ к этому списку, пока Вас снова не пригласят.",
+    "terms": {
+      "list": "список",
+      "item": "товар",
+      "bin": "корзина",
+      "owner": "владелец",
+      "writer": "редактор",
+      "reader": "читатель",
+      "invitation": "приглашение",
+      "notification": "уведомление",
+      "block": "заблокировать",
+      "Day": "День",
+      "Night": "Ночь",
+      "Auto": "Авто",
+      "sign in": "войти (экран: Вход)",
+      "code": "код"
+    }
+  },
+  "uk": {
+    "address": "formal ви (lowercase)",
+    "example": "Ми надішлемо вам шестизначний код електронною поштою. Пароль не потрібен.",
+    "terms": {
+      "list": "список",
+      "item": "пункт",
+      "bin": "смітник",
+      "owner": "власник",
+      "writer": "редактор",
+      "reader": "читач",
+      "invitation": "запрошення",
+      "notification": "сповіщення",
+      "block": "заблокувати",
+      "Day": "День",
+      "Night": "Ніч",
+      "Auto": "Авто",
+      "sign in": "увійти",
+      "code": "код"
+    }
+  },
+  "bg": {
+    "address": "formal вие (plural imperative and вие/ви forms)",
+    "example": "Ще ви изпратим шестцифрен код по имейл. Не е нужна парола.",
+    "terms": {
+      "list": "списък",
+      "item": "артикул",
+      "bin": "кошче",
+      "owner": "собственик",
+      "writer": "редактор",
+      "reader": "читател",
+      "invitation": "покана",
+      "notification": "известие",
+      "block": "блокиране",
+      "Day": "Ден",
+      "Night": "Нощ",
+      "Auto": "Авто",
+      "sign in": "вход",
+      "code": "код"
+    }
+  }
+}
