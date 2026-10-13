@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native';
 
@@ -18,6 +19,7 @@ import { fonts, spacing } from '../theme';
  */
 export function SetNameScreen(_props: SetNameScreenProps) {
   const styles = useStyles();
+  const { t } = useLingui();
   const { state, setName, retryName, signOut } = useSession();
   const session = state.status === 'nameRequired' ? state.session : null;
 
@@ -68,15 +70,24 @@ export function SetNameScreen(_props: SetNameScreenProps) {
         void signOut('revoked');
         return;
       }
-      setError(verdict === 'retryable' ? 'You need a connection to set your name.' : failure);
+      // `failure` is the server's own wording, shown as it arrives.
+      setError(verdict === 'retryable' ? t`You need a connection to set your name.` : failure);
       setPending(false);
     }
   }
 
   return (
     <AuthFrame>
-      <Text style={styles.title}>Pick a name</Text>
-      <Text style={styles.hint}>Other people in your lists will see this. It has to be unique.</Text>
+      <Text style={styles.title}>
+        <Trans comment="Title of the screen where a new account chooses the name other people see. Not a list's name.">
+          Pick a name
+        </Trans>
+      </Text>
+      <Text style={styles.hint}>
+        <Trans comment="Unique: no two accounts can have the same name.">
+          Other people in your lists will see this. It has to be unique.
+        </Trans>
+      </Text>
 
       {error ? <ErrorBanner message={error} style={styles.error} /> : null}
 
@@ -84,8 +95,8 @@ export function SetNameScreen(_props: SetNameScreenProps) {
         style={styles.field}
         value={name}
         onChangeText={editName}
-        placeholder="Your name"
-        accessibilityLabel="Your name"
+        placeholder={t`Your name`}
+        accessibilityLabel={t`Your name`}
         autoCapitalize="words"
         autoCorrect={false}
         returnKeyType="done"
@@ -93,7 +104,7 @@ export function SetNameScreen(_props: SetNameScreenProps) {
       />
 
       <PillButton
-        label="Continue"
+        label={t`Continue`}
         variant="filled"
         size="lg"
         disabled={!canSubmit}

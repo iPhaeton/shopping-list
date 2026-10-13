@@ -6,6 +6,10 @@
     "@expo-google-fonts/nunito-sans": "^0.4.2",
     "@expo-google-fonts/source-serif-4": "^0.4.1",
     "@expo/metro-runtime": "~57.0.16",
+    "@formatjs/intl-locale": "^5.3.12",
+    "@formatjs/intl-pluralrules": "^6.3.15",
+    "@lingui/core": "6.9.1",
+    "@lingui/react": "6.9.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-google-signin/google-signin": "^16.1.5",
     "@react-navigation/native": "^7.3.17",
@@ -19,6 +23,7 @@
     "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
+    "expo-localization": "~57.0.2",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
@@ -31,6 +36,9 @@
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "@lingui/babel-plugin-lingui-macro": "6.9.1",
+    "@lingui/cli": "6.9.1",
+    "@lingui/format-po": "6.9.1",
     "@react-native/jest-preset": "^0.86.3",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
@@ -48,15 +56,21 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "kb:audit": "node scripts/kb-audit.mjs"
+    "kb:audit": "node scripts/kb-audit.mjs",
+    "i18n:extract": "lingui extract --clean",
+    "i18n:compile": "lingui compile --typescript",
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "jest": {
     "preset": "jest-expo",
     "setupFiles": [
       "<rootDir>/jest.setup.ts"
     ],
+    "transform": {
+      "\\.mjs$": "babel-jest"
+    },
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg))"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|@lingui/.*|@formatjs/.*|@messageformat/.*))"
     ]
   },
   "private": true

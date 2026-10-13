@@ -1,0 +1,12 @@
+# Dev builds only: shows the catalog LOCALE (a locales.ts tag, `pseudo`, or `device` to go back to the
+# device's own choice) in place, on whatever screen is up. Navigate in English, switch, shoot, switch
+# back — every other flow finds things by their English labels.
+appId: com.shoppingloop.app
+---
+- openLink: shopping-list://dev/locale/${LOCALE}
+# A simulator that has never opened this scheme asks first — after a beat, hence the wait.
+- waitForAnimationToEnd
+- tapOn:
+    text: Open
+    optional: true
+- waitForAnimationToEnd

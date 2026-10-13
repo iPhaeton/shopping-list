@@ -54,6 +54,59 @@
             "image": "./assets/splash/emblem-night.png"
           }
         }
+      ],
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": [
+              "en",
+              "de",
+              "fr",
+              "es",
+              "it",
+              "pt-PT",
+              "sv",
+              "nb",
+              "fi",
+              "pl",
+              "cs",
+              "sk",
+              "sl",
+              "hr",
+              "hu",
+              "sr-Cyrl",
+              "sr-Latn",
+              "be",
+              "ru",
+              "uk",
+              "bg"
+            ],
+            "android": [
+              "en",
+              "de",
+              "fr",
+              "es",
+              "it",
+              "pt-PT",
+              "sv",
+              "nb",
+              "fi",
+              "pl",
+              "cs",
+              "sk",
+              "sl",
+              "hr",
+              "hu",
+              "sr-Cyrl",
+              "sr-Latn",
+              "be",
+              "ru",
+              "uk",
+              "bg"
+            ]
+          }
+        }
       ]
     ]
   }

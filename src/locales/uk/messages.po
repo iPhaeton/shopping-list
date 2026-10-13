@@ -1,0 +1,30 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-12 20:35+0200\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: uk\n"
+
+#: src/screens/SetNameScreen.tsx
+msgid "Continue"
+msgstr ""
+
+#. Unique: no two accounts can have the same name.
+#: src/screens/SetNameScreen.tsx
+msgid "Other people in your lists will see this. It has to be unique."
+msgstr ""
+
+#. Title of the screen where a new account chooses the name other people see. Not a list's name.
+#: src/screens/SetNameScreen.tsx
+msgid "Pick a name"
+msgstr ""
+
+#: src/screens/SetNameScreen.tsx
+msgid "You need a connection to set your name."
+msgstr ""
+
+#: src/screens/SetNameScreen.tsx
+msgid "Your name"
+msgstr ""

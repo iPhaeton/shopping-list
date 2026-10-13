@@ -1,3 +1,6 @@
+// First, before anything that could format a message: Hermes has no `Intl.PluralRules`.
+import './src/i18n/polyfills';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

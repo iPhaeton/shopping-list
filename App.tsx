@@ -1,8 +1,10 @@
+import { I18nProvider } from '@lingui/react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { i18n } from './src/i18n';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ListsProvider } from './src/state/ListsContext';
 import { NotificationsProvider } from './src/state/NotificationsContext';
@@ -17,24 +19,31 @@ import { ThemeProvider, useTheme } from './src/state/ThemeContext';
  * launch screen itself follows the device's appearance until JS sets the app's own; what this rules
  * out is anything in between, like the root view in last session's colour. `SortProvider` gates the
  * same way, on the remembered sorts, so no list is ever drawn in an order it then leaves.
+ *
+ * `I18nProvider` is outermost because everything below it shows text — the theme's own Auto hint
+ * included. Its catalog is already active by the time this renders (`src/i18n`), so the first frame
+ * is in the device's language; switching later re-renders whatever reads it through `useLingui` or
+ * `<Trans>`. No `defaultComponent`: `<Trans>` sits inside a `<Text>` and returns a bare string.
  */
 void SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({ fade: true, duration: 250 });
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <SortProvider>
-          <SessionProvider>
-            <ListsForSignedInUser>
-              <ThemedStatusBar />
-              <RootNavigator />
-            </ListsForSignedInUser>
-          </SessionProvider>
-        </SortProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <I18nProvider i18n={i18n}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <SortProvider>
+            <SessionProvider>
+              <ListsForSignedInUser>
+                <ThemedStatusBar />
+                <RootNavigator />
+              </ListsForSignedInUser>
+            </SessionProvider>
+          </SortProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </I18nProvider>
   );
 }
 

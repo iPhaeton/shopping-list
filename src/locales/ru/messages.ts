@@ -1,0 +1,1 @@
+/*eslint-disable*/import type{Messages}from"@lingui/core";export const messages=JSON.parse("{\"Oxyd5f\":[\"Pick a name\"],\"oCecht\":[\"You need a connection to set your name.\"],\"q8yluz\":[\"Your name\"],\"xGVfLh\":[\"Continue\"],\"ywJuRY\":[\"Other people in your lists will see this. It has to be unique.\"]}")as Messages;
