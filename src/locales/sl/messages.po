@@ -10,264 +10,264 @@ msgstr ""
 #. VoiceOver only: the separator between the parts of a list read aloud, e.g. "Unread, Maya invited you to Picnic, 2 min ago". English is a comma and a space.
 #: src/i18n/spokenList.ts
 msgid ", "
-msgstr ""
+msgstr ", "
 
 #. A refusal from the server when a name is too short, under the name field on Set name and Account (# is the minimum, 3). The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "{characters, plural, other {please enter at least # characters}}"
-msgstr ""
+msgstr "{characters, plural, one {Vnesite vsaj # znak.} two {Vnesite vsaj # znaka.} few {Vnesite vsaj # znake.} other {Vnesite vsaj # znakov.}}"
 
 #. A link that is waiting before it can send another code. # is a countdown in seconds; "s" abbreviates seconds.
 #: src/screens/SignInScreen.tsx
 msgid "{cooldown, plural, other {Resend code in #s}}"
-msgstr ""
+msgstr "{cooldown, plural, one {Znova pošlji kodo čez # s} two {Znova pošlji kodo čez # s} few {Znova pošlji kodo čez # s} other {Znova pošlji kodo čez # s}}"
 
 #. Title when a search of a list's items loaded so far finds nothing; the rest are still to load. # is how many were searched.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {No matches in the # loaded items}}"
-msgstr ""
+msgstr "{count, plural, one {Ni zadetkov v # naloženem artiklu} two {Ni zadetkov v # naloženih artiklih} few {Ni zadetkov v # naloženih artiklih} other {Ni zadetkov v # naloženih artiklih}}"
 
 #. Title when a search of the lists loaded so far finds nothing; the rest are still to load. # is how many were searched.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {No matches in the # loaded lists}}"
-msgstr ""
+msgstr "{count, plural, one {Ni zadetkov v # naloženem seznamu} two {Ni zadetkov v # naloženih seznamih} few {Ni zadetkov v # naloženih seznamih} other {Ni zadetkov v # naloženih seznamih}}"
 
 #. Under the search field when the rest of a list's items could not load (offline). # is how many were searched.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Searched the # loaded items. The rest need a connection.}}"
-msgstr ""
+msgstr "{count, plural, one {Preiskan je # naložen artikel. Za preostale je potrebna povezava.} two {Preiskana sta # naložena artikla. Za preostale je potrebna povezava.} few {Preiskani so # naloženi artikli. Za preostale je potrebna povezava.} other {Preiskanih je # naloženih artiklov. Za preostale je potrebna povezava.}}"
 
 #. Under the search field when the rest of the lists could not load (offline). # is how many were searched.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Searched the # loaded lists. The rest need a connection.}}"
-msgstr ""
+msgstr "{count, plural, one {Preiskan je # naložen seznam. Za preostale je potrebna povezava.} two {Preiskana sta # naložena seznama. Za preostale je potrebna povezava.} few {Preiskani so # naloženi seznami. Za preostale je potrebna povezava.} other {Preiskanih je # naloženih seznamov. Za preostale je potrebna povezava.}}"
 
 #. Under the search field when only a list's first items could be searched: there are too many to load. # is how many.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Searched the first # items.}}"
-msgstr ""
+msgstr "{count, plural, one {Preiskan je prvi # artikel.} two {Preiskana sta prva # artikla.} few {Preiskani so prvi # artikli.} other {Preiskanih je prvih # artiklov.}}"
 
 #. Under the search field when only the first lists could be searched: there are too many to load. # is how many.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Searched the first # lists.}}"
-msgstr ""
+msgstr "{count, plural, one {Preiskan je prvi # seznam.} two {Preiskana sta prva # seznama.} few {Preiskani so prvi # seznami.} other {Preiskanih je prvih # seznamov.}}"
 
 #. Under the search field while the rest of a list's items load in the background. # is how many are loaded so far.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Searching # loaded items · loading the rest…}}"
-msgstr ""
+msgstr "{count, plural, one {Iskanje v # naloženem artiklu · nalaganje preostalih …} two {Iskanje v # naloženih artiklih · nalaganje preostalih …} few {Iskanje v # naloženih artiklih · nalaganje preostalih …} other {Iskanje v # naloženih artiklih · nalaganje preostalih …}}"
 
 #. Under the search field while the rest of the lists load in the background. # is how many are loaded so far.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Searching # loaded lists · loading the rest…}}"
-msgstr ""
+msgstr "{count, plural, one {Iskanje v # naloženem seznamu · nalaganje preostalih …} two {Iskanje v # naloženih seznamih · nalaganje preostalih …} few {Iskanje v # naloženih seznamih · nalaganje preostalih …} other {Iskanje v # naloženih seznamih · nalaganje preostalih …}}"
 
 #. Under the sort buttons when the rest of a list's items could not load (offline). # is how many were sorted.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Sorted the # loaded items. The rest need a connection.}}"
-msgstr ""
+msgstr "{count, plural, one {Razvrščen je # naložen artikel. Za preostale je potrebna povezava.} two {Razvrščena sta # naložena artikla. Za preostale je potrebna povezava.} few {Razvrščeni so # naloženi artikli. Za preostale je potrebna povezava.} other {Razvrščenih je # naloženih artiklov. Za preostale je potrebna povezava.}}"
 
 #. Under the sort buttons when the rest of the lists could not load (offline). # is how many were sorted.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Sorted the # loaded lists. The rest need a connection.}}"
-msgstr ""
+msgstr "{count, plural, one {Razvrščen je # naložen seznam. Za preostale je potrebna povezava.} two {Razvrščena sta # naložena seznama. Za preostale je potrebna povezava.} few {Razvrščeni so # naloženi seznami. Za preostale je potrebna povezava.} other {Razvrščenih je # naloženih seznamov. Za preostale je potrebna povezava.}}"
 
 #. Under the sort buttons when only a list's first items could be sorted: there are too many to load. # is how many.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Sorted the first # items.}}"
-msgstr ""
+msgstr "{count, plural, one {Razvrščen je prvi # artikel.} two {Razvrščena sta prva # artikla.} few {Razvrščeni so prvi # artikli.} other {Razvrščenih je prvih # artiklov.}}"
 
 #. Under the sort buttons when only the first lists could be sorted: there are too many to load. # is how many.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Sorted the first # lists.}}"
-msgstr ""
+msgstr "{count, plural, one {Razvrščen je prvi # seznam.} two {Razvrščena sta prva # seznama.} few {Razvrščeni so prvi # seznami.} other {Razvrščenih je prvih # seznamov.}}"
 
 #. Under the sort buttons while the rest of a list's items load in the background. # is how many are loaded so far.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Sorting # loaded items · loading the rest…}}"
-msgstr ""
+msgstr "{count, plural, one {Razvrščanje # naloženega artikla · nalaganje preostalih …} two {Razvrščanje # naloženih artiklov · nalaganje preostalih …} few {Razvrščanje # naloženih artiklov · nalaganje preostalih …} other {Razvrščanje # naloženih artiklov · nalaganje preostalih …}}"
 
 #. Under the sort buttons while the rest of the lists load in the background. # is how many are loaded so far.
 #: src/lib/searchCopy.ts
 msgid "{count, plural, other {Sorting # loaded lists · loading the rest…}}"
-msgstr ""
+msgstr "{count, plural, one {Razvrščanje # naloženega seznama · nalaganje preostalih …} two {Razvrščanje # naloženih seznamov · nalaganje preostalih …} few {Razvrščanje # naloženih seznamov · nalaganje preostalih …} other {Razvrščanje # naloženih seznamov · nalaganje preostalih …}}"
 
 #. How long ago something happened, in whole days, abbreviated: short, small print beside other text.
 #: src/lib/ago.ts
 msgid "{days, plural, other {# d ago}}"
-msgstr ""
+msgstr "{days, plural, one {pred # d} two {pred # d} few {pred # d} other {pred # d}}"
 
 #. Under the title when a list's bin is empty: how long deleted items are kept. # is a number of days (30).
 #: src/screens/ListDetailScreen.tsx
 msgid "{days, plural, other {Deleted items wait here for # days.}}"
-msgstr ""
+msgstr "{days, plural, one {Izbrisani artikli ostanejo tu # dan.} two {Izbrisani artikli ostanejo tu # dneva.} few {Izbrisani artikli ostanejo tu # dni.} other {Izbrisani artikli ostanejo tu # dni.}}"
 
 #. Under the title when the bin of lists is empty: how long deleted lists are kept. # is a number of days (30).
 #: src/screens/ListsScreen.tsx
 msgid "{days, plural, other {Deleted lists wait here for # days.}}"
-msgstr ""
+msgstr "{days, plural, one {Izbrisani seznami ostanejo tu # dan.} two {Izbrisani seznami ostanejo tu # dneva.} few {Izbrisani seznami ostanejo tu # dni.} other {Izbrisani seznami ostanejo tu # dni.}}"
 
 #. How long ago something happened, in whole hours, abbreviated: short, small print beside other text.
 #: src/lib/ago.ts
 msgid "{hours, plural, other {# h ago}}"
-msgstr ""
+msgstr "{hours, plural, one {pred # h} two {pred # h} few {pred # h} other {pred # h}}"
 
 #. VoiceOver only: a list someone else shared with this person. {listName} is the list's name as typed: never inflect it.
 #: src/components/ListRow.tsx
 msgid "{listName}, shared with you"
-msgstr ""
+msgstr "{listName}, deljeno z vami"
 
 #. A refusal from the server on the Sharing screen: the member being made an owner already owns the most lists allowed (# is that limit, 100). "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "{max, plural, other {they already own # lists}}"
-msgstr ""
+msgstr "{max, plural, one {Ta oseba že ima v lasti # seznam.} two {Ta oseba že ima v lasti # seznama.} few {Ta oseba že ima v lasti # sezname.} other {Ta oseba že ima v lasti # seznamov.}}"
 
 #. A refusal from the server on the Sharing screen: the person is already a member of the most lists allowed (# is that limit, 1,000). "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "{max, plural, other {they are already on # lists}}"
-msgstr ""
+msgstr "{max, plural, one {Ta oseba je že v # seznamu.} two {Ta oseba je že v # seznamih.} few {Ta oseba je že v # seznamih.} other {Ta oseba je že v # seznamih.}}"
 
 #. A refusal from the server: the list holds the most items allowed (# is that limit, 1,000). Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "{max, plural, other {this list already has # items}}"
-msgstr ""
+msgstr "{max, plural, one {Ta seznam že ima # artikel.} two {Ta seznam že ima # artikla.} few {Ta seznam že ima # artikle.} other {Ta seznam že ima # artiklov.}}"
 
 #. Shown when a list holds the most items allowed (# is that limit, 1,000).
 #: src/lib/limits.ts
 msgid "{max, plural, other {This list is full: # items at most.}}"
-msgstr ""
+msgstr "{max, plural, one {Ta seznam je poln: največ # artikel.} two {Ta seznam je poln: največ # artikla.} few {Ta seznam je poln: največ # artikli.} other {Ta seznam je poln: največ # artiklov.}}"
 
 #. Shown when the person owns the most lists allowed (# is that limit, 100).
 #: src/lib/limits.ts
 msgid "{max, plural, other {You own # lists. Delete one or hand one over to make room.}}"
-msgstr ""
+msgstr "{max, plural, one {V lasti imate # seznam. Izbrišite enega ali ga predajte, da sprostite prostor.} two {V lasti imate # seznama. Izbrišite enega ali ga predajte, da sprostite prostor.} few {V lasti imate # sezname. Izbrišite enega ali ga predajte, da sprostite prostor.} other {V lasti imate # seznamov. Izbrišite enega ali ga predajte, da sprostite prostor.}}"
 
 #. Shown when the person is a member of the most lists allowed, their own and shared ones (# is that limit, 1,000).
 #: src/lib/limits.ts
 msgid "{max, plural, other {You're on # lists. Delete or leave one to make room.}}"
-msgstr ""
+msgstr "{max, plural, one {Sodelujete v # seznamu. Izbrišite ali zapustite enega, da sprostite prostor.} two {Sodelujete v # seznamih. Izbrišite ali zapustite enega, da sprostite prostor.} few {Sodelujete v # seznamih. Izbrišite ali zapustite enega, da sprostite prostor.} other {Sodelujete v # seznamih. Izbrišite ali zapustite enega, da sprostite prostor.}}"
 
 #. How long ago something happened, in whole minutes, abbreviated: short, small print beside other text.
 #: src/lib/ago.ts
 msgid "{minutes, plural, other {# min ago}}"
-msgstr ""
+msgstr "{minutes, plural, one {pred # min} two {pred # min} few {pred # min} other {pred # min}}"
 
 #. "Sign in with Apple" is Apple's feature: use the name Apple uses in this language. # is a number of minutes (5).
 #: src/lib/appleSignIn.ts
 msgid "{minutes, plural, other {Sign in with Apple needs a few minutes to reset. Try again in # minutes.}}"
-msgstr ""
+msgstr "{minutes, plural, one {Prijava z Apple potrebuje nekaj minut za ponastavitev. Poskusite znova čez # minuto.} two {Prijava z Apple potrebuje nekaj minut za ponastavitev. Poskusite znova čez # minuti.} few {Prijava z Apple potrebuje nekaj minut za ponastavitev. Poskusite znova čez # minute.} other {Prijava z Apple potrebuje nekaj minut za ponastavitev. Poskusite znova čez # minut.}}"
 
 #. The person's own row among a list's members. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "{name} (you)"
-msgstr ""
+msgstr "{name} (vi)"
 
 #. A notification: someone accepted this person's invitation to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.
 #: src/screens/NotificationsScreen.tsx
 msgid "{name} accepted your invitation to {listName}"
-msgstr ""
+msgstr "{name}: vaše povabilo k seznamu {listName} je sprejeto"
 
 #. A notification: someone declined this person's invitation to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.
 #: src/screens/NotificationsScreen.tsx
 msgid "{name} declined your invitation to {listName}"
-msgstr ""
+msgstr "{name}: vaše povabilo k seznamu {listName} je zavrnjeno"
 
 #. A notification: someone invited this person to a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. {listName} is the list's name as typed: never inflect it.
 #: src/screens/NotificationsScreen.tsx
 msgid "{name} invited you to {listName}"
-msgstr ""
+msgstr "{name} vas vabi k seznamu {listName}"
 
 #. The confirm before blocking the person who sent an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form. “Blocked people” is the name of that screen: use its translation.
 #: src/screens/NotificationsScreen.tsx
 msgid "{name} will be told you declined, and you won't see invitations from them any more. Unblock them any time under Blocked people."
-msgstr ""
+msgstr "Oseba {name} bo obveščena, da je povabilo zavrnjeno, povabil te osebe pa ne boste več videli. Osebo lahko kadar koli odblokirate v razdelku Blokirane osebe."
 
 #. The confirm before removing someone from a list: what it costs them. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "{name} will lose access to this list until someone invites them again."
-msgstr ""
+msgstr "Dostop osebe {name} do tega seznama bo odstranjen, dokler ne prejme novega povabila."
 
 #. The confirm before withdrawing an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending.
 #: src/screens/SharingScreen.tsx
 msgid "{name}'s invitation will be withdrawn."
-msgstr ""
+msgstr "Povabilo za {name} bo umaknjeno."
 
 #. VoiceOver only: two sort orders in priority order, e.g. "to do first, then A to Z".
 #: src/lib/searchCopy.ts
 msgid "{order}, then {next}"
-msgstr ""
+msgstr "{order}, nato {next}"
 
 #. A quiet banner while changes made offline wait to be sent. # is how many changes.
 #: src/components/SyncBanner.tsx
 msgid "{pending, plural, one {# change will sync when you're back online} other {# changes will sync when you're back online}}"
-msgstr ""
+msgstr "{pending, plural, one {# sprememba bo sinhronizirana, ko bo povezava spet na voljo} two {# spremembi bosta sinhronizirani, ko bo povezava spet na voljo} few {# spremembe bodo sinhronizirane, ko bo povezava spet na voljo} other {# sprememb bo sinhroniziranih, ko bo povezava spet na voljo}}"
 
 #. Under the email field on the sign-in screen: a new code was asked for too soon after the last one. # is how many seconds are left, and can be 0.
 #: src/lib/serverMessages.ts
 msgid "{seconds, plural, other {For security purposes, you can only request this after # seconds.}}"
-msgstr ""
+msgstr "{seconds, plural, one {Iz varnostnih razlogov lahko to zahtevate šele čez # sekundo.} two {Iz varnostnih razlogov lahko to zahtevate šele čez # sekundi.} few {Iz varnostnih razlogov lahko to zahtevate šele čez # sekunde.} other {Iz varnostnih razlogov lahko to zahtevate šele čez # sekund.}}"
 
 #. Under the search field when the rest of the lists could not load (offline). {loaded} is how many were searched; # is the approximate total.
 #: src/lib/searchCopy.ts
 msgid "{total, plural, other {Searched {loaded} of # lists. The rest need a connection.}}"
-msgstr ""
+msgstr "{total, plural, one {Preiskano: {loaded} od # seznama. Za preostale je potrebna povezava.} two {Preiskano: {loaded} od # seznamov. Za preostale je potrebna povezava.} few {Preiskano: {loaded} od # seznamov. Za preostale je potrebna povezava.} other {Preiskano: {loaded} od # seznamov. Za preostale je potrebna povezava.}}"
 
 #. Under the search field while the rest of the lists load in the background. {loaded} is how many are loaded so far; # is the approximate total.
 #: src/lib/searchCopy.ts
 msgid "{total, plural, other {Searching {loaded} of # lists · loading the rest…}}"
-msgstr ""
+msgstr "{total, plural, one {Iskanje: {loaded} od # seznama · nalaganje preostalih …} two {Iskanje: {loaded} od # seznamov · nalaganje preostalih …} few {Iskanje: {loaded} od # seznamov · nalaganje preostalih …} other {Iskanje: {loaded} od # seznamov · nalaganje preostalih …}}"
 
 #. Under the sort buttons when the rest of the lists could not load (offline). {loaded} is how many were sorted; # is the approximate total.
 #: src/lib/searchCopy.ts
 msgid "{total, plural, other {Sorted {loaded} of # lists. The rest need a connection.}}"
-msgstr ""
+msgstr "{total, plural, one {Razvrščeno: {loaded} od # seznama. Za preostale je potrebna povezava.} two {Razvrščeno: {loaded} od # seznamov. Za preostale je potrebna povezava.} few {Razvrščeno: {loaded} od # seznamov. Za preostale je potrebna povezava.} other {Razvrščeno: {loaded} od # seznamov. Za preostale je potrebna povezava.}}"
 
 #. Under the sort buttons while the rest of the lists load in the background. {loaded} is how many are loaded so far; # is the approximate total.
 #: src/lib/searchCopy.ts
 msgid "{total, plural, other {Sorting {loaded} of # lists · loading the rest…}}"
-msgstr ""
+msgstr "{total, plural, one {Razvrščanje: {loaded} od # seznama · nalaganje preostalih …} two {Razvrščanje: {loaded} od # seznamov · nalaganje preostalih …} few {Razvrščanje: {loaded} od # seznamov · nalaganje preostalih …} other {Razvrščanje: {loaded} od # seznamov · nalaganje preostalih …}}"
 
 #. VoiceOver only: the bell button's value, how many notifications are unread. # is that number.
 #: src/screens/ListsScreen.tsx
 msgid "{unreadCount, plural, other {# unread}}"
-msgstr ""
+msgstr "{unreadCount, plural, one {# neprebrano obvestilo} two {# neprebrani obvestili} few {# neprebrana obvestila} other {# neprebranih obvestil}}"
 
 #. A refusal from the server on the Sharing screen: removing or demoting this owner would leave the list with none. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "a list must keep at least one owner"
-msgstr ""
+msgstr "Seznam mora imeti vsaj enega lastnika."
 
 #. Under the members, for a list's only owner: why they cannot leave or step down.
 #: src/screens/SharingScreen.tsx
 msgid "A list must keep at least one owner."
-msgstr ""
+msgstr "Seznam mora imeti vsaj enega lastnika."
 
 #. VoiceOver only: a sort order, alphabetical.
 #. VoiceOver only: a sort order, alphabetical.
 #: src/components/SortButtons.tsx
 #: src/lib/searchCopy.ts
 msgid "A to Z"
-msgstr ""
+msgstr "Od A do Ž"
 
 #. Sort button, alphabetical: the first and last letters of the alphabet. Fits about 10 characters.
 #: src/components/SortButtons.tsx
 msgid "A–Z"
-msgstr ""
+msgstr "A–Ž"
 
 #. Button (verb) on an invitation: joins the list. Fits about 12 characters, half of a row.
 #: src/screens/NotificationsScreen.tsx
 msgid "Accept"
-msgstr ""
+msgstr "Sprejmi"
 
 #. VoiceOver only: the Accept button on an invitation. {listName} is the list's name as typed: never inflect it.
 #: src/screens/NotificationsScreen.tsx
 msgid "Accept invitation to {listName}"
-msgstr ""
+msgstr "Sprejmi povabilo k seznamu {listName}"
 
 #. The Accept button while the answer is being sent. Fits about 12 characters.
 #: src/screens/NotificationsScreen.tsx
 msgid "Accepting…"
-msgstr ""
+msgstr "Sprejemanje …"
 
 #. The Account screen's title, and the label of the button that opens it.
 #. The Account screen's title, and the label of the button that opens it.
@@ -276,67 +276,67 @@ msgstr ""
 #: src/screens/AccountScreen.tsx
 #: src/screens/ListsScreen.tsx
 msgid "Account"
-msgstr ""
+msgstr "Račun"
 
 #. Button (verb) beside the field: adds the item typed to the list. Fits about 10 characters.
 #: src/screens/ListDetailScreen.tsx
 msgid "Add"
-msgstr ""
+msgstr "Dodaj"
 
 #. Placeholder of the field where a new item is typed.
 #: src/screens/ListDetailScreen.tsx
 msgid "Add an item"
-msgstr ""
+msgstr "Dodaj artikel"
 
 #. Under the title of an empty list, for someone who can add to it.
 #: src/screens/ListDetailScreen.tsx
 msgid "Add your first item above."
-msgstr ""
+msgstr "Prvi artikel dodajte zgoraj."
 
 #. Label (noun) of the picker that chooses the light theme, the dark theme, or Auto.
 #: src/screens/AccountScreen.tsx
 msgid "Appearance"
-msgstr ""
+msgstr "Videz"
 
 #. An error from the server, on Account when deleting an account: Apple could not be reached.
 #: src/lib/serverMessages.ts
 msgid "Apple couldn't be reached. Try again in a minute."
-msgstr ""
+msgstr "Apple trenutno ni dosegljiv. Poskusite znova čez minuto."
 
 #. An error from the server: Apple refused to confirm the person signing in.
 #: src/lib/serverMessages.ts
 msgid "Apple didn't confirm it's you. Try again."
-msgstr ""
+msgstr "Apple ni potrdil vaše identitete. Poskusite znova."
 
 #. Shown when Apple sign-in failed and could not recover by itself; trying again later may work.
 #: src/lib/appleSignIn.ts
 msgid "Apple sign-in couldn't finish. Try again in a minute."
-msgstr ""
+msgstr "Prijave z Apple ni bilo mogoče dokončati. Poskusite znova čez minuto."
 
 #. An error from the server while finishing Apple sign-in: the code Apple gave the app did not arrive.
 #: src/lib/serverMessages.ts
 msgid "Apple's sign-in code is missing. Try again."
-msgstr ""
+msgstr "Manjka Applova koda za prijavo. Poskusite znova."
 
 #. Under a pending invitation: the role it offers, can only see the list. Short, small print.
 #: src/screens/NotificationsScreen.tsx
 msgid "as a reader"
-msgstr ""
+msgstr "kot bralec"
 
 #. Under a pending invitation: the role it offers, can add and change items. Short, small print.
 #: src/screens/NotificationsScreen.tsx
 msgid "as a writer"
-msgstr ""
+msgstr "kot urednik"
 
 #. Under a pending invitation: the role it offers, can also share, rename and delete the list. Short, small print.
 #: src/screens/NotificationsScreen.tsx
 msgid "as an owner"
-msgstr ""
+msgstr "kot lastnik"
 
 #. Appearance picker option: switches between the light and dark themes at sunrise and sunset. Fits about 9 characters, one of three equal segments.
 #: src/screens/AccountScreen.tsx
 msgid "Auto"
-msgstr ""
+msgstr "Samodejno"
 
 #. VoiceOver only: the round arrow button that goes back to the previous screen.
 #. VoiceOver only: the round arrow button that goes back to the previous screen.
@@ -345,17 +345,17 @@ msgstr ""
 #: src/screens/ListDetailScreen.tsx
 #: src/screens/SharingScreen.tsx
 msgid "Back"
-msgstr ""
+msgstr "Nazaj"
 
 #. Button (verb) in a confirm: blocks the person who sent the invitation. Fits about 12 characters, half of a row.
 #: src/screens/NotificationsScreen.tsx
 msgid "Block"
-msgstr ""
+msgstr "Blokiraj"
 
 #. Button under an invitation: opens the confirm to block its sender. Full width; a long name is cut with …. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.
 #: src/screens/NotificationsScreen.tsx
 msgid "Block {name}"
-msgstr ""
+msgstr "Blokiraj osebo {name}"
 
 #. The Blocked people screen: its title, and the buttons that open it from Account and Notifications.
 #. The Blocked people screen: its title, and the buttons that open it from Account and Notifications.
@@ -366,12 +366,12 @@ msgstr ""
 #: src/screens/BlockedPeopleScreen.tsx
 #: src/screens/NotificationsScreen.tsx
 msgid "Blocked people"
-msgstr ""
+msgstr "Blokirane osebe"
 
 #. The Block button while the block is being sent. Fits about 12 characters.
 #: src/screens/NotificationsScreen.tsx
 msgid "Blocking…"
-msgstr ""
+msgstr "Blokiranje …"
 
 #. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
 #. Button (verb): closes the confirm or editor without doing anything. Fits about 12 characters, half of a row of two buttons.
@@ -385,359 +385,359 @@ msgstr ""
 #: src/screens/NotificationsScreen.tsx
 #: src/screens/SharingScreen.tsx
 msgid "Cancel"
-msgstr ""
+msgstr "Prekliči"
 
 #. VoiceOver only: the Cancel button under the block confirm. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.
 #: src/screens/NotificationsScreen.tsx
 msgid "Cancel blocking {name}"
-msgstr ""
+msgstr "Prekliči blokiranje osebe {name}"
 
 #. VoiceOver only: the Cancel button under the Delete account confirm.
 #: src/screens/AccountScreen.tsx
 msgid "Cancel deleting account"
-msgstr ""
+msgstr "Prekliči brisanje računa"
 
 #. VoiceOver only: the Cancel button under the name being edited.
 #: src/screens/AccountScreen.tsx
 msgid "Cancel editing name"
-msgstr ""
+msgstr "Prekliči urejanje imena"
 
 #. Under the title when a search finds nothing.
 #: src/lib/searchCopy.ts
 msgid "Check the spelling, or try fewer letters."
-msgstr ""
+msgstr "Preverite črkovanje ali poskusite z manj črkami."
 
 #. Title of the screen where the person types the code that was emailed to them.
 #: src/screens/SignInScreen.tsx
 msgid "Check your email"
-msgstr ""
+msgstr "Preverite e-pošto"
 
 #. The browser tab's title on web while a new account picks the name other people see.
 #: src/navigation/RootNavigator.tsx
 msgid "Choose a name"
-msgstr ""
+msgstr "Izberite ime"
 
 #. VoiceOver only: the × button in the search field, which empties it.
 #: src/components/SearchField.tsx
 msgid "Clear search"
-msgstr ""
+msgstr "Počisti iskanje"
 
 #. VoiceOver only: the button that confirms blocking someone. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense; use a present tense, a passive or a label form.
 #: src/screens/NotificationsScreen.tsx
 msgid "Confirm block {name}"
-msgstr ""
+msgstr "Potrdi blokiranje osebe {name}"
 
 #. VoiceOver only: the button that confirms deleting the account.
 #: src/screens/AccountScreen.tsx
 msgid "Confirm delete account"
-msgstr ""
+msgstr "Potrdi izbris računa"
 
 #. VoiceOver only: the button that confirms leaving a list.
 #: src/screens/SharingScreen.tsx
 msgid "Confirm leave list"
-msgstr ""
+msgstr "Potrdi zapustitev seznama"
 
 #. VoiceOver only: the button that confirms removing someone from a list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "Confirm remove {name}"
-msgstr ""
+msgstr "Potrdi odstranitev osebe {name}"
 
 #. VoiceOver only: the button that confirms signing out of every device.
 #: src/screens/AccountScreen.tsx
 msgid "Confirm sign out of all devices"
-msgstr ""
+msgstr "Potrdi odjavo iz vseh naprav"
 
 #. VoiceOver only: the button that confirms withdrawing an invitation. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending.
 #: src/screens/SharingScreen.tsx
 msgid "Confirm withdraw {name}'s invitation"
-msgstr ""
+msgstr "Potrdi umik povabila za {name}"
 
 #. Button under the name field: saves the name and goes on into the app. A full-width button.
 #: src/screens/SetNameScreen.tsx
 msgid "Continue"
-msgstr ""
+msgstr "Nadaljuj"
 
 #. VoiceOver only: Apple's own sign-in button, whose visible words Apple draws in the device's language. Use Apple's wording for this button.
 #: src/screens/SignInScreen.tsx
 msgid "Continue with Apple"
-msgstr ""
+msgstr "Nadaljuj z Apple"
 
 #. Button that signs in with a Google account. Use Google's usual wording for this button.
 #: src/screens/SignInScreen.tsx
 msgid "Continue with Google"
-msgstr ""
+msgstr "Nadaljuj z Googlom"
 
 #. Shown when the lists could not be read.
 #: src/state/reloadPages.ts
 msgid "Could not load your lists."
-msgstr ""
+msgstr "Vaših seznamov ni bilo mogoče naložiti."
 
 #. Shown when the phone's own storage refuses to keep a change waiting to be sent.
 #: src/state/useOutbox.ts
 msgid "Could not save your changes on this device — they will be lost if the app closes."
-msgstr ""
+msgstr "Sprememb ni bilo mogoče shraniti v tej napravi – če se aplikacija zapre, bodo izgubljene."
 
 #. Button (verb) beside the field: creates a list with the name typed. Fits about 10 characters.
 #: src/screens/ListsScreen.tsx
 msgid "Create"
-msgstr ""
+msgstr "Ustvari"
 
 #. Sort button (noun): sorts by the date each list or item was added, its arrow showing the direction. Fits about 8 characters beside the arrow.
 #: src/components/SortButtons.tsx
 msgid "Date"
-msgstr ""
+msgstr "Datum"
 
 #. Appearance picker option: the light theme. Fits about 9 characters, one of three equal segments.
 #: src/screens/AccountScreen.tsx
 msgid "Day"
-msgstr ""
+msgstr "Dan"
 
 #. Under the Appearance picker with Auto on, in a polar summer: the light theme stays on all day. "Day" is the name of the light theme in the picker.
 #: src/state/resolveTheme.ts
 msgid "Day all day today"
-msgstr ""
+msgstr "Danes ves dan: Dan"
 
 #. Under the Appearance picker with Auto on: when the light theme ("Day" in the picker) comes on next. {time} is a clock time, e.g. 06:48. Short: it shares a line with the "Appearance" label.
 #: src/state/resolveTheme.ts
 msgid "Day from {time}"
-msgstr ""
+msgstr "Dan od {time}"
 
 #. Button (verb) on an invitation: says no to it. Fits about 12 characters, half of a row.
 #: src/screens/NotificationsScreen.tsx
 msgid "Decline"
-msgstr ""
+msgstr "Zavrni"
 
 #. VoiceOver only: the Decline button on an invitation. {listName} is the list's name as typed: never inflect it.
 #: src/screens/NotificationsScreen.tsx
 msgid "Decline invitation to {listName}"
-msgstr ""
+msgstr "Zavrni povabilo k seznamu {listName}"
 
 #. Under an invitation this person declined (a state, not a button). Short, small print.
 #: src/screens/NotificationsScreen.tsx
 msgid "Declined"
-msgstr ""
+msgstr "Zavrnjeno"
 
 #. The Decline button while the answer is being sent. Fits about 12 characters.
 #: src/screens/NotificationsScreen.tsx
 msgid "Declining…"
-msgstr ""
+msgstr "Zavračanje …"
 
 #. VoiceOver only: the bin button on an item, which deletes it. {itemName} is an item's name as the person typed it: never inflect it.
 #: src/components/ItemRow.tsx
 msgid "Delete {itemName}"
-msgstr ""
+msgstr "Izbriši artikel {itemName}"
 
 #. VoiceOver only: the bin button on a list, which deletes it. {listName} is the list's name as typed: never inflect it.
 #: src/components/ListRow.tsx
 msgid "Delete {listName}"
-msgstr ""
+msgstr "Izbriši seznam {listName}"
 
 #. Button: starts deleting the account (a confirm follows). A full-width button.
 #: src/screens/AccountScreen.tsx
 msgid "Delete account"
-msgstr ""
+msgstr "Izbriši račun"
 
 #. In place of the search field while a list's bin is shown: what the screen lists now.
 #: src/screens/ListDetailScreen.tsx
 msgid "Deleted items, newest first."
-msgstr ""
+msgstr "Izbrisani artikli, najnovejši najprej."
 
 #. In place of the search field while the bin is shown: what the screen lists now.
 #: src/screens/ListsScreen.tsx
 msgid "Deleted lists, newest first."
-msgstr ""
+msgstr "Izbrisani seznami, najnovejši najprej."
 
 #. The confirm under Delete account: what deleting costs.
 #: src/screens/AccountScreen.tsx
 msgid "Deleting your account can't be undone. Lists you're the only owner of will be deleted, including for anyone you shared them with. Lists that have another owner will stay with their members."
-msgstr ""
+msgstr "Izbrisa računa ni mogoče razveljaviti. Seznami, katerih edini lastnik ste, bodo izbrisani, tudi za vse osebe, ki imajo do njih dostop. Seznami z drugim lastnikom ostanejo njihovim članom."
 
 #. The confirm button while the account is being deleted.
 #: src/screens/AccountScreen.tsx
 msgid "Deleting…"
-msgstr ""
+msgstr "Brisanje …"
 
 #. Button (verb): drops the waiting change. Fits about 10 characters, beside "Restore and keep my change".
 #: src/components/BlockedBanner.tsx
 msgid "Discard"
-msgstr ""
+msgstr "Zavrzi"
 
 #. VoiceOver only: the Discard button, which drops the waiting change.
 #: src/components/BlockedBanner.tsx
 msgid "Discard my change"
-msgstr ""
+msgstr "Zavrzi mojo spremembo"
 
 #. Button (verb) beside the name: opens it for editing. Fits about 8 characters.
 #: src/screens/AccountScreen.tsx
 msgid "Edit"
-msgstr ""
+msgstr "Uredi"
 
 #. VoiceOver only: the Edit button beside the name.
 #: src/screens/AccountScreen.tsx
 msgid "Edit name"
-msgstr ""
+msgstr "Uredi ime"
 
 #. Label (noun) above the account's email address.
 #. Label (noun) above the account's email address.
 #: src/screens/AccountScreen.tsx
 msgid "Email"
-msgstr ""
+msgstr "E-pošta"
 
 #. The label of the email field on the sign-in screen.
 #: src/screens/SignInScreen.tsx
 msgid "Email address"
-msgstr ""
+msgstr "E-poštni naslov"
 
 #. Under the title when the list asked for is not there any more.
 #. Under the title when the list asked for is not there any more.
 #: src/screens/ListDetailScreen.tsx
 #: src/screens/SharingScreen.tsx
 msgid "Go back and pick a list from the list screen."
-msgstr ""
+msgstr "Vrnite se in izberite seznam na zaslonu s seznami."
 
 #. Under the title when there are no notifications.
 #: src/screens/NotificationsScreen.tsx
 msgid "Invitations to shared lists show up here."
-msgstr ""
+msgstr "Tukaj so prikazana povabila k skupnim seznamom."
 
 #. Button (verb) beside the field: invites the person picked to the list. Fits about 10 characters.
 #: src/components/UserAutocomplete.tsx
 msgid "Invite"
-msgstr ""
+msgstr "Povabi"
 
 #. VoiceOver only: a suggested person under the invite field; tapping picks them. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.
 #: src/components/UserAutocomplete.tsx
 msgid "Invite {name}"
-msgstr ""
+msgstr "Povabi osebo {name}"
 
 #. VoiceOver only: the Owner option of the role a new person is invited with.
 #: src/screens/SharingScreen.tsx
 msgid "Invite as owner"
-msgstr ""
+msgstr "Povabi kot lastnika"
 
 #. VoiceOver only: the Reader option of the role a new person is invited with.
 #: src/screens/SharingScreen.tsx
 msgid "Invite as reader"
-msgstr ""
+msgstr "Povabi kot bralca"
 
 #. VoiceOver only: the Writer option of the role a new person is invited with.
 #: src/screens/SharingScreen.tsx
 msgid "Invite as writer"
-msgstr ""
+msgstr "Povabi kot urednika"
 
 #. Heading (adjective, plural) over the people invited to a list who have not answered yet.
 #: src/screens/SharingScreen.tsx
 msgid "Invited"
-msgstr ""
+msgstr "Povabljeni"
 
 #. Under the name of someone invited to a list. {age} is how long ago, a whole phrase such as "5 min ago" or "just now". Avoid a participle that shows the gender of the person invited: their gender is unknown.
 #: src/screens/SharingScreen.tsx
 msgid "Invited {age}"
-msgstr ""
+msgstr "Povabilo poslano {age}"
 
 #. Placeholder of the field that renames an item on a shopping list.
 #: src/components/ItemRow.tsx
 msgid "Item name"
-msgstr ""
+msgstr "Ime artikla"
 
 #. How long ago something happened: under a minute. Shown in small print beside other text.
 #: src/lib/ago.ts
 msgid "just now"
-msgstr ""
+msgstr "pravkar"
 
 #. Button: leaves the list, for a member who is not an owner. Fits about 12 characters in its confirm, half of a row.
 #: src/screens/SharingScreen.tsx
 msgid "Leave list"
-msgstr ""
+msgstr "Zapusti seznam"
 
 #. The Leave list button while leaving is being sent. Fits about 12 characters.
 #: src/screens/SharingScreen.tsx
 msgid "Leaving…"
-msgstr ""
+msgstr "Zapuščanje …"
 
 #. The browser tab's title on a list's screen while the list's name is not known yet.
 #: src/screens/ListDetailScreen.tsx
 msgid "List"
-msgstr ""
+msgstr "Seznam"
 
 #. Placeholder of the field that renames a list.
 #: src/screens/ListDetailScreen.tsx
 msgid "List name"
-msgstr ""
+msgstr "Ime seznama"
 
 #. Title when the list asked for is not there any more (deleted, or access removed).
 #. Title when the list asked for is not there any more (deleted, or access removed).
 #: src/screens/ListDetailScreen.tsx
 #: src/screens/SharingScreen.tsx
 msgid "List not found"
-msgstr ""
+msgstr "Seznama ni mogoče najti"
 
 #. VoiceOver only: a spinner while the blocked people load.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Loading blocked people"
-msgstr ""
+msgstr "Nalaganje blokiranih oseb"
 
 #. VoiceOver only: a spinner while a list is looked up.
 #: src/screens/ListDetailScreen.tsx
 msgid "Loading list"
-msgstr ""
+msgstr "Nalaganje seznama"
 
 #. VoiceOver only: a spinner while a list's items load.
 #: src/screens/ListDetailScreen.tsx
 msgid "Loading list items"
-msgstr ""
+msgstr "Nalaganje artiklov seznama"
 
 #. VoiceOver only: a spinner while the next page of blocked people loads.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Loading more blocked people"
-msgstr ""
+msgstr "Nalaganje dodatnih blokiranih oseb"
 
 #. VoiceOver only: a spinner while the next page of items loads.
 #: src/screens/ListDetailScreen.tsx
 msgid "Loading more items"
-msgstr ""
+msgstr "Nalaganje dodatnih artiklov"
 
 #. VoiceOver only: a spinner while the next page of lists loads.
 #: src/screens/ListsScreen.tsx
 msgid "Loading more lists"
-msgstr ""
+msgstr "Nalaganje dodatnih seznamov"
 
 #. VoiceOver only: a spinner while the next page of notifications loads.
 #: src/screens/NotificationsScreen.tsx
 msgid "Loading more notifications"
-msgstr ""
+msgstr "Nalaganje dodatnih obvestil"
 
 #. VoiceOver only: a spinner while the notifications load.
 #: src/screens/NotificationsScreen.tsx
 msgid "Loading notifications"
-msgstr ""
+msgstr "Nalaganje obvestil"
 
 #. VoiceOver only: a spinner while a list's members load.
 #: src/screens/SharingScreen.tsx
 msgid "Loading who has access"
-msgstr ""
+msgstr "Nalaganje oseb z dostopom"
 
 #. VoiceOver only: a spinner while the lists load.
 #: src/screens/ListsScreen.tsx
 msgid "Loading your lists"
-msgstr ""
+msgstr "Nalaganje vaših seznamov"
 
 #. VoiceOver only: the hint on an unticked item, saying what a tap does.
 #: src/components/ItemRow.tsx
 msgid "Marks this item as done"
-msgstr ""
+msgstr "Označi artikel kot opravljen"
 
 #. VoiceOver only: the hint on a ticked item, saying what a tap does.
 #: src/components/ItemRow.tsx
 msgid "Marks this item as not done"
-msgstr ""
+msgstr "Označi artikel kot neopravljen"
 
 #. Title (heading) of the app's main screen, which shows every list of the person's.
 #. Title (heading) of the app's main screen, which shows every list of the person's.
 #: src/navigation/RootNavigator.tsx
 #: src/screens/ListsScreen.tsx
 msgid "My Lists"
-msgstr ""
+msgstr "Moji seznami"
 
 #. A person's name: the label of a field or a value on screen.
 #. A person's name: the label of a field or a value on screen.
@@ -745,104 +745,104 @@ msgstr ""
 #: src/components/UserAutocomplete.tsx
 #: src/screens/AccountScreen.tsx
 msgid "Name"
-msgstr ""
+msgstr "Ime"
 
 #. Under the title before the person has any list. "Groceries" is an example name for a shopping list.
 #: src/screens/ListsScreen.tsx
 msgid "Name your first list above — for example, Groceries."
-msgstr ""
+msgstr "Zgoraj poimenujte svoj prvi seznam – na primer Živila."
 
 #. VoiceOver only: the round + button that shows the field for adding an item.
 #: src/screens/ListDetailScreen.tsx
 msgid "New item"
-msgstr ""
+msgstr "Nov artikel"
 
 #. VoiceOver only: the round + button that shows the field for naming a new list.
 #: src/screens/ListsScreen.tsx
 msgid "New list"
-msgstr ""
+msgstr "Nov seznam"
 
 #. Placeholder of the field where a new list is named.
 #: src/screens/ListsScreen.tsx
 msgid "New list name"
-msgstr ""
+msgstr "Ime novega seznama"
 
 #. VoiceOver only: a sort order in force, by date added.
 #: src/lib/searchCopy.ts
 msgid "newest first"
-msgstr ""
+msgstr "najnovejši najprej"
 
 #. VoiceOver only: the date sort button's state, newest added first.
 #: src/components/SortButtons.tsx
 msgid "Newest first"
-msgstr ""
+msgstr "Najnovejši najprej"
 
 #. Appearance picker option: the dark theme. Fits about 9 characters, one of three equal segments.
 #: src/screens/AccountScreen.tsx
 msgid "Night"
-msgstr ""
+msgstr "Noč"
 
 #. Under the Appearance picker with Auto on, in a polar winter: the dark theme stays on all day. "Night" is the name of the dark theme in the picker.
 #: src/state/resolveTheme.ts
 msgid "Night all day today"
-msgstr ""
+msgstr "Danes ves dan: Noč"
 
 #. Under the Appearance picker with Auto on: when the dark theme ("Night" in the picker) comes on next. {time} is a clock time, e.g. 19:12. Short: it shares a line with the "Appearance" label.
 #: src/state/resolveTheme.ts
 msgid "Night from {time}"
-msgstr ""
+msgstr "Noč od {time}"
 
 #. Title of the Lists screen before the person has any list.
 #: src/screens/ListsScreen.tsx
 msgid "No lists yet"
-msgstr ""
+msgstr "Še ni seznamov"
 
 #. Under an invitation that can no longer be answered: the list was deleted or the invitation withdrawn. Short, small print.
 #: src/screens/NotificationsScreen.tsx
 msgid "No longer available"
-msgstr ""
+msgstr "Ni več na voljo"
 
 #. Title when a search finds nothing. {query} is what the person typed, inserted as typed.
 #: src/lib/searchCopy.ts
 msgid "No matches for \"{query}\""
-msgstr ""
+msgstr "Ni zadetkov za „{query}“"
 
 #. Title of the Notifications screen when there are none.
 #: src/screens/NotificationsScreen.tsx
 msgid "No notifications yet"
-msgstr ""
+msgstr "Še ni obvestil"
 
 #. Under the title of an empty list, for someone who can only read it.
 #: src/screens/ListDetailScreen.tsx
 msgid "Nobody has added anything yet."
-msgstr ""
+msgstr "Na seznamu še ni ničesar."
 
 #. A refusal from the server: the person may not add items to this list any more. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "not allowed to add to this list"
-msgstr ""
+msgstr "Nimate dovoljenja za dodajanje na ta seznam."
 
 #. A refusal from the server: the person may not change this item any more. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "not allowed to change this item"
-msgstr ""
+msgstr "Nimate dovoljenja za spreminjanje tega artikla."
 
 #. Shown in place of the account's name while it has none yet.
 #: src/screens/AccountScreen.tsx
 msgid "Not set"
-msgstr ""
+msgstr "Ni nastavljeno"
 
 #. Shown when an action needs an account and the app is signed out.
 #. Shown when an action needs an account and the app is signed out.
 #: src/lib/serverMessages.ts
 #: src/state/SessionContext.tsx
 msgid "Not signed in."
-msgstr ""
+msgstr "Potrebna je prijava."
 
 #. Title of a list with no items yet.
 #: src/screens/ListDetailScreen.tsx
 msgid "Nothing on this list"
-msgstr ""
+msgstr "Na tem seznamu ni ničesar"
 
 #. The Notifications screen: its title, and the label of the bell button that opens it.
 #. The Notifications screen: its title, and the label of the bell button that opens it.
@@ -851,550 +851,550 @@ msgstr ""
 #: src/screens/ListsScreen.tsx
 #: src/screens/NotificationsScreen.tsx
 msgid "Notifications"
-msgstr ""
+msgstr "Obvestila"
 
 #. VoiceOver only: a sort button is switched off.
 #: src/components/SortButtons.tsx
 msgid "Off"
-msgstr ""
+msgstr "Izklopljeno"
 
 #. VoiceOver only: a sort order in force, by date added.
 #: src/lib/searchCopy.ts
 msgid "oldest first"
-msgstr ""
+msgstr "najstarejši najprej"
 
 #. VoiceOver only: the date sort button's state, oldest added first.
 #: src/components/SortButtons.tsx
 msgid "Oldest first"
-msgstr ""
+msgstr "Najstarejši najprej"
 
 #. A refusal from the server on the Sharing screen, when someone who is no longer an owner changes a member's role. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "only an owner can change roles on this list"
-msgstr ""
+msgstr "Vloge na tem seznamu lahko spreminja samo lastnik."
 
 #. Under the members, for someone who is not an owner of the list.
 #: src/screens/SharingScreen.tsx
 msgid "Only an owner can change who has access."
-msgstr ""
+msgstr "Kdo ima dostop, lahko spreminja samo lastnik."
 
 #. A refusal from the server: only an owner may put the list in the bin or take it out. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "only an owner can delete or restore this list"
-msgstr ""
+msgstr "Ta seznam lahko izbriše ali obnovi samo lastnik."
 
 #. Shown when someone who is not an owner of a list tries to delete it or restore it from the bin.
 #: src/state/useListWrites.ts
 msgid "Only an owner can delete or restore this list."
-msgstr ""
+msgstr "Ta seznam lahko izbriše ali obnovi samo lastnik."
 
 #. A refusal from the server on the Sharing screen, when someone who is no longer an owner invites a person. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "only an owner can invite people to this list"
-msgstr ""
+msgstr "K temu seznamu lahko osebe povabi samo lastnik."
 
 #. A refusal from the server on the Sharing screen, when someone who is no longer an owner removes a member. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "only an owner can remove members from this list"
-msgstr ""
+msgstr "Člane s tega seznama lahko odstrani samo lastnik."
 
 #. A refusal from the server: only an owner may rename the list. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "only an owner can rename this list"
-msgstr ""
+msgstr "Ta seznam lahko preimenuje samo lastnik."
 
 #. Shown when someone who is not an owner of a list tries to rename it.
 #: src/state/useListWrites.ts
 msgid "Only an owner can rename this list."
-msgstr ""
+msgstr "Ta seznam lahko preimenuje samo lastnik."
 
 #. VoiceOver only: a notification card that opens its list. {listName} is the list's name as typed: never inflect it.
 #: src/screens/NotificationsScreen.tsx
 msgid "Open {listName}"
-msgstr ""
+msgstr "Odpri seznam {listName}"
 
 #. Unique: no two accounts can have the same name.
 #: src/screens/SetNameScreen.tsx
 msgid "Other people in your lists will see this. It has to be unique."
-msgstr ""
+msgstr "To ime bodo videli drugi na vaših seznamih. Biti mora edinstveno."
 
 #. A member's role, on a badge: can also share, rename and delete the list. Lowercase; the badge capitalizes the first letter.
 #: src/screens/SharingScreen.tsx
 msgctxt "badge"
 msgid "owner"
-msgstr ""
+msgstr "lastnik"
 
 #. Role picker option (noun): a member who can also rename, share and delete the list. Fits about 7 characters: the picker is three equal segments in a narrow space.
 #: src/components/RolePicker.tsx
 msgid "Owner"
-msgstr ""
+msgstr "Lastnik"
 
 #. Heading over the members of a list on the Sharing screen.
 #: src/screens/SharingScreen.tsx
 msgid "People with access"
-msgstr ""
+msgstr "Osebe z dostopom"
 
 #. Under the title when nobody is blocked. "Notifications" is the name of that screen.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "People you block from Notifications show up here."
-msgstr ""
+msgstr "Tukaj so prikazane osebe, ki jih blokirate v razdelku Obvestila."
 
 #. Title of the screen where a new account chooses the name other people see. Not a list's name.
 #: src/screens/SetNameScreen.tsx
 msgid "Pick a name"
-msgstr ""
+msgstr "Izberite ime"
 
 #. A refusal from the server when a name is saved empty, under the name field on Set name and Account. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "please enter a name"
-msgstr ""
+msgstr "Vnesite ime."
 
 #. Under the search field on a list this person can only read.
 #: src/screens/ListDetailScreen.tsx
 msgid "Read only — you can see this list but not change it."
-msgstr ""
+msgstr "Samo za branje – seznam lahko vidite, ne morete pa ga spreminjati."
 
 #. A member's role, on a badge: can only see the list. Lowercase; the badge capitalizes the first letter.
 #: src/screens/SharingScreen.tsx
 msgctxt "badge"
 msgid "reader"
-msgstr ""
+msgstr "bralec"
 
 #. Role picker option (noun): a member who can only see the list. Fits about 7 characters: the picker is three equal segments in a narrow space.
 #: src/components/RolePicker.tsx
 msgid "Reader"
-msgstr ""
+msgstr "Bralec"
 
 #. Button (verb) in a confirm: removes the member from the list. Fits about 12 characters, half of a row.
 #: src/screens/SharingScreen.tsx
 msgid "Remove"
-msgstr ""
+msgstr "Odstrani"
 
 #. VoiceOver only: the bin button on a member's row, which removes them from the list. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "Remove {name}"
-msgstr ""
+msgstr "Odstrani osebo {name}"
 
 #. The Remove button while the removal is being sent. Fits about 12 characters.
 #: src/screens/SharingScreen.tsx
 msgid "Removing…"
-msgstr ""
+msgstr "Odstranitev …"
 
 #. Button (verb) in a list's header: renames the list. Fits about 10 characters, one of the header's buttons.
 #: src/screens/ListDetailScreen.tsx
 msgid "Rename"
-msgstr ""
+msgstr "Preimenuj"
 
 #. VoiceOver only: the pencil button on an item, which renames it. {itemName} is an item's name as the person typed it: never inflect it.
 #: src/components/ItemRow.tsx
 msgid "Rename {itemName}"
-msgstr ""
+msgstr "Preimenuj artikel {itemName}"
 
 #. VoiceOver only: the Rename button in a list's header.
 #: src/screens/ListDetailScreen.tsx
 msgid "Rename list"
-msgstr ""
+msgstr "Preimenuj seznam"
 
 #. A link under the code field: emails a new code.
 #: src/screens/SignInScreen.tsx
 msgid "Resend code"
-msgstr ""
+msgstr "Znova pošlji kodo"
 
 #. VoiceOver only: the button that takes a deleted item out of the bin. {itemName} is an item's name as the person typed it: never inflect it.
 #: src/components/ItemRow.tsx
 msgid "Restore {itemName}"
-msgstr ""
+msgstr "Obnovi artikel {itemName}"
 
 #. Takes a deleted list out of the bin: what VoiceOver reads for the icon on the Lists screen, and the visible label of the button on the list's own screen. {listName} is the list's name as typed: never inflect it.
 #. Takes a deleted list out of the bin: what VoiceOver reads for the icon on the Lists screen, and the visible label of the button on the list's own screen. {listName} is the list's name as typed: never inflect it.
 #: src/components/ListRow.tsx
 #: src/screens/ListDetailScreen.tsx
 msgid "Restore {listName}"
-msgstr ""
+msgstr "Obnovi seznam {listName}"
 
 #. Button: takes the deleted list or item out of the bin and sends the waiting change.
 #: src/components/BlockedBanner.tsx
 msgid "Restore and keep my change"
-msgstr ""
+msgstr "Obnovi in ohrani mojo spremembo"
 
 #. Button beside a name being edited: saves the new name. Fits about 10 characters.
 #. Button beside a name being edited: saves the new name. Fits about 10 characters.
 #: src/components/ItemRow.tsx
 #: src/screens/ListDetailScreen.tsx
 msgid "Save"
-msgstr ""
+msgstr "Shrani"
 
 #. Button: saves the name being edited. Fits about 12 characters, half of a row of two buttons.
 #: src/screens/AccountScreen.tsx
 msgid "Save name"
-msgstr ""
+msgstr "Shrani ime"
 
 #. The Save name button while the new name is being saved. Fits about 12 characters.
 #: src/screens/AccountScreen.tsx
 msgid "Saving…"
-msgstr ""
+msgstr "Shranjevanje …"
 
 #. VoiceOver only: a round magnifier button that shows the search field and sort buttons.
 #: src/components/ModeButton.tsx
 msgid "Search and sort"
-msgstr ""
+msgstr "Iskanje in razvrščanje"
 
 #. Placeholder and label of the field that searches a list's items by name.
 #: src/screens/ListDetailScreen.tsx
 msgid "Search items"
-msgstr ""
+msgstr "Iskanje artiklov"
 
 #. Placeholder and label of the field that searches the lists by name.
 #: src/screens/ListsScreen.tsx
 msgid "Search lists"
-msgstr ""
+msgstr "Iskanje seznamov"
 
 #. VoiceOver only: the search in force. {query} is what the person typed, inserted as typed.
 #: src/lib/searchCopy.ts
 msgid "Searching {query}"
-msgstr ""
+msgstr "Iskanje: {query}"
 
 #. Button: emails a sign-in code to the address typed. A full-width button.
 #: src/screens/SignInScreen.tsx
 msgid "Send code"
-msgstr ""
+msgstr "Pošlji kodo"
 
 #. VoiceOver only: the Owner option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "Set {name} to owner"
-msgstr ""
+msgstr "Osebi {name} dodeli vlogo lastnika"
 
 #. VoiceOver only: the Reader option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "Set {name} to reader"
-msgstr ""
+msgstr "Osebi {name} dodeli vlogo bralca"
 
 #. VoiceOver only: the Writer option on a member's row. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense.
 #: src/screens/SharingScreen.tsx
 msgid "Set {name} to writer"
-msgstr ""
+msgstr "Osebi {name} dodeli vlogo urednika"
 
 #. Button (verb): shares something through the system share sheet, or opens who a list is shared with. Fits about 10 characters.
 #. Button (verb): shares something through the system share sheet, or opens who a list is shared with. Fits about 10 characters.
 #: src/screens/AccountScreen.tsx
 #: src/screens/ListDetailScreen.tsx
 msgid "Share"
-msgstr ""
+msgstr "Deli"
 
 #. VoiceOver only: the Share button beside the email address, which opens the system share sheet.
 #: src/screens/AccountScreen.tsx
 msgid "Share email address"
-msgstr ""
+msgstr "Deli e-poštni naslov"
 
 #. VoiceOver only: the Share button in a list's header, which opens who has access to the list.
 #: src/screens/ListDetailScreen.tsx
 msgid "Share list"
-msgstr ""
+msgstr "Deli seznam"
 
 #. Under a list's name on the Lists screen: someone else's list that this person can change.
 #: src/components/ListRow.tsx
 msgid "Shared with you · can edit"
-msgstr ""
+msgstr "Deljeno z vami · lahko urejate"
 
 #. Under a list's name on the Lists screen: someone else's list that this person can only read.
 #: src/components/ListRow.tsx
 msgid "Shared with you · view only"
-msgstr ""
+msgstr "Deljeno z vami · samo ogled"
 
 #. Title (heading) of the screen that shows who has access to a list, and lets an owner invite people.
 #. Title (heading) of the screen that shows who has access to a list, and lets an owner invite people.
 #: src/navigation/RootNavigator.tsx
 #: src/screens/SharingScreen.tsx
 msgid "Sharing"
-msgstr ""
+msgstr "Skupna raba"
 
 #. A switch that shows only the deleted lists or items (the bin) instead of the live ones. Its label sits beside it on the screen.
 #. A switch that shows only the deleted lists or items (the bin) instead of the live ones. Its label sits beside it on the screen.
 #: src/components/ShowDeletedToggle.tsx
 msgid "Show deleted"
-msgstr ""
+msgstr "Prikaži izbrisane"
 
 #. Button (verb) under the code field: signs in with the code typed. A full-width button.
 #: src/screens/SignInScreen.tsx
 msgctxt "button"
 msgid "Sign in"
-msgstr ""
+msgstr "Prijavi se"
 
 #. Title of the sign-in screen (heading), above the email field.
 #: src/screens/SignInScreen.tsx
 msgctxt "heading"
 msgid "Sign in"
-msgstr ""
+msgstr "Prijava"
 
 #. "Sign in with Apple" is Apple's feature: use the name Apple uses in this language. An error from the server: it is missing its Apple settings.
 #: src/lib/serverMessages.ts
 msgid "Sign in with Apple isn't set up on the server."
-msgstr ""
+msgstr "Prijava z Apple na strežniku ni nastavljena."
 
 #. Button: signs out of this device only. A full-width button.
 #: src/screens/AccountScreen.tsx
 msgid "Sign out"
-msgstr ""
+msgstr "Odjavi se"
 
 #. Button: signs out of every device at once. A full-width button.
 #: src/screens/AccountScreen.tsx
 msgid "Sign out of all devices"
-msgstr ""
+msgstr "Odjavi se iz vseh naprav"
 
 #. Shown when Apple or Google sign-in finished but sent back nothing to sign in with.
 #. Shown when Apple or Google sign-in finished but sent back nothing to sign in with.
 #: src/lib/appleSignIn.ts
 #: src/lib/googleSignIn.ts
 msgid "Sign-in did not return an identity token"
-msgstr ""
+msgstr "Prijava ni vrnila identifikacijskega žetona."
 
 #. The confirm button while every device is being signed out.
 #: src/screens/AccountScreen.tsx
 msgid "Signing out…"
-msgstr ""
+msgstr "Odjavljanje …"
 
 #. The label of the field where the emailed six-digit code is typed.
 #: src/screens/SignInScreen.tsx
 msgid "Six-digit code"
-msgstr ""
+msgstr "Šestmestna koda"
 
 #. VoiceOver only: the sort button that sorts by when each was added.
 #: src/components/SortButtons.tsx
 msgid "Sort by date added"
-msgstr ""
+msgstr "Razvrsti po datumu dodajanja"
 
 #. VoiceOver only: the sort button that sorts alphabetically.
 #: src/components/SortButtons.tsx
 msgid "Sort by name"
-msgstr ""
+msgstr "Razvrsti po imenu"
 
 #. VoiceOver only: the sort button that puts items still to do first or last.
 #: src/components/SortButtons.tsx
 msgid "Sort by to do"
-msgstr ""
+msgstr "Razvrsti po neopravljenih"
 
 #. Placeholder of the field on the Sharing screen where an owner looks up someone to invite.
 #: src/components/UserAutocomplete.tsx
 msgid "Start typing a name"
-msgstr ""
+msgstr "Začnite vnašati ime"
 
 #. A refusal from the server on the Sharing screen: the person being invited deleted their account meanwhile. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "that account no longer exists"
-msgstr ""
+msgstr "Ta račun ne obstaja več."
 
 #. An error from the server: the Apple ID used is not the one linked to this account.
 #: src/lib/serverMessages.ts
 msgid "That Apple ID isn't the one this account signs in with."
-msgstr ""
+msgstr "Ta Apple ID ni tisti, s katerim se prijavljate v ta račun."
 
 #. A change made earlier, refused when it reached the server.
 #: src/lib/listsApi.ts
 msgid "That change is no longer valid."
-msgstr ""
+msgstr "Ta sprememba ni več veljavna."
 
 #. A change made earlier is waiting: the item it was made to has since been deleted (put in the bin).
 #: src/components/BlockedBanner.tsx
 msgid "That item is in the bin. Restore it and keep your change?"
-msgstr ""
+msgstr "Ta artikel je v košu. Ga želite obnoviti in ohraniti spremembo?"
 
 #. A change made earlier is waiting: the list it was made to has since been deleted (put in the bin).
 #: src/components/BlockedBanner.tsx
 msgid "That list is in the bin. Restore it and keep your change?"
-msgstr ""
+msgstr "Ta seznam je v košu. Ga želite obnoviti in ohraniti spremembo?"
 
 #. A refusal from the server when another account already uses this name, under the name field on Set name and Account. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "that name is taken"
-msgstr ""
+msgstr "To ime je že zasedeno."
 
 #. A refusal from the server on the Sharing screen: the member whose role was changed, or who was removed, has already left. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "that person is not a member of this list"
-msgstr ""
+msgstr "Ta oseba ni na tem seznamu."
 
 #. Title when the bin (the deleted lists or items) is empty.
 #. Title when the bin (the deleted lists or items) is empty.
 #: src/screens/ListDetailScreen.tsx
 #: src/screens/ListsScreen.tsx
 msgid "The bin is empty"
-msgstr ""
+msgstr "Koš je prazen"
 
 #. A refusal from the server on the Sharing screen: the person being invited is already a member of the list. "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "they already have this list"
-msgstr ""
+msgstr "Ta oseba že ima dostop do tega seznama."
 
 #. A refusal from the server on the Sharing screen: the person being invited already has an open invitation to the list. "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "they have already been invited"
-msgstr ""
+msgstr "Ta oseba je že povabljena."
 
 #. An error from the server, on Account when deleting an account that does not sign in with Apple.
 #: src/lib/serverMessages.ts
 msgid "This account doesn't sign in with Apple."
-msgstr ""
+msgstr "Ta račun ne uporablja prijave z Apple."
 
 #. Under an Apple Hide My Email address. “Sign in with Apple” is Apple's feature: use the name Apple uses in this language.
 #: src/screens/AccountScreen.tsx
 msgid "This address hides your real email. On another iPhone, use Sign in with Apple. On Android or the web, sign in with this address, and Apple forwards the code to your inbox."
-msgstr ""
+msgstr "Ta naslov skriva vaš pravi e-poštni naslov. V drugem iPhonu uporabite Prijavo z Apple. V Androidu ali spletu se prijavite s tem naslovom in Apple bo kodo preposlal v vaš nabiralnik."
 
 #. A refusal from the server on the Notifications or Sharing screen: the invitation was already answered or withdrawn. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "this invitation is no longer open"
-msgstr ""
+msgstr "To povabilo ni več odprto."
 
 #. A refusal from the server on the Notifications screen: the person who sent the invitation is no longer an owner of the list. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "this invitation is no longer valid"
-msgstr ""
+msgstr "To povabilo ni več veljavno."
 
 #. A refusal from the server on the Notifications screen: the list in the invitation was put in the bin. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "this list has been deleted"
-msgstr ""
+msgstr "Ta seznam je izbrisan."
 
 #. A refusal from the server on the Sharing screen: nobody can be invited to a list in the bin. "the bin" is where deleted lists wait 30 days. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "this list is in the bin"
-msgstr ""
+msgstr "Ta seznam je v košu."
 
 #. On a deleted list's own screen. “Show deleted” is the switch of that name: use its translation.
 #: src/screens/ListDetailScreen.tsx
 msgid "This list is in the bin. Restoring it brings back everything except the items you deleted separately — those are one tick of Show deleted away."
-msgstr ""
+msgstr "Ta seznam je v košu. Če ga obnovite, se vrne vse razen posamično izbrisanih artiklov – te prikažete z enim dotikom stikala Prikaži izbrisane."
 
 #. The confirm under Sign out of all devices: what it does.
 #: src/screens/AccountScreen.tsx
 msgid "This signs every device out, not just this one."
-msgstr ""
+msgstr "S tem se odjavite iz vseh naprav, ne le iz te."
 
 #. VoiceOver only: a sort order in force, items still to do before done ones.
 #: src/lib/searchCopy.ts
 msgid "to do first"
-msgstr ""
+msgstr "neopravljeni najprej"
 
 #. VoiceOver only: the to-do sort button is on, items still to do first.
 #: src/components/SortButtons.tsx
 msgid "To do first"
-msgstr ""
+msgstr "Neopravljeni najprej"
 
 #. Sort button: items still to do go first. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do First"
-msgstr ""
+msgstr "Odprti prvi"
 
 #. VoiceOver only: a sort order in force, done items before those still to do.
 #: src/lib/searchCopy.ts
 msgid "to do last"
-msgstr ""
+msgstr "neopravljeni nazadnje"
 
 #. VoiceOver only: the to-do sort button is on, done items first.
 #: src/components/SortButtons.tsx
 msgid "To do last"
-msgstr ""
+msgstr "Neopravljeni nazadnje"
 
 #. Sort button (lit): done items go last. Fits about 10 characters, one of three equal buttons.
 #: src/components/SortButtons.tsx
 msgid "To Do Last"
-msgstr ""
+msgstr "Odprti zadnji"
 
 #. Under the code field on the sign-in screen: the six-digit code typed was wrong, or too old. The English is the server's own words, with no full stop: write it as your language's UI would.
 #: src/lib/serverMessages.ts
 msgid "Token has expired or is invalid"
-msgstr ""
+msgstr "Koda je potekla ali ni veljavna."
 
 #. Button beside a line saying some lists or items could not load: loads them again. Fits about 10 characters.
 #: src/components/CoverageLine.tsx
 msgid "Try again"
-msgstr ""
+msgstr "Poskusi znova"
 
 #. Under the email field on the sign-in screen: what was typed is not an email address.
 #: src/lib/serverMessages.ts
 msgid "Unable to validate email address: invalid format"
-msgstr ""
+msgstr "E-poštnega naslova ni mogoče preveriti: neveljavna oblika."
 
 #. Button (verb) beside a blocked person: lets their invitations through again. Fits about 12 characters.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Unblock"
-msgstr ""
+msgstr "Odblokiraj"
 
 #. VoiceOver only: the Unblock button beside a blocked person. {name} is a person's name as they typed it: never inflect it. Their gender is unknown.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Unblock {name}"
-msgstr ""
+msgstr "Odblokiraj osebo {name}"
 
 #. The Unblock button while the unblock is being sent. Fits about 12 characters.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "Unblocking…"
-msgstr ""
+msgstr "Odblokiranje …"
 
 #. VoiceOver only: the dot on an avatar that marks a notification not seen before.
 #: src/screens/NotificationsScreen.tsx
 msgid "Unread"
-msgstr ""
+msgstr "Neprebrano"
 
 #. A link under the code field: goes back to type a different email address.
 #: src/screens/SignInScreen.tsx
 msgid "Use a different email"
-msgstr ""
+msgstr "Uporabi drug e-poštni naslov"
 
 #. Under the title. {address} is the email address the person typed, inserted as typed.
 #: src/screens/SignInScreen.tsx
 msgid "We sent a six-digit code to {address}."
-msgstr ""
+msgstr "Šestmestno kodo smo poslali na {address}."
 
 #. Under the sign-in title: how signing in works.
 #: src/screens/SignInScreen.tsx
 msgid "We'll email you a six-digit code. No password needed."
-msgstr ""
+msgstr "Po e-pošti vam bomo poslali šestmestno kodo. Geslo ni potrebno."
 
 #. Button (verb) in a confirm: withdraws the invitation. Fits about 12 characters, half of a row.
 #: src/screens/SharingScreen.tsx
 msgid "Withdraw"
-msgstr ""
+msgstr "Umakni"
 
 #. VoiceOver only: the × button on an invitation, which withdraws it. {name} is a person's name as they typed it: never inflect it. Their gender is unknown, so avoid a gendered past tense. Phrase it so the name needs no ending, e.g. "Withdraw the invitation for {name}".
 #: src/screens/SharingScreen.tsx
 msgid "Withdraw {name}'s invitation"
-msgstr ""
+msgstr "Umakni povabilo za {name}"
 
 #. The Withdraw button while the withdrawal is being sent. Fits about 12 characters.
 #: src/screens/SharingScreen.tsx
 msgid "Withdrawing…"
-msgstr ""
+msgstr "Umikanje …"
 
 #. A member's role, on a badge: can add and change items. Lowercase; the badge capitalizes the first letter.
 #: src/screens/SharingScreen.tsx
 msgctxt "badge"
 msgid "writer"
-msgstr ""
+msgstr "urednik"
 
 #. Role picker option (noun): a member who can add, tick off and rename items. Fits about 7 characters: the picker is three equal segments in a narrow space.
 #: src/components/RolePicker.tsx
 msgid "Writer"
-msgstr ""
+msgstr "Urednik"
 
 #. Button: confirms deleting the account. Shares a row with Cancel.
 #: src/screens/AccountScreen.tsx
 msgid "Yes, delete my account"
-msgstr ""
+msgstr "Da, izbriši moj račun"
 
 #. Button: confirms signing out of every device. Shares a row with Cancel.
 #: src/screens/AccountScreen.tsx
 msgid "Yes, sign out everywhere"
-msgstr ""
+msgstr "Da, odjavi me povsod"
 
 #. A refusal from the server on the Sharing screen: the person tried to invite themselves. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "you already have this list"
-msgstr ""
+msgstr "Ta seznam že imate."
 
 #. A refusal from the server on the Sharing screen, when leaving a list the person was already removed from. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
 #: src/lib/serverMessages.ts
 msgid "you are not a member of this list"
-msgstr ""
+msgstr "Niste na tem seznamu."
 
 #. Shown when someone who can only read a list tries to change it.
 #. Shown when someone who can only read a list tries to change it.
@@ -1402,82 +1402,82 @@ msgstr ""
 #. Shown when someone who can only read a list tries to change it.
 #: src/state/useListWrites.ts
 msgid "You have read-only access to this list."
-msgstr ""
+msgstr "Do tega seznama imate dostop samo za branje."
 
 #. Title of the Blocked people screen when nobody is blocked.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "You haven't blocked anyone"
-msgstr ""
+msgstr "Ni blokiranih oseb"
 
 #. Under an invitation this person accepted: they are now a member of the list. Short, small print.
 #: src/screens/NotificationsScreen.tsx
 msgid "You joined"
-msgstr ""
+msgstr "Povabilo sprejeto"
 
 #. Shown when answering an invitation failed for lack of a connection.
 #: src/screens/NotificationsScreen.tsx
 msgid "You need a connection to answer an invitation."
-msgstr ""
+msgstr "Za odgovor na povabilo potrebujete povezavo."
 
 #. Shown when a change to who has access failed for lack of a connection.
 #: src/screens/SharingScreen.tsx
 msgid "You need a connection to change who has access."
-msgstr ""
+msgstr "Za spreminjanje dostopa potrebujete povezavo."
 
 #. Shown when saving a new name failed for lack of a connection.
 #: src/screens/AccountScreen.tsx
 msgid "You need a connection to change your name."
-msgstr ""
+msgstr "Za spremembo imena potrebujete povezavo."
 
 #. Shown when deleting the account failed for lack of a connection.
 #: src/screens/AccountScreen.tsx
 msgid "You need a connection to delete your account."
-msgstr ""
+msgstr "Za izbris računa potrebujete povezavo."
 
 #. Shown when the list of blocked people could not load for lack of a connection.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "You need a connection to see who you've blocked."
-msgstr ""
+msgstr "Za prikaz blokiranih oseb potrebujete povezavo."
 
 #. Shown when the notifications could not load for lack of a connection.
 #: src/screens/NotificationsScreen.tsx
 msgid "You need a connection to see your notifications."
-msgstr ""
+msgstr "Za prikaz obvestil potrebujete povezavo."
 
 #. Shown when saving the name failed for lack of a connection.
 #: src/screens/SetNameScreen.tsx
 msgid "You need a connection to set your name."
-msgstr ""
+msgstr "Za nastavitev imena potrebujete povezavo."
 
 #. Shown when unblocking someone failed for lack of a connection.
 #: src/screens/BlockedPeopleScreen.tsx
 msgid "You need a connection to unblock someone."
-msgstr ""
+msgstr "Za odblokiranje osebe potrebujete povezavo."
 
 #. A change made earlier, refused when it reached the server: the role changed meanwhile.
 #: src/lib/listsApi.ts
 msgid "You no longer have permission to make that change."
-msgstr ""
+msgstr "Nimate več dovoljenja za to spremembo."
 
 #. Above the sign-in form after this device was signed out from another one. Keep it to one line.
 #: src/screens/SignInScreen.tsx
 msgid "You were signed out on another device."
-msgstr ""
+msgstr "Odjava je bila izvedena v drugi napravi."
 
 #. The confirm before leaving a list, or removing yourself from it: what it costs.
 #: src/screens/SharingScreen.tsx
 msgid "You'll lose access to this list until someone invites you again."
-msgstr ""
+msgstr "Dostop do tega seznama bo odstranjen, dokler vas kdo znova ne povabi."
 
 #. Placeholder of the email field: an example address. Localize it if your language has a usual example, keeping it a valid address.
 #: src/screens/SignInScreen.tsx
 msgid "you@example.com"
-msgstr ""
+msgstr "ime@primer.si"
 
 #. Above the sign-in form after the account was deleted. Keep it to one line.
 #: src/screens/SignInScreen.tsx
 msgid "Your account was deleted."
-msgstr ""
+msgstr "Vaš račun je izbrisan."
 
 #. Placeholder and label of the field holding the name other people see for this account.
 #. Placeholder and label of the field holding the name other people see for this account.
@@ -1486,16 +1486,16 @@ msgstr ""
 #: src/screens/AccountScreen.tsx
 #: src/screens/SetNameScreen.tsx
 msgid "Your name"
-msgstr ""
+msgstr "Vaše ime"
 
 #. VoiceOver only: a sort order, reverse alphabetical.
 #. VoiceOver only: a sort order, reverse alphabetical.
 #: src/components/SortButtons.tsx
 #: src/lib/searchCopy.ts
 msgid "Z to A"
-msgstr ""
+msgstr "Od Ž do A"
 
 #. Sort button (lit), reverse alphabetical: the last and first letters of the alphabet. Fits about 10 characters.
 #: src/components/SortButtons.tsx
 msgid "Z–A"
-msgstr ""
+msgstr "Ž–A"
