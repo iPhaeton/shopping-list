@@ -23,6 +23,7 @@ import {
   fetchProfile,
   setName as setNameRpc,
 } from '../lib/profileApi';
+import { serverMessage } from '../lib/serverMessages';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -334,7 +335,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Sign-in and sign-up are the same path, so there is no separate registration screen.
       options: { shouldCreateUser: true },
     });
-    return { error: error?.message ?? null };
+    return { error: error ? serverMessage(error) : null };
   }, []);
 
   const verifyCode = useCallback(async (email: string, code: string): Promise<Result> => {
@@ -343,7 +344,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       token: code.trim(),
       type: 'email',
     });
-    return { error: error?.message ?? null };
+    return { error: error ? serverMessage(error) : null };
   }, []);
 
   const performSignOut = useCallback(
@@ -360,7 +361,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       if (reason) signOutReason.current = reason;
       const { error } = await supabase.auth.signOut({ scope });
-      return { error: error?.message ?? null };
+      return { error: error ? serverMessage(error) : null };
     },
     [state]
   );

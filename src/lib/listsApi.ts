@@ -2,6 +2,7 @@ import { t } from '@lingui/core/macro';
 
 import type { BinCursor, Cursor, CursorOf, Item, List, ListCounts, Role, Stream } from '../state/types';
 import { itemsFull, LIMIT_CODES, listsFull, ownedListsFull } from './limits';
+import { SESSION_REVOKED_MESSAGE, serverMessage } from './serverMessages';
 import { supabase } from './supabase';
 
 /**
@@ -18,7 +19,8 @@ export type Result = {
   /**
    * True exactly when `session_still_valid()` refused this write because the device's session was
    * revoked elsewhere — distinguished from an ordinary `42501` by message text, since both share the
-   * errcode. Set before `writeResult` calls `humanize()`, which would otherwise erase the distinction.
+   * errcode. Read from the raw text, before `serverMessage` translates it and before `writeResult`
+   * calls `humanize()`, either of which would otherwise erase the distinction.
    */
   sessionRevoked?: boolean;
 };
@@ -137,7 +139,7 @@ export async function fetchLists<S extends Stream>(
     ? liveListPage(after as Cursor | null, limit)
     : binListPage(after as BinCursor | null, limit));
 
-  if (error) return { lists: null, next: null, error: error.message };
+  if (error) return { lists: null, next: null, error: serverMessage(error) };
   const rows = data as unknown as MembershipRow[];
   const last = rows[rows.length - 1];
   const next =
@@ -220,7 +222,7 @@ export async function fetchItems<S extends Stream>(
     ? liveItemPage(listId, after as Cursor | null, limit)
     : binItemPage(listId, after as BinCursor | null, limit));
 
-  if (error) return { items: null, next: null, error: error.message };
+  if (error) return { items: null, next: null, error: serverMessage(error) };
   const rows = data as unknown as ItemRow[];
   return { items: rows.map(toItem), next: cursorAfter(rows, stream, limit), error: null };
 }
@@ -271,7 +273,7 @@ export async function fetchItem(
     .eq('id', itemId)
     .maybeSingle();
 
-  if (error) return { item: null, error: error.message };
+  if (error) return { item: null, error: serverMessage(error) };
   return { item: data ? toItem(data as unknown as ItemRow) : null, error: null };
 }
 
@@ -297,7 +299,7 @@ export async function fetchList(
     .eq('list_id', listId)
     .maybeSingle();
 
-  if (error) return { list: null, error: error.message };
+  if (error) return { list: null, error: serverMessage(error) };
   return { list: data ? toList(data as unknown as MembershipRow) : null, error: null };
 }
 
@@ -315,7 +317,7 @@ export async function fetchListCounts(): Promise<{
 }> {
   const { data, error } = await supabase.rpc('my_list_counts');
 
-  if (error) return { counts: null, error: error.message };
+  if (error) return { counts: null, error: serverMessage(error) };
   // An aggregate always answers one row; `?? []` and the zeros are for a null body, as in
   // `fetchMembers`, rather than a crash.
   const [row] = (data ?? []) as ListCounts[];
@@ -428,21 +430,19 @@ export async function setItemDone(itemId: string, done: boolean): Promise<Result
 /**
  * Shared with `membersApi.ts` and `notificationsApi.ts`, the online-only RPCs' seams: those calls
  * are answered while the user is still looking at the screen that caused them, so they keep the
- * database's own words rather than the rewritten sentences `writeResult` below gives the seven
- * outbox writes — all but a limit refusal at `acceptInvitation`, which is about the person holding
- * the phone and is rephrased there.
+ * database's own words — from the catalog, in the active language (`serverMessage`) — rather than
+ * the rewritten sentences `writeResult` below gives the seven outbox writes — all but a limit
+ * refusal at `acceptInvitation`, which is about the person holding the phone and is rephrased there.
  */
 export function resultFor(error: Failure, status: number): Result {
   if (!error) return { error: null, verdict: 'ok' };
   return {
-    error: error.message,
+    error: serverMessage(error),
     verdict: verdictFor(error.code ?? '', status),
+    // The raw text, never `error` above: a translated message would not match.
     sessionRevoked: error.code === '42501' && error.message === SESSION_REVOKED_MESSAGE,
   };
 }
-
-/** The exact message `session_still_valid()` raises in `20260920000000_session_revocation.sql`. */
-const SESSION_REVOKED_MESSAGE = 'this device has been signed out';
 
 /**
  * `resultFor` for the seven writes that go through the outbox, which differ from the rest in two ways:
@@ -500,7 +500,7 @@ function humanize(error: NonNullable<Failure>): string {
       return itemsFull();
 
     default:
-      return error.message;
+      return serverMessage(error);
   }
 }
 

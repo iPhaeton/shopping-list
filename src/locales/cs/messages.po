@@ -12,6 +12,11 @@ msgstr ""
 msgid ", "
 msgstr ""
 
+#. A refusal from the server when a name is too short, under the name field on Set name and Account (# is the minimum, 3). The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "{characters, plural, other {please enter at least # characters}}"
+msgstr ""
+
 #. A link that is waiting before it can send another code. # is a countdown in seconds; "s" abbreviates seconds.
 #: src/screens/SignInScreen.tsx
 msgid "{cooldown, plural, other {Resend code in #s}}"
@@ -112,6 +117,21 @@ msgstr ""
 msgid "{listName}, shared with you"
 msgstr ""
 
+#. A refusal from the server on the Sharing screen: the member being made an owner already owns the most lists allowed (# is that limit, 100). "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "{max, plural, other {they already own # lists}}"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen: the person is already a member of the most lists allowed (# is that limit, 1,000). "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "{max, plural, other {they are already on # lists}}"
+msgstr ""
+
+#. A refusal from the server: the list holds the most items allowed (# is that limit, 1,000). Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "{max, plural, other {this list already has # items}}"
+msgstr ""
+
 #. Shown when a list holds the most items allowed (# is that limit, 1,000).
 #: src/lib/limits.ts
 msgid "{max, plural, other {This list is full: # items at most.}}"
@@ -182,6 +202,11 @@ msgstr ""
 msgid "{pending, plural, one {# change will sync when you're back online} other {# changes will sync when you're back online}}"
 msgstr ""
 
+#. Under the email field on the sign-in screen: a new code was asked for too soon after the last one. # is how many seconds are left, and can be 0.
+#: src/lib/serverMessages.ts
+msgid "{seconds, plural, other {For security purposes, you can only request this after # seconds.}}"
+msgstr ""
+
 #. Under the search field when the rest of the lists could not load (offline). {loaded} is how many were searched; # is the approximate total.
 #: src/lib/searchCopy.ts
 msgid "{total, plural, other {Searched {loaded} of # lists. The rest need a connection.}}"
@@ -205,6 +230,11 @@ msgstr ""
 #. VoiceOver only: the bell button's value, how many notifications are unread. # is that number.
 #: src/screens/ListsScreen.tsx
 msgid "{unreadCount, plural, other {# unread}}"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen: removing or demoting this owner would leave the list with none. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "a list must keep at least one owner"
 msgstr ""
 
 #. Under the members, for a list's only owner: why they cannot leave or step down.
@@ -268,9 +298,24 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
+#. An error from the server, on Account when deleting an account: Apple could not be reached.
+#: src/lib/serverMessages.ts
+msgid "Apple couldn't be reached. Try again in a minute."
+msgstr ""
+
+#. An error from the server: Apple refused to confirm the person signing in.
+#: src/lib/serverMessages.ts
+msgid "Apple didn't confirm it's you. Try again."
+msgstr ""
+
 #. Shown when Apple sign-in failed and could not recover by itself; trying again later may work.
 #: src/lib/appleSignIn.ts
 msgid "Apple sign-in couldn't finish. Try again in a minute."
+msgstr ""
+
+#. An error from the server while finishing Apple sign-in: the code Apple gave the app did not arrive.
+#: src/lib/serverMessages.ts
+msgid "Apple's sign-in code is missing. Try again."
 msgstr ""
 
 #. Under a pending invitation: the role it offers, can only see the list. Short, small print.
@@ -772,12 +817,24 @@ msgstr ""
 msgid "Nobody has added anything yet."
 msgstr ""
 
+#. A refusal from the server: the person may not add items to this list any more. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "not allowed to add to this list"
+msgstr ""
+
+#. A refusal from the server: the person may not change this item any more. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "not allowed to change this item"
+msgstr ""
+
 #. Shown in place of the account's name while it has none yet.
 #: src/screens/AccountScreen.tsx
 msgid "Not set"
 msgstr ""
 
 #. Shown when an action needs an account and the app is signed out.
+#. Shown when an action needs an account and the app is signed out.
+#: src/lib/serverMessages.ts
 #: src/state/SessionContext.tsx
 msgid "Not signed in."
 msgstr ""
@@ -811,14 +868,39 @@ msgstr ""
 msgid "Oldest first"
 msgstr ""
 
+#. A refusal from the server on the Sharing screen, when someone who is no longer an owner changes a member's role. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "only an owner can change roles on this list"
+msgstr ""
+
 #. Under the members, for someone who is not an owner of the list.
 #: src/screens/SharingScreen.tsx
 msgid "Only an owner can change who has access."
 msgstr ""
 
+#. A refusal from the server: only an owner may put the list in the bin or take it out. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "only an owner can delete or restore this list"
+msgstr ""
+
 #. Shown when someone who is not an owner of a list tries to delete it or restore it from the bin.
 #: src/state/useListWrites.ts
 msgid "Only an owner can delete or restore this list."
+msgstr ""
+
+#. A refusal from the server on the Sharing screen, when someone who is no longer an owner invites a person. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "only an owner can invite people to this list"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen, when someone who is no longer an owner removes a member. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "only an owner can remove members from this list"
+msgstr ""
+
+#. A refusal from the server: only an owner may rename the list. Rarely shown; the app usually says this in its own words. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "only an owner can rename this list"
 msgstr ""
 
 #. Shown when someone who is not an owner of a list tries to rename it.
@@ -860,6 +942,11 @@ msgstr ""
 #. Title of the screen where a new account chooses the name other people see. Not a list's name.
 #: src/screens/SetNameScreen.tsx
 msgid "Pick a name"
+msgstr ""
+
+#. A refusal from the server when a name is saved empty, under the name field on Set name and Account. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "please enter a name"
 msgstr ""
 
 #. Under the search field on a list this person can only read.
@@ -1039,6 +1126,11 @@ msgctxt "heading"
 msgid "Sign in"
 msgstr ""
 
+#. "Sign in with Apple" is Apple's feature: use the name Apple uses in this language. An error from the server: it is missing its Apple settings.
+#: src/lib/serverMessages.ts
+msgid "Sign in with Apple isn't set up on the server."
+msgstr ""
+
 #. Button: signs out of this device only. A full-width button.
 #: src/screens/AccountScreen.tsx
 msgid "Sign out"
@@ -1086,6 +1178,16 @@ msgstr ""
 msgid "Start typing a name"
 msgstr ""
 
+#. A refusal from the server on the Sharing screen: the person being invited deleted their account meanwhile. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "that account no longer exists"
+msgstr ""
+
+#. An error from the server: the Apple ID used is not the one linked to this account.
+#: src/lib/serverMessages.ts
+msgid "That Apple ID isn't the one this account signs in with."
+msgstr ""
+
 #. A change made earlier, refused when it reached the server.
 #: src/lib/listsApi.ts
 msgid "That change is no longer valid."
@@ -1101,6 +1203,16 @@ msgstr ""
 msgid "That list is in the bin. Restore it and keep your change?"
 msgstr ""
 
+#. A refusal from the server when another account already uses this name, under the name field on Set name and Account. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "that name is taken"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen: the member whose role was changed, or who was removed, has already left. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "that person is not a member of this list"
+msgstr ""
+
 #. Title when the bin (the deleted lists or items) is empty.
 #. Title when the bin (the deleted lists or items) is empty.
 #: src/screens/ListDetailScreen.tsx
@@ -1108,9 +1220,44 @@ msgstr ""
 msgid "The bin is empty"
 msgstr ""
 
+#. A refusal from the server on the Sharing screen: the person being invited is already a member of the list. "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "they already have this list"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen: the person being invited already has an open invitation to the list. "they" is one person whose gender is unknown: avoid gendered forms. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "they have already been invited"
+msgstr ""
+
+#. An error from the server, on Account when deleting an account that does not sign in with Apple.
+#: src/lib/serverMessages.ts
+msgid "This account doesn't sign in with Apple."
+msgstr ""
+
 #. Under an Apple Hide My Email address. “Sign in with Apple” is Apple's feature: use the name Apple uses in this language.
 #: src/screens/AccountScreen.tsx
 msgid "This address hides your real email. On another iPhone, use Sign in with Apple. On Android or the web, sign in with this address, and Apple forwards the code to your inbox."
+msgstr ""
+
+#. A refusal from the server on the Notifications or Sharing screen: the invitation was already answered or withdrawn. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "this invitation is no longer open"
+msgstr ""
+
+#. A refusal from the server on the Notifications screen: the person who sent the invitation is no longer an owner of the list. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "this invitation is no longer valid"
+msgstr ""
+
+#. A refusal from the server on the Notifications screen: the list in the invitation was put in the bin. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "this list has been deleted"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen: nobody can be invited to a list in the bin. "the bin" is where deleted lists wait 30 days. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "this list is in the bin"
 msgstr ""
 
 #. On a deleted list's own screen. “Show deleted” is the switch of that name: use its translation.
@@ -1153,9 +1300,19 @@ msgstr ""
 msgid "To Do Last"
 msgstr ""
 
+#. Under the code field on the sign-in screen: the six-digit code typed was wrong, or too old. The English is the server's own words, with no full stop: write it as your language's UI would.
+#: src/lib/serverMessages.ts
+msgid "Token has expired or is invalid"
+msgstr ""
+
 #. Button beside a line saying some lists or items could not load: loads them again. Fits about 10 characters.
 #: src/components/CoverageLine.tsx
 msgid "Try again"
+msgstr ""
+
+#. Under the email field on the sign-in screen: what was typed is not an email address.
+#: src/lib/serverMessages.ts
+msgid "Unable to validate email address: invalid format"
 msgstr ""
 
 #. Button (verb) beside a blocked person: lets their invitations through again. Fits about 12 characters.
@@ -1227,6 +1384,16 @@ msgstr ""
 #. Button: confirms signing out of every device. Shares a row with Cancel.
 #: src/screens/AccountScreen.tsx
 msgid "Yes, sign out everywhere"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen: the person tried to invite themselves. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "you already have this list"
+msgstr ""
+
+#. A refusal from the server on the Sharing screen, when leaving a list the person was already removed from. The English is the database's own words, lowercase with no full stop: write a natural sentence, capitalised and punctuated as your language's UI would be.
+#: src/lib/serverMessages.ts
+msgid "you are not a member of this list"
 msgstr ""
 
 #. Shown when someone who can only read a list tries to change it.

@@ -1,6 +1,7 @@
 import { t } from '@lingui/core/macro';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
+import { serverMessage } from './serverMessages';
 import { supabase } from './supabase';
 
 export type Result = { error: string | null };
@@ -52,5 +53,5 @@ export async function signInWithGoogle(): Promise<Result> {
   }
 
   const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
-  return { error: error?.message ?? null };
+  return { error: error ? serverMessage(error) : null };
 }

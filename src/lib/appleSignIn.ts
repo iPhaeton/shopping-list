@@ -7,6 +7,7 @@ import {
 } from 'expo-apple-authentication';
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 
+import { serverMessage } from './serverMessages';
 import { supabase } from './supabase';
 
 /**
@@ -100,7 +101,7 @@ export async function signInWithApple(): Promise<Result> {
     if ((error as { status?: number }).status === 500 && !carriesEmail(identityToken)) {
       return { error: await resetAppleSignIn(credential.authorizationCode) };
     }
-    return { error: error.message };
+    return { error: serverMessage(error) };
   }
 
   storeAppleToken(credential.authorizationCode);

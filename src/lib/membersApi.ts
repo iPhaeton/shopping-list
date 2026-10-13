@@ -1,5 +1,6 @@
 import type { Role } from '../state/types';
 import { resultFor, type Result } from './listsApi';
+import { serverMessage } from './serverMessages';
 import { supabase } from './supabase';
 
 type MemberRow = { user_id: string; email: string; name: string | null; role: Role };
@@ -37,7 +38,7 @@ export async function fetchMembers(
 ): Promise<{ members: Member[] | null; error: string | null }> {
   const { data, error } = await supabase.rpc('list_members_of', { p_list_id: listId });
 
-  if (error) return { members: null, error: error.message };
+  if (error) return { members: null, error: serverMessage(error) };
   // `?? []` rather than a bare cast: a set-returning function with no rows to return can answer with
   // a null body, and an empty roster is a fine answer — a crash is not.
   return { members: ((data ?? []) as MemberRow[]).map(toMember), error: null };
@@ -66,7 +67,7 @@ export async function searchUsers(
     listId === undefined ? { p_query: query } : { p_query: query, p_list_id: listId }
   );
 
-  if (error) return { users: null, error: error.message };
+  if (error) return { users: null, error: serverMessage(error) };
   return { users: ((data ?? []) as UserSuggestionRow[]).map(toSuggestion), error: null };
 }
 
@@ -97,7 +98,7 @@ export async function fetchInvitations(
 ): Promise<{ invitations: PendingInvitation[] | null; error: string | null }> {
   const { data, error } = await supabase.rpc('pending_invitations_of', { p_list_id: listId });
 
-  if (error) return { invitations: null, error: error.message };
+  if (error) return { invitations: null, error: serverMessage(error) };
   // A null body is an empty list, as `fetchMembers` reads one.
   return { invitations: ((data ?? []) as PendingInvitationRow[]).map(toInvitation), error: null };
 }

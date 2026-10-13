@@ -1,6 +1,7 @@
 import type { Role } from '../state/types';
 import { LIMIT_CODES, listsFull, ownedListsFull } from './limits';
 import { MAX_ROWS, resultFor, type Result } from './listsApi';
+import { serverMessage } from './serverMessages';
 import { supabase } from './supabase';
 
 /**
@@ -117,7 +118,7 @@ export async function fetchNotifications({
   );
 
   if (error) {
-    return { notifications: null, cursor: null, error: error.message, retryable: isRetryable(error, status) };
+    return { notifications: null, cursor: null, error: serverMessage(error), retryable: isRetryable(error, status) };
   }
 
   const rows = (data ?? []) as NotificationRow[];
@@ -138,7 +139,7 @@ export async function fetchUnreadCount(): Promise<{
 }> {
   const { data, error, status } = await supabase.rpc('unread_notification_count');
 
-  if (error) return { count: null, error: error.message, retryable: isRetryable(error, status) };
+  if (error) return { count: null, error: serverMessage(error), retryable: isRetryable(error, status) };
   if (typeof data !== 'number') return { count: null, error: 'unexpected answer', retryable: false };
   return { count: data, error: null, retryable: false };
 }
@@ -230,7 +231,7 @@ export async function fetchBlockedUsers({
   );
 
   if (error) {
-    return { blocked: null, cursor: null, error: error.message, retryable: isRetryable(error, status) };
+    return { blocked: null, cursor: null, error: serverMessage(error), retryable: isRetryable(error, status) };
   }
 
   const rows = (data ?? []) as { user_id: string; name: string; blocked_at: string }[];

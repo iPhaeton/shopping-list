@@ -1,4 +1,5 @@
 import { resultFor, type Result } from './listsApi';
+import { serverMessage } from './serverMessages';
 import { supabase } from './supabase';
 
 type ProfileRow = { name: string | null };
@@ -13,7 +14,7 @@ export async function fetchProfile(
   userId: string
 ): Promise<{ name: string | null; error: string | null }> {
   const { data, error } = await supabase.from('users').select('name').eq('id', userId).maybeSingle();
-  if (error) return { name: null, error: error.message };
+  if (error) return { name: null, error: serverMessage(error) };
   return { name: (data as ProfileRow | null)?.name ?? null, error: null };
 }
 
@@ -46,7 +47,8 @@ export async function deleteAccount(): Promise<Result> {
  * already on the server.
  *
  * Its failures come back in the shape `resultFor` reads: the function's own are 4xx with the
- * sentence to show, so they are `permanent`; the RPC's status and words are passed back unchanged,
+ * sentence to show, so they are `permanent`, and `serverMessage` shows that sentence from the
+ * catalog by its `code`; the RPC's status and words are passed back unchanged,
  * so a revoked session still sets `sessionRevoked`. A request that never got an answer is status 0,
  * so `retryable`, the same as an offline RPC.
  */
